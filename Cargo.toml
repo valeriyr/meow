@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["crates/meow"]
+
+# Dependencies that should be kept in sync through the whole workspace
+[workspace.dependencies]
