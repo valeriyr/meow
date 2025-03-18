@@ -1,5 +1,5 @@
 use clap::{command, Parser};
-use meow::commands::Command;
+use meow_node::commands::Command;
 
 #[derive(Parser)]
 #[command(

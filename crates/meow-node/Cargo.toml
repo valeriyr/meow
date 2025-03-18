@@ -1,10 +1,10 @@
 [package]
-name = "meow"
+name = "meow-node"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
-description = "meow is a MEOW project CLI tool"
+description = "meow-node is a MEOW project node"
 
 [dependencies]
 clap.workspace = true

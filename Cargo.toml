@@ -1,6 +1,22 @@
 [workspace]
 resolver = "2"
-members = ["crates/meow"]
+members = [
+    "crates/meow",
+    "crates/meow-node",
+    "crates/meow-types"
+    ]
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
+base64 = "0.22.1"
+clap = { version ="4.5.32", features = ["derive", "wrap_help"] }
+enum_dispatch = "0.3.13"
+hex = "0.4.3"
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = "1.0.140"
+strum = "0.27"
+strum_macros = "0.27"
+thiserror = "2.0.12"
+
+meow-keys = { path = "crates/meow-keys" }
+meow-types = { path = "crates/meow-types" }
