@@ -9,10 +9,10 @@ pub enum KeyPairError {
     Base64DecodeError(#[from] base64::DecodeError),
     #[error("ed25519_consensus error: {0}")]
     Ed25519ConsensusError(#[from] ed25519_consensus::Error),
-    #[error("invalid derivation path: {0}")]
-    InvalidDerivationPath(DerivationPath),
-    #[error("invalid signature scheme flag: {0}")]
-    InvalidSignatureSchemeFlag(u8),
-    #[error("invalid key pair bytes: {0:?}")]
-    InvalidKeyPairBytes(Vec<u8>),
+    #[error("invalid derivation path: {path}")]
+    InvalidDerivationPath { path: DerivationPath },
+    #[error("invalid signature scheme flag: {flag}")]
+    InvalidSignatureSchemeFlag { flag: u8 },
+    #[error("invalid key pair bytes: {bytes:?}")]
+    InvalidKeyPairBytes { bytes: Vec<u8> },
 }

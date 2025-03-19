@@ -32,7 +32,7 @@ impl TryFrom<u8> for SignatureScheme {
     fn try_from(flag: u8) -> Result<Self, Self::Error> {
         match flag {
             0x00 => Ok(SignatureScheme::Ed25519),
-            _ => Err(KeyPairError::InvalidSignatureSchemeFlag(flag)),
+            _ => Err(KeyPairError::InvalidSignatureSchemeFlag { flag }),
         }
     }
 }

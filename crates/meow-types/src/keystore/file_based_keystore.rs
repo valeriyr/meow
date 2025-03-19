@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path};
 
 use crate::keypair::KeyPair;
 
@@ -10,10 +10,29 @@ use super::{in_memory_keystore::InMemoryKeystore, Result};
 /// Uses an in-memory a a base implementation.
 pub struct FileBasedKeystore {
     in_memory_store: InMemoryKeystore,
-    path: PathBuf,
+    path: Box<dyn AsRef<Path>>,
 }
 
 impl FileBasedKeystore {
+    /// Loads a keystore from the file.
+    ///
+    /// # Errors
+    /// - [KeystoreError::IoError] if the file cannot be written.
+    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
+    pub fn load(path: &impl AsRef<Path>) -> Result<Self> {
+        let in_memory_store = if path.as_ref().exists() {
+            let content = fs::read(path)?;
+            serde_json::from_slice::<InMemoryKeystore>(&content)?
+        } else {
+            InMemoryKeystore::default()
+        };
+
+        Ok(Self {
+            in_memory_store,
+            path: Box::new(path.as_ref().to_owned()),
+        })
+    }
+
     /// Adds a key to the keystore.
     ///
     /// # Errors
@@ -34,16 +53,7 @@ impl FileBasedKeystore {
     fn save(&self) -> Result<()> {
         let contents = serde_json::to_string(&self.in_memory_store)?;
 
-        fs::write(&self.path, contents)?;
+        fs::write(&*self.path, contents)?;
         Ok(())
-    }
-}
-
-impl Default for FileBasedKeystore {
-    fn default() -> Self {
-        Self {
-            in_memory_store: Default::default(),
-            path: Default::default(),
-        }
     }
 }

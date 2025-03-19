@@ -7,4 +7,8 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "meow is a MEOW project CLI tool"
 
 [dependencies]
+anyhow.workspace = true
+bip32.workspace = true
 clap.workspace = true
+
+meow-types.workspace = true

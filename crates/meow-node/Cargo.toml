@@ -7,4 +7,5 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "meow-node is a MEOW project node"
 
 [dependencies]
+anyhow.workspace = true
 clap.workspace = true

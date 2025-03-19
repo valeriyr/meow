@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::{ser::SerializeSeq, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{error::KeystoreError, Result};
 use crate::{address::Address, keypair::KeyPair};
@@ -22,7 +22,7 @@ impl InMemoryKeystore {
         let address = keypair.public().into();
 
         if self.keys.contains_key(&address) {
-            return Err(KeystoreError::KeyPairAlreadyExists(keypair));
+            return Err(KeystoreError::KeyPairAlreadyExists { keypair });
         }
 
         self.keys.insert(address, keypair);
@@ -44,11 +44,23 @@ impl Serialize for InMemoryKeystore {
         S: Serializer,
     {
         let keys = self.keys.values().collect::<Vec<_>>();
+        keys.serialize(serializer)
+    }
+}
 
-        let mut seq = serializer.serialize_seq(Some(keys.len()))?;
+impl<'de> Deserialize<'de> for InMemoryKeystore {
+    fn deserialize<D>(deserializer: D) -> core::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+
+        let mut keystore = Self::default();
+
+        let keys = Vec::<KeyPair>::deserialize(deserializer)?;
         for key in keys {
-            seq.serialize_element(key)?;
+            keystore.add_key(key).map_err(D::Error::custom)?;
         }
-        seq.end()
+        Ok(keystore)
     }
 }

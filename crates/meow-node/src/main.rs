@@ -1,6 +1,7 @@
 use clap::{command, Parser};
 use meow_node::commands::Command;
 
+/// The main command line arguments.
 #[derive(Parser)]
 #[command(
     name = env!("CARGO_BIN_NAME"),
@@ -15,8 +16,8 @@ struct Args {
     command: Command,
 }
 
-fn main() {
+fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
-    args.command.run();
+    args.command.run()
 }

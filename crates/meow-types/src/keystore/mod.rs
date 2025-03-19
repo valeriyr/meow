@@ -3,6 +3,8 @@ pub mod error;
 mod file_based_keystore;
 mod in_memory_keystore;
 
+use std::path::Path;
+
 use error::KeystoreError;
 use file_based_keystore::FileBasedKeystore;
 use in_memory_keystore::InMemoryKeystore;
@@ -19,6 +21,20 @@ pub enum Keystore {
 }
 
 impl Keystore {
+    /// Loads a keystore from the file.
+    ///
+    /// # Errors
+    /// - [KeystoreError::IoError] if the file cannot be written.
+    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
+    pub fn file_based(path: &impl AsRef<Path>) -> Result<Self> {
+        Ok(Keystore::FileBased(FileBasedKeystore::load(path)?))
+    }
+
+    /// Creates an empty in-memory keystore.
+    pub fn in_memory() -> Self {
+        Keystore::InMemory(InMemoryKeystore::default())
+    }
+
     /// Adds a key to the keystore.
     ///
     /// # Errors

@@ -5,8 +5,8 @@ use crate::keypair::KeyPair;
 pub enum KeystoreError {
     #[error("io error: {0}")]
     IoError(#[from] std::io::Error),
-    #[error("key already exists: {0:?}")]
-    KeyPairAlreadyExists(KeyPair),
+    #[error("key already exists: {keypair:?}")]
+    KeyPairAlreadyExists { keypair: KeyPair },
     #[error("serde json error: {0}")]
     SerdeJsonError(#[from] serde_json::Error),
 }

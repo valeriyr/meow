@@ -2,6 +2,7 @@ mod derivation;
 
 pub mod ed25519;
 pub mod error;
+pub mod mnemonic;
 
 pub mod private_key;
 pub mod public_key;
@@ -11,6 +12,7 @@ use base64::{engine::general_purpose, Engine};
 use bip32::DerivationPath;
 use ed25519::Ed25519KeyPair;
 use error::KeyPairError;
+use mnemonic::MnemonicType;
 use public_key::PublicKey;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature_scheme::SignatureScheme;
@@ -40,6 +42,25 @@ impl KeyPair {
     ) -> Result<Self> {
         match scheme {
             SignatureScheme::Ed25519 => Ok(KeyPair::Ed25519(Ed25519KeyPair::derive(seed, path)?)),
+        }
+    }
+
+    /// Generates a key pair.
+    ///
+    /// # Errors
+    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
+    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
+    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
+    pub fn generate(
+        scheme: SignatureScheme,
+        path: Option<DerivationPath>,
+        mnemonic_type: Option<MnemonicType>,
+    ) -> Result<Self> {
+        match scheme {
+            SignatureScheme::Ed25519 => Ok(KeyPair::Ed25519(Ed25519KeyPair::generate(
+                path,
+                mnemonic_type,
+            )?)),
         }
     }
 
@@ -78,16 +99,20 @@ impl KeyPair {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let scheme_byte = bytes
             .first()
-            .ok_or_else(|| KeyPairError::InvalidKeyPairBytes(bytes.to_owned()))?;
+            .ok_or_else(|| KeyPairError::InvalidKeyPairBytes {
+                bytes: bytes.to_owned(),
+            })?;
 
         let scheme = SignatureScheme::try_from(*scheme_byte)?;
 
         let keypair = match scheme {
-            SignatureScheme::Ed25519 => KeyPair::Ed25519(Ed25519KeyPair::try_from(
-                bytes
-                    .get(1..)
-                    .ok_or_else(|| KeyPairError::InvalidKeyPairBytes(bytes.to_owned()))?,
-            )?),
+            SignatureScheme::Ed25519 => {
+                KeyPair::Ed25519(Ed25519KeyPair::try_from(bytes.get(1..).ok_or_else(
+                    || KeyPairError::InvalidKeyPairBytes {
+                        bytes: bytes.to_owned(),
+                    },
+                )?)?)
+            }
         };
 
         Ok(keypair)

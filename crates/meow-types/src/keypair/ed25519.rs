@@ -3,7 +3,9 @@ use std::fmt;
 use bip32::{ChildNumber, DerivationPath};
 use zeroize::ZeroizeOnDrop;
 
-use super::{derivation::DERIVATION_PATH_COIN_TYPE, error::KeyPairError, Result};
+use super::{
+    derivation::DERIVATION_PATH_COIN_TYPE, error::KeyPairError, mnemonic::MnemonicType, Result,
+};
 
 /// The Ed25519 derivation path purpose.
 const DERIVATION_PATH_PURPOSE_ED25519: u32 = 44;
@@ -47,6 +49,24 @@ impl Ed25519KeyPair {
         let private_key = Ed25519PrivateKey(ed25519_consensus::SigningKey::from(derived));
 
         Ok(private_key.into())
+    }
+
+    /// Generates an Ed25519 key pair from a mnemonic phrase.
+    ///
+    /// # Errors
+    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
+    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
+    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
+    pub fn generate(
+        path: Option<DerivationPath>,
+        mnemonic_type: Option<MnemonicType>,
+    ) -> Result<Self> {
+        let mnemonic_type = mnemonic_type.unwrap_or(MnemonicType::Words24);
+
+        let mnemonic = bip39::Mnemonic::new(mnemonic_type.into(), bip39::Language::English);
+        let seed = bip39::Seed::new(&mnemonic, "");
+
+        Self::derive(seed.as_bytes(), path)
     }
 
     /// Returns the public key of the key pair.
@@ -120,10 +140,10 @@ fn validate_path(path: Option<DerivationPath>) -> Result<DerivationPath> {
                 {
                     Ok(path)
                 } else {
-                    Err(KeyPairError::InvalidDerivationPath(path))
+                    Err(KeyPairError::InvalidDerivationPath { path })
                 }
             } else {
-                Err(KeyPairError::InvalidDerivationPath(path))
+                Err(KeyPairError::InvalidDerivationPath { path })
             }
         }
         None => Ok(format!(
