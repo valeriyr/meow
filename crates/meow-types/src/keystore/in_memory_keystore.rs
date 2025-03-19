@@ -28,6 +28,16 @@ impl InMemoryKeystore {
         self.keys.insert(address, keypair);
         Ok(())
     }
+
+    /// Gets a key from the keystore.
+    pub fn get_key(&self, address: &Address) -> Option<&KeyPair> {
+        self.keys.get(address)
+    }
+
+    /// Gets an iterator over the keys, sorted by address.
+    pub fn iter(&self) -> impl Iterator<Item = (&Address, &KeyPair)> {
+        self.keys.iter()
+    }
 }
 
 impl Default for InMemoryKeystore {

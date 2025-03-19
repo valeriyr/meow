@@ -9,7 +9,7 @@ use error::KeystoreError;
 use file_based_keystore::FileBasedKeystore;
 use in_memory_keystore::InMemoryKeystore;
 
-use crate::keypair::KeyPair;
+use crate::{address::Address, keypair::KeyPair};
 
 /// The result type related to keystores.
 pub type Result<T> = std::result::Result<T, KeystoreError>;
@@ -44,5 +44,23 @@ impl Keystore {
             Keystore::FileBased(keystore) => keystore.add_key(keypair),
             Keystore::InMemory(keystore) => keystore.add_key(keypair),
         }
+    }
+
+    /// Gets a key from the keystore.
+    pub fn get_key(&self, address: &Address) -> Option<&KeyPair> {
+        match self {
+            Keystore::FileBased(keystore) => keystore.get_key(address),
+            Keystore::InMemory(keystore) => keystore.get_key(address),
+        }
+    }
+
+    /// Gets an iterator over the keys, sorted by address.
+    pub fn iter(&self) -> impl Iterator<Item = (&Address, &KeyPair)> {
+        let elements: Vec<_> = match self {
+            Keystore::FileBased(keystore) => keystore.iter().collect(),
+            Keystore::InMemory(keystore) => keystore.iter().collect(),
+        };
+
+        elements.into_iter()
     }
 }

@@ -1,6 +1,8 @@
 use std::fmt;
 
+use base64::{engine::general_purpose, Engine};
 use bip32::{ChildNumber, DerivationPath};
+use rand::{CryptoRng, RngCore};
 use zeroize::ZeroizeOnDrop;
 
 use super::{
@@ -41,7 +43,6 @@ impl Ed25519KeyPair {
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
     /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn derive(seed: &[u8], path: Option<DerivationPath>) -> Result<Self> {
         let path = validate_path(path)?;
         let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
@@ -56,7 +57,6 @@ impl Ed25519KeyPair {
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
     /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn generate(
         path: Option<DerivationPath>,
         mnemonic_type: Option<MnemonicType>,
@@ -69,6 +69,12 @@ impl Ed25519KeyPair {
         Self::derive(seed.as_bytes(), path)
     }
 
+    /// Generates a random Ed25519 key pair.
+    pub fn random<R: CryptoRng + RngCore>(rnd: R) -> Self {
+        let private_key = Ed25519PrivateKey(ed25519_consensus::SigningKey::new(rnd));
+        private_key.into()
+    }
+
     /// Returns the public key of the key pair.
     pub fn public(&self) -> &Ed25519PublicKey {
         &self.public
@@ -77,6 +83,16 @@ impl Ed25519KeyPair {
     /// Returns the bytes representation of the key pair.
     pub fn as_bytes(&self) -> &[u8] {
         self.private.0.as_bytes()
+    }
+
+    /// Encodes the Ed25519 key pair to a base64 string.
+    pub fn encode_base64(&self) -> String {
+        general_purpose::STANDARD.encode(self.as_bytes())
+    }
+
+    /// Encodes the Ed25519 key pair to a hex string.
+    pub fn encode_hex(&self) -> String {
+        hex::encode(self.as_bytes())
     }
 }
 
@@ -99,6 +115,22 @@ impl TryFrom<&[u8]> for Ed25519KeyPair {
 //
 // Implementation of [Ed25519PublicKey].
 //
+impl Ed25519PublicKey {
+    /// Returns the bytes representation of the public key.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    /// Encodes the Ed25519 public key to a base64 string.
+    pub fn encode_base64(&self) -> String {
+        general_purpose::STANDARD.encode(self.as_bytes())
+    }
+
+    /// Encodes the Ed25519 public key to a hex string.
+    pub fn encode_hex(&self) -> String {
+        hex::encode(self.as_bytes())
+    }
+}
 
 impl From<&Ed25519PrivateKey> for Ed25519PublicKey {
     fn from(private: &Ed25519PrivateKey) -> Self {

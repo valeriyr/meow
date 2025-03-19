@@ -14,6 +14,7 @@ use ed25519::Ed25519KeyPair;
 use error::KeyPairError;
 use mnemonic::MnemonicType;
 use public_key::PublicKey;
+use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature_scheme::SignatureScheme;
 
@@ -34,7 +35,6 @@ impl KeyPair {
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
     /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn derive(
         seed: &[u8],
         scheme: SignatureScheme,
@@ -50,7 +50,6 @@ impl KeyPair {
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
     /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn generate(
         scheme: SignatureScheme,
         path: Option<DerivationPath>,
@@ -61,6 +60,13 @@ impl KeyPair {
                 path,
                 mnemonic_type,
             )?)),
+        }
+    }
+
+    /// Generates a random key pair.
+    pub fn random<R: CryptoRng + RngCore>(scheme: SignatureScheme, rnd: R) -> Self {
+        match scheme {
+            SignatureScheme::Ed25519 => KeyPair::Ed25519(Ed25519KeyPair::random(rnd)),
         }
     }
 
@@ -85,17 +91,27 @@ impl KeyPair {
     }
 
     /// Encodes the key pair to a base64 string.
-    fn encode_base64(&self) -> String {
+    pub fn encode_base64(&self) -> String {
         general_purpose::STANDARD.encode(self.to_bytes())
     }
 
     /// Decodes a key pair from the base64 string.
-    fn decode_base64(base64: &str) -> Result<Self> {
+    ///
+    /// # Errors
+    /// - [KeyPairError::InvalidKeyPairBytes] if the key pair bytes are invalid.
+    /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
+    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
+    pub fn decode_base64(base64: &str) -> Result<Self> {
         let bytes = general_purpose::STANDARD.decode(base64)?;
         Self::from_bytes(&bytes)
     }
 
     /// Decodes a key pair from the bytes.
+    ///
+    /// # Errors
+    /// - [KeyPairError::InvalidKeyPairBytes] if the key pair bytes are invalid.
+    /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
+    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let scheme_byte = bytes
             .first()
