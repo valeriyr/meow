@@ -54,6 +54,14 @@ impl Keystore {
         }
     }
 
+    /// Removes a key from the keystore.
+    pub fn remove_key(&mut self, address: &Address) -> Result<Option<KeyPair>> {
+        match self {
+            Keystore::FileBased(keystore) => keystore.remove_key(address),
+            Keystore::InMemory(keystore) => keystore.remove_key(address),
+        }
+    }
+
     /// Gets an iterator over the keys, sorted by address.
     pub fn iter(&self) -> impl Iterator<Item = (&Address, &KeyPair)> {
         let elements: Vec<_> = match self {

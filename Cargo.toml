@@ -15,11 +15,14 @@ clap = { version ="4.5.32", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 enum_dispatch = "0.3.13"
 hex = "0.4.3"
+json_to_table = "0.10.0"
+prefix-hex = { version = "0.7.1", features = ["std"] }
 rand = "0.8.5"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 strum = "0.27"
 strum_macros = "0.27"
+tabled = "0.18.0"
 thiserror = "2.0.12"
 
 meow-types = { path = "crates/meow-types" }

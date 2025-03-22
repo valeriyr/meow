@@ -1,6 +1,6 @@
 use bip32::DerivationPath;
 
-/// An error related to key pairs.
+/// An error related to keypairs.
 #[derive(Debug, thiserror::Error)]
 pub enum KeyPairError {
     #[error("bip32 error: {0}")]
@@ -13,6 +13,6 @@ pub enum KeyPairError {
     InvalidDerivationPath { path: DerivationPath },
     #[error("invalid signature scheme flag: {flag}")]
     InvalidSignatureSchemeFlag { flag: u8 },
-    #[error("invalid key pair bytes: {bytes:?}")]
+    #[error("invalid keypair bytes: {bytes:?}")]
     InvalidKeyPairBytes { bytes: Vec<u8> },
 }

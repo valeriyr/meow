@@ -36,7 +36,7 @@ pub struct Ed25519KeyPair {
 //
 
 impl Ed25519KeyPair {
-    /// Derives an Ed25519 key pair.
+    /// Derives an Ed25519 keypair.
     ///
     /// Ed25519 follows SLIP-0010 using hardened path: m/44'/9999'/0'/0'/{index}'.
     ///
@@ -52,7 +52,7 @@ impl Ed25519KeyPair {
         Ok(private_key.into())
     }
 
-    /// Generates an Ed25519 key pair from a mnemonic phrase.
+    /// Generates an Ed25519 keypair from a mnemonic phrase.
     ///
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
@@ -69,28 +69,28 @@ impl Ed25519KeyPair {
         Self::derive(seed.as_bytes(), path)
     }
 
-    /// Generates a random Ed25519 key pair.
+    /// Generates a random Ed25519 keypair.
     pub fn random<R: CryptoRng + RngCore>(rnd: R) -> Self {
         let private_key = Ed25519PrivateKey(ed25519_consensus::SigningKey::new(rnd));
         private_key.into()
     }
 
-    /// Returns the public key of the key pair.
+    /// Returns the public key of the keypair.
     pub fn public(&self) -> &Ed25519PublicKey {
         &self.public
     }
 
-    /// Returns the bytes representation of the key pair.
+    /// Returns the bytes representation of the keypair.
     pub fn as_bytes(&self) -> &[u8] {
         self.private.0.as_bytes()
     }
 
-    /// Encodes the Ed25519 key pair to a base64 string.
+    /// Encodes the Ed25519 keypair to a base64 string.
     pub fn encode_base64(&self) -> String {
         general_purpose::STANDARD.encode(self.as_bytes())
     }
 
-    /// Encodes the Ed25519 key pair to a hex string.
+    /// Encodes the Ed25519 keypair to a hex string.
     pub fn encode_hex(&self) -> String {
         hex::encode(self.as_bytes())
     }

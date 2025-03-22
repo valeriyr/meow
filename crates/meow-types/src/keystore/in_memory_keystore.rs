@@ -34,6 +34,11 @@ impl InMemoryKeystore {
         self.keys.get(address)
     }
 
+    /// Removes a key from the keystore.
+    pub fn remove_key(&mut self, address: &Address) -> Result<Option<KeyPair>> {
+        Ok(self.keys.remove(address))
+    }
+
     /// Gets an iterator over the keys, sorted by address.
     pub fn iter(&self) -> impl Iterator<Item = (&Address, &KeyPair)> {
         self.keys.iter()

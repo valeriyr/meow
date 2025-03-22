@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use clap::{command, Parser};
 
-use crate::keytool::KeyToolCommand;
+use crate::{keytool::KeyToolCommand, output_formatter::OutputFormatter};
 
 use meow_types::{config::meow_keystore_path, keystore::Keystore};
 
@@ -16,11 +16,11 @@ pub enum Command {
     #[command(name = "keytool")]
     KeyTool {
         /// The path to the keystore file.
-        #[arg(long)]
-        keystore_path: Option<PathBuf>,
-        /// Return command outputs in json format
         #[arg(long, global = true)]
-        json: bool,
+        keystore_path: Option<PathBuf>,
+        /// The command output is formatted using this formatter before printing.
+        #[arg(long, global = true)]
+        output_formatter: Option<OutputFormatter>,
         /// Subcommands.
         #[command(subcommand)]
         cmd: KeyToolCommand,
@@ -37,13 +37,22 @@ impl Command {
             }
             Command::KeyTool {
                 keystore_path,
-                json,
+                output_formatter,
                 cmd,
             } => {
                 let keystore_path = keystore_path.unwrap_or(meow_keystore_path()?);
                 let mut keystore = Keystore::file_based(&keystore_path)?;
 
-                cmd.run(&mut keystore)
+                let output = cmd.run(&mut keystore)?;
+
+                println!(
+                    "{}",
+                    output_formatter
+                        .unwrap_or(OutputFormatter::Table)
+                        .format(&output)?
+                );
+
+                Ok(())
             }
         }
     }

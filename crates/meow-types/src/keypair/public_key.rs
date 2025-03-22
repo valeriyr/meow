@@ -15,12 +15,26 @@ impl PublicKey {
             PublicKey::Ed25519(_) => SignatureScheme::Ed25519,
         }
     }
+
+    /// Encodes the public key to a base64 string.
+    pub fn encode_base64(&self) -> String {
+        match self {
+            PublicKey::Ed25519(public_key) => public_key.encode_base64(),
+        }
+    }
+
+    /// Encodes the public key to a hex string.
+    pub fn encode_hex(&self) -> String {
+        match self {
+            PublicKey::Ed25519(public_key) => public_key.encode_hex(),
+        }
+    }
 }
 
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
-            PublicKey::Ed25519(public_key) => public_key.0.as_bytes(),
+            PublicKey::Ed25519(public_key) => public_key.as_bytes(),
         }
     }
 }

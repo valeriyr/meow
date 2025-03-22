@@ -65,6 +65,28 @@ fn add_duplicate_key_to_in_memory_keystore() {
     ));
 }
 
+#[test]
+fn remove_key_from_in_memory_keystore() {
+    let mut keystore = Keystore::in_memory();
+
+    let (_, keypair1) = test_keypair1();
+    let (address2, keypair2) = test_keypair2();
+
+    keystore.add_key(keypair1).unwrap();
+    keystore.add_key(keypair2).unwrap();
+
+    assert_eq!(keystore.iter().count(), 2);
+
+    keystore.remove_key(&address2).unwrap();
+
+    let (address1, keypair1) = test_keypair1();
+
+    assert_eq!(keystore.iter().count(), 1);
+
+    assert_eq!(keystore.get_key(&address1), Some(&keypair1));
+    assert_eq!(keystore.get_key(&address2), None);
+}
+
 //
 // File-based keystore tests.
 //
@@ -147,6 +169,52 @@ fn add_duplicate_key_to_file_based_keystore() {
         keystore.add_key(keypair2),
         Err(KeystoreError::KeyPairAlreadyExists { .. })
     ));
+}
+
+#[test]
+fn remove_key_from_file_based_keystore() {
+    let tmp_dir = TempDir::new().unwrap();
+
+    // Add two keys.
+    {
+        let mut keystore = test_file_based_keystore(tmp_dir.path());
+
+        let (_, keypair1) = test_keypair1();
+        let (_, keypair2) = test_keypair2();
+
+        keystore.add_key(keypair1).unwrap();
+        keystore.add_key(keypair2).unwrap();
+    }
+
+    // Remove a key from the keystore.
+    {
+        let mut keystore = test_file_based_keystore(tmp_dir.path());
+
+        assert_eq!(keystore.iter().count(), 2);
+
+        let (address1, keypair1) = test_keypair1();
+        let (address2, _) = test_keypair2();
+
+        keystore.remove_key(&address2).unwrap();
+
+        assert_eq!(keystore.iter().count(), 1);
+
+        assert_eq!(keystore.get_key(&address1), Some(&keypair1));
+        assert_eq!(keystore.get_key(&address2), None);
+    }
+
+    // Check the keystore after removing the key.
+    {
+        let keystore = test_file_based_keystore(tmp_dir.path());
+
+        let (address1, keypair1) = test_keypair1();
+        let (address2, _) = test_keypair2();
+
+        assert_eq!(keystore.iter().count(), 1);
+
+        assert_eq!(keystore.get_key(&address1), Some(&keypair1));
+        assert_eq!(keystore.get_key(&address2), None);
+    }
 }
 
 //

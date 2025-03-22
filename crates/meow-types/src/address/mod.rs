@@ -1,11 +1,17 @@
-use std::fmt;
+pub mod error;
+
+use std::{fmt, str::FromStr};
 
 use blake2::{
     digest::{consts::U32, generic_array::GenericArray},
     Blake2b, Digest,
 };
+use error::AddressError;
 
 use crate::keypair::{public_key::PublicKey, KeyPair};
+
+/// The result type related to keystores.
+pub type Result<T> = std::result::Result<T, AddressError>;
 
 /// The address length.
 pub const ADDRESS_LENGTH: usize = 32;
@@ -26,7 +32,17 @@ impl Address {
 
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.0))
+        write!(f, "{}", prefix_hex::encode(self.0))
+    }
+}
+
+impl FromStr for Address {
+    type Err = AddressError;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let bytes: Vec<u8> = prefix_hex::decode(s)?;
+
+        Address::try_from(bytes.as_slice())
     }
 }
 
@@ -47,5 +63,18 @@ impl From<PublicKey> for Address {
         hasher.finalize_into(GenericArray::from_mut_slice(&mut bytes));
 
         Address::new(bytes)
+    }
+}
+
+impl TryFrom<&[u8]> for Address {
+    type Error = AddressError;
+
+    fn try_from(bytes: &[u8]) -> Result<Self> {
+        <[u8; ADDRESS_LENGTH]>::try_from(bytes)
+            .map_err(|_| AddressError::InvalidAddressBytesLength {
+                actual: bytes.len(),
+                expected: ADDRESS_LENGTH,
+            })
+            .map(Address)
     }
 }

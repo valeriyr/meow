@@ -41,13 +41,21 @@ impl FileBasedKeystore {
     /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
     pub fn add_key(&mut self, keypair: KeyPair) -> Result<()> {
         self.inner.add_key(keypair)?;
-        self.save()?;
-        Ok(())
+        // TODO: Should we remove the keypair from the store if the save fails?
+        self.save()
     }
 
     /// Gets a key from the keystore.
     pub fn get_key(&self, address: &Address) -> Option<&KeyPair> {
         self.inner.get_key(address)
+    }
+
+    /// Removes a key from the keystore.
+    pub fn remove_key(&mut self, address: &Address) -> Result<Option<KeyPair>> {
+        let result = self.inner.remove_key(address)?;
+        // TODO: Should we add the keypair back if the save fails?
+        self.save()?;
+        Ok(result)
     }
 
     /// Gets an iterator over the keys, sorted by address.

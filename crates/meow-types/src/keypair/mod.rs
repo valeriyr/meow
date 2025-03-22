@@ -1,6 +1,6 @@
 mod derivation;
+mod ed25519;
 
-pub mod ed25519;
 pub mod error;
 pub mod mnemonic;
 
@@ -18,10 +18,10 @@ use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature_scheme::SignatureScheme;
 
-/// The result type related to key pairs.
+/// The result type related to keypairs.
 pub type Result<T> = std::result::Result<T, KeyPairError>;
 
-/// The key pair type.
+/// The keypair type.
 ///
 /// Currently only EdDSA is supported.
 #[derive(Debug, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub enum KeyPair {
 }
 
 impl KeyPair {
-    /// Derives a key pair.
+    /// Derives a keypair.
     ///
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
@@ -45,7 +45,7 @@ impl KeyPair {
         }
     }
 
-    /// Generates a key pair.
+    /// Generates a keypair.
     ///
     /// # Errors
     /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
@@ -63,21 +63,21 @@ impl KeyPair {
         }
     }
 
-    /// Generates a random key pair.
+    /// Generates a random keypair.
     pub fn random<R: CryptoRng + RngCore>(scheme: SignatureScheme, rnd: R) -> Self {
         match scheme {
             SignatureScheme::Ed25519 => KeyPair::Ed25519(Ed25519KeyPair::random(rnd)),
         }
     }
 
-    /// Returns the public key of the key pair.
+    /// Returns the public key of the keypair.
     pub fn public(&self) -> PublicKey {
         match self {
             KeyPair::Ed25519(keypair) => PublicKey::Ed25519(keypair.public().to_owned()),
         }
     }
 
-    /// Returns a bytes representation of the key pair.
+    /// Returns a bytes representation of the keypair.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.push(self.public().scheme().flag());
@@ -90,15 +90,15 @@ impl KeyPair {
         bytes
     }
 
-    /// Encodes the key pair to a base64 string.
+    /// Encodes the keypair to a base64 string.
     pub fn encode_base64(&self) -> String {
         general_purpose::STANDARD.encode(self.to_bytes())
     }
 
-    /// Decodes a key pair from the base64 string.
+    /// Decodes a keypair from the base64 string.
     ///
     /// # Errors
-    /// - [KeyPairError::InvalidKeyPairBytes] if the key pair bytes are invalid.
+    /// - [KeyPairError::InvalidKeyPairBytes] if the keypair bytes are invalid.
     /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
     /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn decode_base64(base64: &str) -> Result<Self> {
@@ -106,10 +106,10 @@ impl KeyPair {
         Self::from_bytes(&bytes)
     }
 
-    /// Decodes a key pair from the bytes.
+    /// Decodes a keypair from the bytes.
     ///
     /// # Errors
-    /// - [KeyPairError::InvalidKeyPairBytes] if the key pair bytes are invalid.
+    /// - [KeyPairError::InvalidKeyPairBytes] if the keypair bytes are invalid.
     /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
     /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {

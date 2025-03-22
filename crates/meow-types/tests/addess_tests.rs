@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use meow_types::{
     address::Address,
     keypair::{signature_scheme::SignatureScheme, KeyPair},
@@ -48,6 +50,28 @@ fn address_from_public_key() {
         address.to_string(),
         "0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f"
     );
+}
+
+#[test]
+fn address_from_string() {
+    let parsed =
+        Address::from_str("0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f")
+            .unwrap();
+    let expected = Address::from(&test_keypair());
+
+    assert_eq!(parsed, expected);
+}
+
+#[test]
+fn address_from_bytes() {
+    let bytes: Vec<u8> =
+        prefix_hex::decode("0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f")
+            .unwrap();
+
+    let parsed = Address::try_from(bytes.as_slice()).unwrap();
+    let expected = Address::from(&test_keypair());
+
+    assert_eq!(parsed, expected);
 }
 
 //

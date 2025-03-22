@@ -25,9 +25,19 @@ fn ed25519_keypair_derive() {
         serde_json::to_string(&keypair).unwrap(),
         "\"AJkFYXpNS6e7iauGdUb9aTJaDhLdMhk+BhlCdJ9E7NjS\""
     );
+
     assert_eq!(
         format!("{keypair:?}"),
         "Ed25519(Ed25519KeyPair { public: Ed25519PublicKey(VerificationKey(\"3d683eed8ee67d24091b27c2de86d7504cdea3fb6f279d64b413b4b011913f82\")), private: <elided secret for Ed25519PrivateKey> })"
+    );
+
+    assert_eq!(
+        keypair.public().encode_base64(),
+        "PWg+7Y7mfSQJGyfC3obXUEzeo/tvJ51ktBO0sBGRP4I="
+    );
+    assert_eq!(
+        keypair.public().encode_hex(),
+        "3d683eed8ee67d24091b27c2de86d7504cdea3fb6f279d64b413b4b011913f82"
     );
 
     assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
@@ -59,6 +69,15 @@ fn ed25519_keypair_random() {
     assert_eq!(
         serde_json::to_string(&keypair).unwrap(),
         "\"AJv0mmoHVflTgR/OEl8mg9UEKcO7SeB0FH4AiaUurhVf\""
+    );
+
+    assert_eq!(
+        keypair.public().encode_base64(),
+        "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA="
+    );
+    assert_eq!(
+        keypair.public().encode_hex(),
+        "b9c6ee1630ef3e711144a648db06bbb2284f7274cfbee53ffcee503cc1a49200"
     );
 
     assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);

@@ -16,6 +16,7 @@ struct Args {
     command: Command,
 }
 
+/// The main function.
 fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
