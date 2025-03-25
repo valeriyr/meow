@@ -1,0 +1,9 @@
+[package]
+name = "meow-vm"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+
+[dependencies]
+chumsky = "0.10.0"

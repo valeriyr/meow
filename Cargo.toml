@@ -3,7 +3,8 @@ resolver = "2"
 members = [
     "crates/meow",
     "crates/meow-node",
-    "crates/meow-types"
+    "crates/meow-types",
+    "crates/meow-vm",
     ]
 
 # Dependencies that should be kept in sync through the whole workspace
