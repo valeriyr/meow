@@ -17,8 +17,9 @@ struct Args {
 }
 
 /// The main function.
-fn main() -> Result<(), anyhow::Error> {
+#[tokio::main]
+async fn main() -> Result<(), anyhow::Error> {
     let args = Args::parse();
 
-    args.command.run()
+    args.command.run().await
 }

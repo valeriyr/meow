@@ -30,10 +30,9 @@ pub enum Command {
 impl Command {
     /// Runs the command.
     pub fn run(self) -> Result<(), anyhow::Error> {
-        match self {
+        Ok(match self {
             Command::SayMeow => {
                 println!("Meow!");
-                Ok(())
             }
             Command::KeyTool {
                 keystore_path,
@@ -51,9 +50,7 @@ impl Command {
                         .unwrap_or(OutputFormatter::Table)
                         .format(&output)?
                 );
-
-                Ok(())
             }
-        }
+        })
     }
 }

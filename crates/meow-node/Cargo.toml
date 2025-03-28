@@ -4,8 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
-description = "meow-node is a MEOW project node"
+description = "meow-node is a MEOW network node"
 
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+thiserror.workspace = true
+tokio.workspace = true

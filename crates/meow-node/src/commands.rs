@@ -1,21 +1,20 @@
 use clap::{command, Parser};
 
+use crate::node::Node;
+
 /// The main command line commands.
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum Command {
-    /// Say meow!
-    SayMeow,
+    /// Run the node.
+    Run,
 }
 
 impl Command {
     /// Runs the command.
-    pub fn run(self) -> Result<(), anyhow::Error> {
-        match self {
-            Command::SayMeow => {
-                println!("Meow!");
-                Ok(())
-            }
-        }
+    pub async fn run(self) -> Result<(), anyhow::Error> {
+        Ok(match self {
+            Command::Run => Node::new().run().await?,
+        })
     }
 }
