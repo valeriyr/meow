@@ -1,5 +1,5 @@
-use json_to_table::json_to_table;
 use json_to_table::Orientation;
+use json_to_table::json_to_table;
 use serde::Serialize;
 use serde_json::json;
 use strum_macros::EnumString;

@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use bip32::DerivationPath;
-use meow_types::keypair::{error::KeyPairError, signature_scheme::SignatureScheme, KeyPair};
-use rand::{rngs::StdRng, SeedableRng};
+use meow_types::keypair::{KeyPair, error::KeyPairError, signature_scheme::SignatureScheme};
+use rand::{SeedableRng, rngs::StdRng};
 
 /// A seed used in the tests.
 const SEED: &str = "34e52ea12212a4b6ce7301eba2cbd9c089886ffb2af0c8835cd565106039a28d0319351451f493e4e9472f77d7ce4d910d552c5c4987e9600c5c436a93f59a24";

@@ -2,10 +2,10 @@ use std::{fs, path::Path};
 
 use meow_types::{
     address::Address,
-    keypair::{signature_scheme::SignatureScheme, KeyPair},
-    keystore::{error::KeystoreError, Keystore},
+    keypair::{KeyPair, signature_scheme::SignatureScheme},
+    keystore::{Keystore, error::KeystoreError},
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 use temp_dir::TempDir;
 
 //

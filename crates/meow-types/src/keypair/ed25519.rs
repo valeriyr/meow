@@ -1,12 +1,12 @@
 use std::fmt;
 
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use bip32::{ChildNumber, DerivationPath};
 use rand::{CryptoRng, RngCore};
 use zeroize::ZeroizeOnDrop;
 
 use super::{
-    derivation::DERIVATION_PATH_COIN_TYPE, error::KeyPairError, mnemonic::MnemonicType, Result,
+    Result, derivation::DERIVATION_PATH_COIN_TYPE, error::KeyPairError, mnemonic::MnemonicType,
 };
 
 /// The Ed25519 derivation path purpose.

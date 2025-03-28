@@ -1,7 +1,7 @@
 [package]
 name = "meow"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "meow is a MEOW project CLI tool"

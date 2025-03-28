@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use crate::{address::Address, keypair::KeyPair};
 
-use super::{in_memory_keystore::InMemoryKeystore, Result};
+use super::{Result, in_memory_keystore::InMemoryKeystore};
 
 /// The file-based keystore type.
 ///

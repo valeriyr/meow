@@ -1,5 +1,5 @@
 [workspace]
-resolver = "2"
+resolver = "3"
 members = [
     "crates/meow",
     "crates/meow-node",
@@ -12,7 +12,7 @@ members = [
 anyhow = "1.0.97"
 base64 = "0.22.1"
 bip32 = "0.5.3"
-clap = { version ="4.5.32", features = ["derive", "wrap_help"] }
+clap = { version ="4.5.34", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 enum_dispatch = "0.3.13"
 hex = "0.4.3"

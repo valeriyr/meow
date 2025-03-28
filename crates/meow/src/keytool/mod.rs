@@ -1,10 +1,10 @@
 pub mod output;
 
 use bip32::DerivationPath;
-use clap::{command, Parser};
+use clap::{Parser, command};
 use meow_types::{
     address::Address,
-    keypair::{mnemonic::MnemonicType, signature_scheme::SignatureScheme, KeyPair},
+    keypair::{KeyPair, mnemonic::MnemonicType, signature_scheme::SignatureScheme},
     keystore::Keystore,
 };
 use output::{Key, KeyToolCommandOutput};

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{command, Parser};
+use clap::{Parser, command};
 
 use crate::{keytool::KeyToolCommand, output_formatter::OutputFormatter};
 

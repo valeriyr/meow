@@ -8,7 +8,7 @@ pub mod private_key;
 pub mod public_key;
 pub mod signature_scheme;
 
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use bip32::DerivationPath;
 use ed25519::Ed25519KeyPair;
 use error::KeyPairError;

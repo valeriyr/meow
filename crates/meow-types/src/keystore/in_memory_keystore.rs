@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{error::KeystoreError, Result};
+use super::{Result, error::KeystoreError};
 use crate::{address::Address, keypair::KeyPair};
 
 /// The in-memory keystore type.

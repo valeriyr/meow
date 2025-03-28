@@ -3,12 +3,12 @@ pub mod error;
 use std::{fmt, str::FromStr};
 
 use blake2::{
-    digest::{consts::U32, generic_array::GenericArray},
     Blake2b, Digest,
+    digest::{consts::U32, generic_array::GenericArray},
 };
 use error::AddressError;
 
-use crate::keypair::{public_key::PublicKey, KeyPair};
+use crate::keypair::{KeyPair, public_key::PublicKey};
 
 /// The result type related to keystores.
 pub type Result<T> = std::result::Result<T, AddressError>;

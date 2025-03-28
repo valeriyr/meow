@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use meow_types::{
     address::Address,
-    keypair::{signature_scheme::SignatureScheme, KeyPair},
+    keypair::{KeyPair, signature_scheme::SignatureScheme},
 };
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{SeedableRng, rngs::StdRng};
 
 //
 // Address creation tests.
