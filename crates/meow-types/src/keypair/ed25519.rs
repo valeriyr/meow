@@ -39,10 +39,6 @@ impl Ed25519KeyPair {
     /// Derives an Ed25519 keypair.
     ///
     /// Ed25519 follows SLIP-0010 using hardened path: m/44'/9999'/0'/0'/{index}'.
-    ///
-    /// # Errors
-    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
-    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
     pub fn derive(seed: &[u8], path: Option<DerivationPath>) -> Result<Self> {
         let path = validate_path(path)?;
         let indexes = path.into_iter().map(|i| i.into()).collect::<Vec<_>>();
@@ -53,10 +49,6 @@ impl Ed25519KeyPair {
     }
 
     /// Generates an Ed25519 keypair from a mnemonic phrase.
-    ///
-    /// # Errors
-    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
-    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
     pub fn generate(
         path: Option<DerivationPath>,
         mnemonic_type: Option<MnemonicType>,

@@ -31,10 +31,6 @@ pub enum KeyPair {
 
 impl KeyPair {
     /// Derives a keypair.
-    ///
-    /// # Errors
-    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
-    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
     pub fn derive(
         seed: &[u8],
         scheme: SignatureScheme,
@@ -46,10 +42,6 @@ impl KeyPair {
     }
 
     /// Generates a keypair.
-    ///
-    /// # Errors
-    /// - [KeyPairError::Bip32Error] if the bip32 error occurs.
-    /// - [KeyPairError::InvalidDerivationPath] if the derivation path is invalid.
     pub fn generate(
         scheme: SignatureScheme,
         path: Option<DerivationPath>,
@@ -96,22 +88,12 @@ impl KeyPair {
     }
 
     /// Decodes a keypair from the base64 string.
-    ///
-    /// # Errors
-    /// - [KeyPairError::InvalidKeyPairBytes] if the keypair bytes are invalid.
-    /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn decode_base64(base64: &str) -> Result<Self> {
         let bytes = general_purpose::STANDARD.decode(base64)?;
         Self::from_bytes(&bytes)
     }
 
     /// Decodes a keypair from the bytes.
-    ///
-    /// # Errors
-    /// - [KeyPairError::InvalidKeyPairBytes] if the keypair bytes are invalid.
-    /// - [KeyPairError::InvalidSignatureSchemeFlag] if the signature scheme flag is invalid.
-    /// - [KeyPairError::Ed25519ConsensusError] if the ed25519 consensus error occurs.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let scheme_byte = bytes
             .first()

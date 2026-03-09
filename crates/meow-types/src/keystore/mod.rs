@@ -22,10 +22,6 @@ pub enum Keystore {
 
 impl Keystore {
     /// Loads a keystore from the file.
-    ///
-    /// # Errors
-    /// - [KeystoreError::IoError] if the file cannot be written.
-    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
     pub fn file_based(path: &impl AsRef<Path>) -> Result<Self> {
         Ok(Keystore::FileBased(FileBasedKeystore::load(path)?))
     }
@@ -36,9 +32,6 @@ impl Keystore {
     }
 
     /// Adds a key to the keystore.
-    ///
-    /// # Errors
-    /// - [KeystoreError::KeyPairAlreadyExists] if the key already exists.
     pub fn add_key(&mut self, keypair: KeyPair) -> Result<()> {
         match self {
             Keystore::FileBased(keystore) => keystore.add_key(keypair),

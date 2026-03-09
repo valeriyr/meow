@@ -15,10 +15,6 @@ const MEOW_KEYSTORE_FILE: &str = "keystore.json";
 /// Returns the path to the meow configuration directory.
 ///
 /// Creates the directory if it does not exist.
-///
-/// # Errors
-/// - [ConfigError::CannotObtainHomeDirectoryPath] if the home directory path cannot be obtained.
-/// - [ConfigError::IoError] if the config directory cannot be created.
 pub fn meow_config_dir() -> Result<PathBuf> {
     match std::env::var_os("MEOW_CONFIG_DIR") {
         Some(config_env) => Ok(config_env.into()),
@@ -38,10 +34,6 @@ pub fn meow_config_dir() -> Result<PathBuf> {
 /// Returns the path to the keystore file.
 ///
 /// Creates the directory if it does not exist.
-///
-/// # Errors
-/// - [ConfigError::CannotObtainHomeDirectoryPath] if the home directory path cannot be obtained.
-/// - [ConfigError::IoError] if the config directory cannot be created.
 pub fn meow_keystore_path() -> Result<PathBuf> {
     meow_config_dir().map(|dir| dir.join(MEOW_KEYSTORE_FILE))
 }

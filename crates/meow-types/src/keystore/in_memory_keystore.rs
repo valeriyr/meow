@@ -15,9 +15,6 @@ pub struct InMemoryKeystore {
 
 impl InMemoryKeystore {
     /// Adds a key to the keystore.
-    ///
-    /// # Errors
-    /// - [KeystoreError::KeyPairAlreadyExists] if the key already exists.
     pub fn add_key(&mut self, keypair: KeyPair) -> Result<()> {
         let address = keypair.public().into();
 

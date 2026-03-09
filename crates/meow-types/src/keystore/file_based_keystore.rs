@@ -15,10 +15,6 @@ pub struct FileBasedKeystore {
 
 impl FileBasedKeystore {
     /// Loads a keystore from the file.
-    ///
-    /// # Errors
-    /// - [KeystoreError::IoError] if the file cannot be written.
-    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
     pub fn load(path: &impl AsRef<Path>) -> Result<Self> {
         let inner = if path.as_ref().exists() {
             let content = fs::read(path)?;
@@ -34,11 +30,6 @@ impl FileBasedKeystore {
     }
 
     /// Adds a key to the keystore.
-    ///
-    /// # Errors
-    /// - [KeystoreError::IoError] if the file cannot be written.
-    /// - [KeystoreError::KeyPairAlreadyExists] if the key already exists.
-    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
     pub fn add_key(&mut self, keypair: KeyPair) -> Result<()> {
         self.inner.add_key(keypair)?;
         // TODO: Should we remove the keypair from the store if the save fails?
@@ -64,10 +55,6 @@ impl FileBasedKeystore {
     }
 
     /// Saves the keystore to the filesystem.
-    ///
-    /// # Errors
-    /// - [KeystoreError::IoError] if the file cannot be written.
-    /// - [KeystoreError::SerdeJsonError] if the key cannot be serialized.
     fn save(&self) -> Result<()> {
         let contents = serde_json::to_string_pretty(&self.inner)?;
 
