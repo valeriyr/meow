@@ -1,4 +1,4 @@
-use meow_types::config::{meow_config_dir, meow_keystore_path};
+use meow_types::config::{error::ConfigError, meow_config_dir, meow_keystore_path};
 use temp_dir::TempDir;
 
 //
@@ -31,5 +31,18 @@ fn meow_keystore_path_with_env_var() {
         assert_eq!(keystore_path, expected_keystore_path);
 
         assert!(!keystore_path.exists());
+    });
+}
+
+#[test]
+fn meow_config_dir_io_error() {
+    let tmp_dir = TempDir::new().unwrap();
+    let file_path = tmp_dir.path().join("file");
+    std::fs::write(&file_path, b"").unwrap();
+    let invalid_path = file_path.join("subdir");
+
+    temp_env::with_var("MEOW_CONFIG_DIR", Some(invalid_path), || {
+        let result = meow_config_dir();
+        assert!(matches!(result.unwrap_err(), ConfigError::IoError(_)));
     });
 }

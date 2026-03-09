@@ -2,10 +2,13 @@ pub mod error;
 
 use std::{fmt, str::FromStr};
 
-use blake2::{Blake2b, Digest, digest::consts::U32};
+use blake2::{Blake2b, digest::consts::U32};
 use error::AddressError;
 
-use crate::keypair::{KeyPair, public_key::PublicKey};
+use crate::{
+    digest::Digest,
+    keypair::{KeyPair, public_key::PublicKey},
+};
 
 /// The result type related to addresses.
 pub type Result<T> = std::result::Result<T, AddressError>;
@@ -22,8 +25,21 @@ impl Address {
     pub const ZERO: Self = Self([0; ADDRESS_LENGTH]);
 
     /// Creates a new address.
-    pub fn new(address: [u8; ADDRESS_LENGTH]) -> Self {
-        Self(address)
+    pub fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
+        Self(bytes)
+    }
+
+    /// Derives a new address from the given digest, tag and number.
+    pub fn derive(digest: Digest, tag: u8, number: u64) -> Self {
+        use blake2::Digest;
+
+        let mut hasher = Blake2b::<U32>::default();
+
+        hasher.update([tag]);
+        hasher.update(digest);
+        hasher.update(number.to_le_bytes());
+
+        Address::new(hasher.finalize().into())
     }
 }
 
@@ -51,6 +67,8 @@ impl From<&KeyPair> for Address {
 
 impl From<PublicKey> for Address {
     fn from(public_key: PublicKey) -> Self {
+        use blake2::Digest;
+
         let mut hasher = Blake2b::<U32>::default();
 
         hasher.update([public_key.scheme().flag()]);
@@ -70,5 +88,11 @@ impl TryFrom<&[u8]> for Address {
                 expected: ADDRESS_LENGTH,
             })
             .map(Address)
+    }
+}
+
+impl AsRef<[u8]> for Address {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }

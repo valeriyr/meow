@@ -55,6 +55,23 @@ fn ed25519_keypair_derive_with_invalid_derivation_path() {
 }
 
 //
+// Keypair generation tests.
+//
+
+#[test]
+fn ed25519_keypair_generate() {
+    let keypair = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
+}
+
+#[test]
+fn ed25519_keypair_generate_produces_unique_keypairs() {
+    let kp1 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    let kp2 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    assert_ne!(kp1, kp2);
+}
+
+//
 // Keypair random generation tests.
 //
 

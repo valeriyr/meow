@@ -1,4 +1,4 @@
-use crate::object::{object_id::ObjectId, object_version::ObjectVersion};
+use crate::{address::Address, object::object_version::ObjectVersion};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub enum ObjectType {
@@ -8,8 +8,8 @@ pub enum ObjectType {
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Object {
-    /// The object ID.
-    id: ObjectId,
+    /// The object address.
+    address: Address,
     /// The object version.
     version: ObjectVersion,
     /// The object type.
@@ -20,18 +20,23 @@ pub struct Object {
 
 impl Object {
     /// Creates a new object.
-    pub fn new(id: ObjectId, version: ObjectVersion, type_: ObjectType, content: Vec<u8>) -> Self {
+    pub fn new(
+        address: Address,
+        version: ObjectVersion,
+        type_: ObjectType,
+        content: Vec<u8>,
+    ) -> Self {
         Self {
-            id,
+            address,
             version,
             type_,
             content,
         }
     }
 
-    /// Returns the object ID.
-    pub fn id(&self) -> &ObjectId {
-        &self.id
+    /// Returns the object address.
+    pub fn address(&self) -> &Address {
+        &self.address
     }
 
     /// Returns the object version.

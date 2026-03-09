@@ -2,6 +2,7 @@ use std::str::FromStr;
 
 use meow_types::{
     address::Address,
+    digest::Digest,
     keypair::{KeyPair, signature_scheme::SignatureScheme},
 };
 use rand::{SeedableRng, rngs::StdRng};
@@ -26,6 +27,47 @@ fn custom_address() {
         address.to_string(),
         "0x0101010101010101010101010101010101010101010101010101010101010101"
     );
+}
+
+//
+// Address derive tests.
+//
+
+#[test]
+fn derive_is_deterministic() {
+    let digest = test_digest();
+    let a1 = Address::derive(digest.clone(), 0, 0);
+    let a2 = Address::derive(digest, 0, 0);
+    assert_eq!(a1, a2);
+}
+
+#[test]
+fn derive_not_zero() {
+    let address = Address::derive(test_digest(), 0, 0);
+    assert_ne!(address, Address::ZERO);
+}
+
+#[test]
+fn derive_differs_by_tag() {
+    let digest = test_digest();
+    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a1 = Address::derive(digest, 1, 0);
+    assert_ne!(a0, a1);
+}
+
+#[test]
+fn derive_differs_by_number() {
+    let digest = test_digest();
+    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a1 = Address::derive(digest, 0, 1);
+    assert_ne!(a0, a1);
+}
+
+#[test]
+fn derive_differs_by_digest() {
+    let a0 = Address::derive(test_digest(), 0, 0);
+    let a1 = Address::derive(other_digest(), 0, 0);
+    assert_ne!(a0, a1);
 }
 
 //
@@ -80,4 +122,12 @@ fn address_from_bytes() {
 
 fn test_keypair() -> KeyPair {
     KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0; 32]))
+}
+
+fn test_digest() -> Digest {
+    Digest::sign(b"hello").unwrap()
+}
+
+fn other_digest() -> Digest {
+    Digest::sign(b"world").unwrap()
 }

@@ -6,6 +6,8 @@ license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
+bcs.workspace = true
+bs58.workspace = true
 base64.workspace = true
 bip32.workspace = true
 dirs.workspace = true

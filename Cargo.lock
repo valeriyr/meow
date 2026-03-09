@@ -95,6 +95,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
+name = "bcs"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85b6598a2f5d564fb7855dc6b06fd1c38cff5a72bd8b863a4d021938497b440a"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "bip32"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -153,6 +163,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
 dependencies = [
  "sha2 0.10.9",
+ "tinyvec",
 ]
 
 [[package]]
@@ -620,8 +631,10 @@ name = "meow-types"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "bcs",
  "bip32",
  "blake2",
+ "bs58",
  "dirs",
  "ed25519-consensus",
  "hex",
