@@ -16,13 +16,13 @@ const DERIVATION_PATH_PURPOSE_ED25519: u32 = 44;
 ///
 /// This is also called a public key by other implementations.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Ed25519PublicKey(pub ed25519_consensus::VerificationKey);
+pub struct Ed25519PublicKey(ed25519_consensus::VerificationKey);
 
 /// An Ed25519 signing key.
 ///
 /// This is also called a secret key by other implementations.
 #[derive(ZeroizeOnDrop)]
-pub struct Ed25519PrivateKey(pub ed25519_consensus::SigningKey);
+pub struct Ed25519PrivateKey(ed25519_consensus::SigningKey);
 
 /// An Ed25519 key par.
 #[derive(Debug, PartialEq, Eq)]

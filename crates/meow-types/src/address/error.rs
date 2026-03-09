@@ -1,4 +1,4 @@
-/// An error related to keypairs.
+/// An error related to addresses.
 #[derive(Debug, thiserror::Error)]
 pub enum AddressError {
     #[error("prefix hex error: {0}")]

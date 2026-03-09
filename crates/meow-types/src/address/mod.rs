@@ -10,7 +10,7 @@ use error::AddressError;
 
 use crate::keypair::{KeyPair, public_key::PublicKey};
 
-/// The result type related to keystores.
+/// The result type related to addresses.
 pub type Result<T> = std::result::Result<T, AddressError>;
 
 /// The address length.
