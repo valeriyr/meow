@@ -3,6 +3,7 @@ use std::fmt;
 use base64::{Engine, engine::general_purpose};
 use bip32::{ChildNumber, DerivationPath};
 use rand::{CryptoRng, RngCore};
+use serde::{Deserialize, Serialize};
 use zeroize::ZeroizeOnDrop;
 
 use super::{
@@ -11,6 +12,13 @@ use super::{
 
 /// The Ed25519 derivation path purpose.
 const DERIVATION_PATH_PURPOSE_ED25519: u32 = 44;
+
+/// An Ed25519 signature.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct Ed25519Signature(
+    ed25519_consensus::Signature,
+    ed25519_consensus::VerificationKey,
+);
 
 /// A valid Ed25519 verification key.
 ///
@@ -24,7 +32,7 @@ pub struct Ed25519PublicKey(ed25519_consensus::VerificationKey);
 #[derive(ZeroizeOnDrop)]
 pub struct Ed25519PrivateKey(ed25519_consensus::SigningKey);
 
-/// An Ed25519 key par.
+/// An Ed25519 key pair.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Ed25519KeyPair {
     public: Ed25519PublicKey,
@@ -65,6 +73,11 @@ impl Ed25519KeyPair {
     pub fn random<R: CryptoRng + RngCore>(rnd: R) -> Self {
         let private_key = Ed25519PrivateKey(ed25519_consensus::SigningKey::new(rnd));
         private_key.into()
+    }
+
+    /// Signs a message with the Ed25519 keypair.
+    pub fn sign<T: AsRef<[u8]>>(&self, msg: T) -> Ed25519Signature {
+        Ed25519Signature(self.private.0.sign(msg.as_ref()), self.public.0)
     }
 
     /// Returns the public key of the keypair.
@@ -147,6 +160,28 @@ impl PartialEq for Ed25519PrivateKey {
 }
 
 impl Eq for Ed25519PrivateKey {}
+
+//
+// Implementation of [Ed25519Signature].
+//
+
+impl Ed25519Signature {
+    /// Verifies a message with the associated Ed25519 public key and signature.
+    pub fn verify<T: AsRef<[u8]>>(&self, msg: T) -> Result<()> {
+        Ok(self.1.verify(&self.0, msg.as_ref())?)
+    }
+}
+
+impl fmt::Display for Ed25519Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut bytes = Vec::new();
+
+        bytes.extend_from_slice(self.0.to_bytes().as_ref());
+        bytes.extend_from_slice(self.1.as_bytes());
+
+        f.write_str(&bs58::encode(bytes).into_string())
+    }
+}
 
 //
 // Utility functions.

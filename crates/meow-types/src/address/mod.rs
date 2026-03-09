@@ -4,6 +4,7 @@ use std::{fmt, str::FromStr};
 
 use blake2::{Blake2b, digest::consts::U32};
 use error::AddressError;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     digest::Digest,
@@ -17,7 +18,7 @@ pub type Result<T> = std::result::Result<T, AddressError>;
 pub const ADDRESS_LENGTH: usize = 32;
 
 /// The meow account address type.
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Address([u8; ADDRESS_LENGTH]);
 
 impl Address {

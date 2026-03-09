@@ -4,3 +4,4 @@ pub mod digest;
 pub mod keypair;
 pub mod keystore;
 pub mod object;
+pub mod transaction;

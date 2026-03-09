@@ -25,8 +25,8 @@ impl Digest {
         Self(bytes)
     }
 
-    /// Signs the given signable data and returns the digest.
-    pub fn sign<T: ?Sized + Serialize>(signable: &T) -> Result<Digest> {
+    /// Computes the digest of the given signable data.
+    pub fn compute<T: ?Sized + Serialize>(signable: &T) -> Result<Digest> {
         use blake2::Digest;
 
         let mut hasher = Blake2b::<U32>::default();

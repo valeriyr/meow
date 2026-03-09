@@ -6,6 +6,7 @@ pub mod mnemonic;
 
 pub mod private_key;
 pub mod public_key;
+pub mod signature;
 pub mod signature_scheme;
 
 use base64::{Engine, engine::general_purpose};
@@ -17,6 +18,8 @@ use public_key::PublicKey;
 use rand::{CryptoRng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use signature_scheme::SignatureScheme;
+
+use crate::keypair::signature::Signature;
 
 /// The result type related to keypairs.
 pub type Result<T> = std::result::Result<T, KeyPairError>;
@@ -59,6 +62,13 @@ impl KeyPair {
     pub fn random<R: CryptoRng + RngCore>(scheme: SignatureScheme, rnd: R) -> Self {
         match scheme {
             SignatureScheme::Ed25519 => KeyPair::Ed25519(Ed25519KeyPair::random(rnd)),
+        }
+    }
+
+    /// Signs a message with the keypair.
+    pub fn sign<T: AsRef<[u8]>>(&self, msg: T) -> Signature {
+        match self {
+            KeyPair::Ed25519(kp) => Signature::Ed25519(kp.sign(msg)),
         }
     }
 

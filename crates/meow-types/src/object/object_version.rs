@@ -1,5 +1,6 @@
 use std::fmt;
 
+/// The version of an object.
 #[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ObjectVersion(u64);
 

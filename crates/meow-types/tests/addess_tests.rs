@@ -125,9 +125,9 @@ fn test_keypair() -> KeyPair {
 }
 
 fn test_digest() -> Digest {
-    Digest::sign(b"hello").unwrap()
+    Digest::compute(b"hello").unwrap()
 }
 
 fn other_digest() -> Digest {
-    Digest::sign(b"world").unwrap()
+    Digest::compute(b"world").unwrap()
 }

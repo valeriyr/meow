@@ -155,11 +155,65 @@ fn ed25519_keypair_decode_base64() {
 }
 
 #[test]
+fn ed25519_keypair_decode_base64_invalid() {
+    assert!(matches!(
+        KeyPair::decode_base64("not valid base64!!!"),
+        Err(KeyPairError::Base64DecodeError(_))
+    ));
+}
+
+#[test]
 fn ed25519_keypair_deserialize_from_str() {
     assert_eq!(
         serde_json::from_str::<KeyPair>("\"AJkFYXpNS6e7iauGdUb9aTJaDhLdMhk+BhlCdJ9E7NjS\"")
             .unwrap(),
         test_ed25519_keypair()
+    );
+}
+
+//
+// Signing tests.
+//
+
+#[test]
+fn sign_is_deterministic() {
+    let keypair = test_ed25519_keypair();
+    let s1 = keypair.sign(b"hello");
+    let s2 = keypair.sign(b"hello");
+    assert_eq!(s1, s2);
+}
+
+#[test]
+fn sign_different_messages_produce_different_signatures() {
+    let keypair = test_ed25519_keypair();
+    let s1 = keypair.sign(b"hello");
+    let s2 = keypair.sign(b"world");
+    assert_ne!(s1, s2);
+}
+
+#[test]
+fn sign_different_keys_produce_different_signatures() {
+    let kp1 = test_ed25519_keypair();
+    let kp2 = KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([1; 32]));
+    assert_ne!(kp1.sign(b"hello"), kp2.sign(b"hello"));
+}
+
+#[test]
+fn signature_clone_equality() {
+    let sig = test_ed25519_keypair().sign(b"hello");
+    assert_eq!(sig.clone(), sig);
+}
+
+//
+// Signature display tests.
+//
+
+#[test]
+fn signature_display_known_value() {
+    let sig = test_ed25519_keypair().sign(b"hello");
+    assert_eq!(
+        sig.to_string(),
+        "M7SXYaettuFbgKsuVK6rm1yot9d9eArcQWkHxva4rTCG1zTWcZ4h74RUUKhBBreicGzQ46y2bLPrHAYrTdgPNLhdkZDBi84Qt6aWYSWQKTMSe7bnBwBYyX6XnnBMagaoFjf"
     );
 }
 
