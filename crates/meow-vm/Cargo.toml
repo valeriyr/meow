@@ -6,4 +6,4 @@ license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
-chumsky = "0.10.0"
+chumsky = "0.12"

@@ -1,7 +1,7 @@
 pub mod output;
 
 use bip32::DerivationPath;
-use clap::{Parser, command};
+use clap::Parser;
 use meow_types::{
     address::Address,
     keypair::{KeyPair, mnemonic::MnemonicType, signature_scheme::SignatureScheme},

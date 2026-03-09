@@ -25,5 +25,5 @@ tiny-bip39 = "2.0.0"
 zeroize = { version = "1.8.1", features = ["derive"] }
 
 [dev-dependencies]
-temp-dir = "0.1.14"
+temp-dir = "0.2"
 temp-env = "0.3.6"

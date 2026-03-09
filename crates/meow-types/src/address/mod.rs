@@ -2,10 +2,7 @@ pub mod error;
 
 use std::{fmt, str::FromStr};
 
-use blake2::{
-    Blake2b, Digest,
-    digest::{consts::U32, generic_array::GenericArray},
-};
+use blake2::{Blake2b, Digest, digest::consts::U32};
 use error::AddressError;
 
 use crate::keypair::{KeyPair, public_key::PublicKey};
@@ -59,10 +56,7 @@ impl From<PublicKey> for Address {
         hasher.update([public_key.scheme().flag()]);
         hasher.update(&public_key);
 
-        let mut bytes = [0; ADDRESS_LENGTH];
-        hasher.finalize_into(GenericArray::from_mut_slice(&mut bytes));
-
-        Address::new(bytes)
+        Address::new(hasher.finalize().into())
     }
 }
 

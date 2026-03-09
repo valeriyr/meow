@@ -9,22 +9,22 @@ members = [
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
-anyhow = "1.0.97"
+anyhow = "1.0"
 base64 = "0.22.1"
 bip32 = "0.5.3"
-clap = { version ="4.5.34", features = ["derive", "wrap_help"] }
+clap = { version ="4.5", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 enum_dispatch = "0.3.13"
 hex = "0.4.3"
-json_to_table = "0.10.0"
+json_to_table = "0.12"
 prefix-hex = { version = "0.7.1", features = ["std"] }
-rand = "0.8.5"
-serde = { version = "1.0.219", features = ["derive"] }
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
-strum = "0.27"
-strum_macros = "0.27"
-tabled = "0.18.0"
-thiserror = "2.0.12"
-tokio = { version = "1.44.1", features = ["full"] }
+strum = "0.28"
+strum_macros = "0.28"
+tabled = "0.20"
+thiserror = "2.0"
+tokio = { version = "1.50", features = ["full"] }
 
 meow-types = { path = "crates/meow-types" }

@@ -1,4 +1,4 @@
-use clap::{Parser, command};
+use clap::Parser;
 use meow::commands::Command;
 
 /// The main command line arguments.

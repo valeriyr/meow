@@ -1,4 +1,4 @@
-use clap::{Parser, command};
+use clap::Parser;
 
 use crate::node::Node;
 
