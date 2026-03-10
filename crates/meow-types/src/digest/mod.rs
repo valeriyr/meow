@@ -13,7 +13,7 @@ pub type Result<T> = std::result::Result<T, DigestError>;
 pub const DIGEST_LENGTH: usize = 32;
 
 /// The meow digest type.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Digest([u8; DIGEST_LENGTH]);
 
 impl Digest {

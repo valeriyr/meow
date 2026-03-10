@@ -617,6 +617,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "meow-executor"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "meow-types",
+ "meow-vm",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "meow-framework"
+version = "0.1.0"
+dependencies = [
+ "meow-types",
+ "meow-vm",
+]
+
+[[package]]
 name = "meow-node"
 version = "0.1.0"
 dependencies = [
@@ -657,6 +676,8 @@ name = "meow-vm"
 version = "0.1.0"
 dependencies = [
  "chumsky",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

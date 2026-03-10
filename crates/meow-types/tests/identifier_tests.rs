@@ -25,6 +25,12 @@ fn valid_identifier_all_uppercase() {
     assert!(Identifier::new("HELLO").is_ok());
 }
 
+#[test]
+fn valid_identifier_with_underscore() {
+    let id = Identifier::new("hello_world").unwrap();
+    assert_eq!(id.as_ref(), "hello_world");
+}
+
 //
 // Identifier validation tests.
 //
@@ -42,14 +48,6 @@ fn invalid_identifier_with_digits() {
     assert!(matches!(
         Identifier::new("hello1").unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == "hello1"
-    ));
-}
-
-#[test]
-fn invalid_identifier_with_underscore() {
-    assert!(matches!(
-        Identifier::new("hello_world").unwrap_err(),
-        IdentifierError::InvalidIdentifier(s) if s == "hello_world"
     ));
 }
 

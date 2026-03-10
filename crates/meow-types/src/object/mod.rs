@@ -79,6 +79,6 @@ impl Object {
 
     /// Returns the object digest.
     pub fn digest(&self) -> Digest {
-        Digest::compute(self).expect("Failed to compute a transaction digest")
+        Digest::compute(self).expect("Failed to compute an object digest")
     }
 }

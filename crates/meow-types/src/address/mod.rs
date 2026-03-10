@@ -18,7 +18,7 @@ pub type Result<T> = std::result::Result<T, AddressError>;
 pub const ADDRESS_LENGTH: usize = 32;
 
 /// The meow account address type.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Address([u8; ADDRESS_LENGTH]);
 
 impl Address {
@@ -26,7 +26,7 @@ impl Address {
     pub const ZERO: Self = Self([0; ADDRESS_LENGTH]);
 
     /// Creates a new address.
-    pub fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
+    pub const fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
         Self(bytes)
     }
 
@@ -76,6 +76,18 @@ impl From<PublicKey> for Address {
         hasher.update(&public_key);
 
         Address::new(hasher.finalize().into())
+    }
+}
+
+impl From<Address> for [u8; ADDRESS_LENGTH] {
+    fn from(address: Address) -> [u8; ADDRESS_LENGTH] {
+        address.0
+    }
+}
+
+impl From<[u8; ADDRESS_LENGTH]> for Address {
+    fn from(bytes: [u8; ADDRESS_LENGTH]) -> Address {
+        Address::new(bytes)
     }
 }
 

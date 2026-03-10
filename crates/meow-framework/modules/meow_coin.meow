@@ -1,0 +1,44 @@
+object MeowCoin { id: address, balance: u64 }
+
+fn mint(balance: u64, owner: address) {
+    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: balance };
+    meow_vm_transfer(coin, owner);
+}
+
+fn burn(coin: MeowCoin) {
+    meow_vm_destroy(coin);
+}
+
+fn transfer(coin: MeowCoin, to: address) {
+    meow_vm_transfer(coin, to);
+}
+
+fn split(from: MeowCoin, amount: u64) {
+    if from.balance < amount {
+        meow_vm_abort(1, "The balance is insufficient");
+    }
+
+    from.balance = from.balance - amount;
+
+    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: amount };
+
+    meow_vm_transfer(coin, meow_vm_sender());
+}
+
+fn merge(from: MeowCoin, to: MeowCoin) {
+    from.balance = from.balance + to.balance;
+
+    meow_vm_destroy(to);
+}
+
+fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
+    if from.balance < amount {
+        meow_vm_abort(1, "The balance is insufficient");
+    }
+
+    from.balance = from.balance - amount;
+
+    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: amount };
+
+    meow_vm_transfer(coin, to);
+}

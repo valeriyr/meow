@@ -1,5 +1,6 @@
 pub mod call;
 pub mod error;
+pub mod execution_result;
 
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +19,7 @@ pub type Result<T> = std::result::Result<T, TransactionError>;
 pub struct Transaction {
     /// The transaction sender address.
     sender: Address,
-    /// The MEOW coin use for paying transaction fee.
+    /// The MEOW coin to be used for paying the transaction fee.
     /// Acts as a nonce of the transaction.
     gas: Address,
     /// The transaction call.

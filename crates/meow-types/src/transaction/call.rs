@@ -5,14 +5,13 @@ use crate::{address::Address, object::identifier::Identifier};
 /// The input of a transaction call.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Input {
-    /// Input is an object instance stored on-chain.
-    /// Defined by the object instance address.
+    /// Input is an object instance stored on-chain; identified by the address.
     Object(Address),
     /// Input is a raw BCS serialized data.
     Raw(Vec<u8>),
 }
 
-/// The VM call which can be done within a transaction.
+/// The Meow VM call which can be done within a transaction.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Call {
     /// The module address.
