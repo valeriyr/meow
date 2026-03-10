@@ -4,7 +4,7 @@ use std::{fmt, str::FromStr};
 
 use blake2::{Blake2b, digest::consts::U32};
 use error::DigestError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// The result type related to addresses.
 pub type Result<T> = std::result::Result<T, DigestError>;
@@ -13,7 +13,7 @@ pub type Result<T> = std::result::Result<T, DigestError>;
 pub const DIGEST_LENGTH: usize = 32;
 
 /// The meow digest type.
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Digest([u8; DIGEST_LENGTH]);
 
 impl Digest {

@@ -1,10 +1,13 @@
+pub mod call;
 pub mod error;
 
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    address::Address, digest::Digest, keypair::signature::Signature,
-    transaction::error::TransactionError,
+    address::Address,
+    digest::Digest,
+    keypair::signature::Signature,
+    transaction::{call::Call, error::TransactionError},
 };
 
 /// The result type related to transactions.
@@ -13,7 +16,13 @@ pub type Result<T> = std::result::Result<T, TransactionError>;
 /// The meow transaction.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct Transaction {
+    /// The transaction sender address.
     sender: Address,
+    /// The MEOW coin use for paying transaction fee.
+    /// Acts as a nonce of the transaction.
+    gas: Address,
+    /// The transaction call.
+    call: Call,
 }
 
 /// A signed transaction.
@@ -26,18 +35,23 @@ pub struct SignedTransaction(Transaction, Signature);
 
 impl Transaction {
     /// Creates a new transaction.
-    pub fn new(sender: Address) -> Self {
-        Self { sender }
-    }
-
-    /// Computes the transaction digest.
-    pub fn digest(&self) -> Digest {
-        Digest::compute(self).expect("Failed to compute a transaction digest")
+    pub fn new(sender: Address, gas: Address, call: Call) -> Self {
+        Self { sender, gas, call }
     }
 
     /// Returns the transaction sender.
     pub fn sender(&self) -> &Address {
         &self.sender
+    }
+
+    /// Returns the transaction call.
+    pub fn call(&self) -> &Call {
+        &self.call
+    }
+
+    /// Computes the transaction digest.
+    pub fn digest(&self) -> Digest {
+        Digest::compute(self).expect("Failed to compute a transaction digest")
     }
 }
 

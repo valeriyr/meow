@@ -1,13 +1,14 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
+
 /// The version of an object.
-#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ObjectVersion(u64);
 
 impl ObjectVersion {
     /// The zero object version.
     pub const ZERO: Self = Self(0);
-
     /// The maximum object version.
     pub const MAX: Self = Self(u64::MAX);
 
