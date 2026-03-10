@@ -8,9 +8,18 @@ impl ObjectVersion {
     /// The zero object version.
     pub const ZERO: Self = Self(0);
 
+    /// The maximum object version.
+    pub const MAX: Self = Self(u64::MAX);
+
     /// Creates a new object version which is the next version of the current one.
-    pub fn next(&self) -> ObjectVersion {
-        ObjectVersion(self.0 + 1)
+    ///
+    /// Returns `None` if the current version is the maximum version.
+    pub fn next(&self) -> Option<ObjectVersion> {
+        if self == &Self::MAX {
+            None
+        } else {
+            Some(Self(self.0 + 1))
+        }
     }
 }
 

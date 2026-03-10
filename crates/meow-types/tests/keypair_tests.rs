@@ -213,7 +213,7 @@ fn signature_display_known_value() {
     let sig = test_ed25519_keypair().sign(b"hello");
     assert_eq!(
         sig.to_string(),
-        "M7SXYaettuFbgKsuVK6rm1yot9d9eArcQWkHxva4rTCG1zTWcZ4h74RUUKhBBreicGzQ46y2bLPrHAYrTdgPNLhdkZDBi84Qt6aWYSWQKTMSe7bnBwBYyX6XnnBMagaoFjf"
+        "OmG4oaiZvsMkTcasralZ0/8u51lLcazOXfnU26auaRPiIM4zYYYwRIZfKW+9RAAaPruLnB553+i5F3WIr1nMAT1oPu2O5n0kCRsnwt6G11BM3qP7byedZLQTtLARkT+C"
     );
 }
 

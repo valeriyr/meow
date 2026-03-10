@@ -1,6 +1,7 @@
 use crate::{address::Address, object::object_version::ObjectVersion};
 
 pub mod error;
+pub mod identifier;
 pub mod object_version;
 
 /// The type of an object.

@@ -32,7 +32,7 @@ impl Transaction {
 
     /// Computes the transaction digest.
     pub fn digest(&self) -> Digest {
-        Digest::compute(self).expect("Failed to compute transaction digest")
+        Digest::compute(self).expect("Failed to compute a transaction digest")
     }
 
     /// Returns the transaction sender.

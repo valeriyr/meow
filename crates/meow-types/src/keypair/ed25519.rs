@@ -179,7 +179,9 @@ impl fmt::Display for Ed25519Signature {
         bytes.extend_from_slice(self.0.to_bytes().as_ref());
         bytes.extend_from_slice(self.1.as_bytes());
 
-        f.write_str(&bs58::encode(bytes).into_string())
+        let base64 = general_purpose::STANDARD.encode(bytes);
+
+        f.write_str(&base64)
     }
 }
 
