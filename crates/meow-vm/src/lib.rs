@@ -11,7 +11,7 @@
 //! ## Quick start
 //!
 //! ```rust
-//! use meow_vm::{compiler::Compiler, vm::{GasMeter, Vm}, types::Value};
+//! use meow_vm::{compiler::Compiler, vm::{GasMeter, GasSchedule, Vm}, types::Value};
 //!
 //! let source = r#"
 //!     fn add(a: u64, b: u64): u64 {
@@ -20,7 +20,7 @@
 //! "#;
 //!
 //! let module = Compiler::compile("math", source).unwrap();
-//! let vm = Vm::new(module, vec![]);
+//! let vm = Vm::new(module, vec![], GasSchedule::default());
 //! let mut gas = GasMeter::new(1_000);
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
@@ -30,7 +30,6 @@
 
 pub mod bytecode;
 pub mod compiler;
-pub mod error;
 pub mod module;
 pub mod types;
 pub mod vm;

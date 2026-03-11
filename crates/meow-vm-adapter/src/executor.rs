@@ -1,6 +1,3 @@
-mod context;
-mod natives;
-
 use std::{cell::RefCell, rc::Rc};
 
 use meow_types::{
@@ -19,10 +16,10 @@ use meow_types::{
 use meow_vm::{
     module::Module,
     types::{Type, Value},
-    vm::{GasMeter, Vm, VmCallResult},
+    vm::{GasMeter, GasSchedule, Vm, VmCallResult, error::VmError},
 };
 
-use crate::context::Context;
+use crate::{context::Context, natives};
 
 /// Execute a transaction against a set of input objects.
 ///
@@ -109,13 +106,13 @@ pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> ExecutionResul
     // Build executor context and native functions.
     let ctx = Rc::new(RefCell::new(Context::new(*sender, tx_digest)));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives);
+    let vm = Vm::new(module, natives, GasSchedule::default());
     let mut gas = GasMeter::new(1_000_000);
 
     // Execute the function.
     let call_result = match vm.call(fn_name, vm_args, &mut gas) {
         Ok(r) => r,
-        Err(meow_vm::error::VmError::Aborted { message, .. }) => {
+        Err(VmError::Aborted { message, .. }) => {
             return ExecutionResult::failure(message, tx_digest);
         }
         Err(e) => {
@@ -220,6 +217,11 @@ fn resolve_arg(input: &Input, expected_type: &Type, inputs: &[Object]) -> Result
                 let v: [u8; 32] =
                     bcs::from_bytes(bytes).map_err(|e| format!("address deserialization: {e}"))?;
                 Ok(Value::Address(v))
+            }
+            Type::Str => {
+                let v: String =
+                    bcs::from_bytes(bytes).map_err(|e| format!("string deserialization: {e}"))?;
+                Ok(Value::Str(v))
             }
             other => Err(format!(
                 "Raw input cannot be resolved to type '{}'",

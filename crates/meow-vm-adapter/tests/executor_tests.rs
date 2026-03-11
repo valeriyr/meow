@@ -1,4 +1,3 @@
-use meow_executor::execute;
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -13,6 +12,7 @@ use meow_types::{
     },
 };
 use meow_vm::{compiler::Compiler, types::Value};
+use meow_vm_adapter::executor::execute;
 
 const MEOW_COIN_SRC: &str = include_str!("../../meow-framework/modules/meow_coin.meow");
 
@@ -105,7 +105,7 @@ fn mint_succeeds_and_creates_object() {
 fn burn_succeeds_and_destroys_object() {
     let coin_id: [u8; 32] = [0xCCu8; 32];
     let module_obj = make_module_object();
-    let coin_obj = make_coin_object(coin_id, SENDER, 50);
+    let coin_obj = make_coin_object(coin_id, SENDER, 0);
 
     let tx = make_transaction("burn", vec![Input::Object(Address::new(coin_id))]);
 
@@ -185,6 +185,30 @@ fn split_with_sufficient_balance() {
         .collect();
     assert_eq!(changed.len(), 1, "original coin must appear as changed");
     assert_eq!(coin_balance_from_content(changed[0].content()), 60);
+}
+
+#[test]
+fn burn_non_zero_balance_returns_failure() {
+    let coin_id: [u8; 32] = [0xCDu8; 32];
+    let module_obj = make_module_object();
+    let coin_obj = make_coin_object(coin_id, SENDER, 50);
+
+    let tx = make_transaction("burn", vec![Input::Object(Address::new(coin_id))]);
+
+    let result = execute(&tx, vec![module_obj, coin_obj]);
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(_)),
+        "burn with non-zero balance must fail"
+    );
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure("Cannot burn a coin with non-zero balance".to_string())
+    );
+    // No object effects on failure.
+    assert!(result.created_objects().is_empty());
+    assert!(result.changed_objects().is_empty());
+    assert!(result.destroyed_objects().is_empty());
 }
 
 #[test]

@@ -1,6 +1,5 @@
-use thiserror::Error;
-
-#[derive(Debug, Error)]
+/// Errors that can occur during VM execution.
+#[derive(Debug, thiserror::Error)]
 pub enum VmError {
     #[error("out of gas: consumed {consumed}, limit {limit}")]
     OutOfGas { consumed: u64, limit: u64 },
@@ -29,9 +28,6 @@ pub enum VmError {
     #[error("call stack overflow (max depth {0})")]
     CallStackOverflow(usize),
 
-    #[error("compile error: {0}")]
-    CompileError(String),
-
     /// Attempted to use a variable whose Object value was already moved out.
     #[error("use after move: {0}")]
     UseAfterMove(String),
@@ -52,5 +48,3 @@ pub enum VmError {
     #[error("invalid object definition '{0}': first field must be 'id: address'")]
     InvalidObject(String),
 }
-
-pub type Result<T> = std::result::Result<T, VmError>;

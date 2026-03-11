@@ -6,6 +6,7 @@ fn mint(balance: u64, owner: address) {
 }
 
 fn burn(coin: MeowCoin) {
+    meow_vm_abort(coin.balance == 0, 2, "Cannot burn a coin with non-zero balance");
     meow_vm_destroy(coin);
 }
 
@@ -13,10 +14,14 @@ fn transfer(coin: MeowCoin, to: address) {
     meow_vm_transfer(coin, to);
 }
 
+fn merge(from: MeowCoin, to: MeowCoin) {
+    from.balance = from.balance + to.balance;
+    to.balance = 0;
+    meow_vm_destroy(to);
+}
+
 fn split(from: MeowCoin, amount: u64) {
-    if from.balance < amount {
-        meow_vm_abort(1, "The balance is insufficient");
-    }
+    meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;
 
@@ -25,16 +30,8 @@ fn split(from: MeowCoin, amount: u64) {
     meow_vm_transfer(coin, meow_vm_sender());
 }
 
-fn merge(from: MeowCoin, to: MeowCoin) {
-    from.balance = from.balance + to.balance;
-
-    meow_vm_destroy(to);
-}
-
 fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
-    if from.balance < amount {
-        meow_vm_abort(1, "The balance is insufficient");
-    }
+    meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;
 

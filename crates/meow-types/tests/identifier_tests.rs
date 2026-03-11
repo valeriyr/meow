@@ -31,6 +31,13 @@ fn valid_identifier_with_underscore() {
     assert_eq!(id.as_ref(), "hello_world");
 }
 
+#[test]
+fn valid_identifier_with_digits() {
+    assert!(Identifier::new("hello1").is_ok());
+    assert!(Identifier::new("hello1_world").is_ok());
+    assert!(Identifier::new("hello1_world2").is_ok());
+}
+
 //
 // Identifier validation tests.
 //
@@ -44,10 +51,10 @@ fn invalid_identifier_empty() {
 }
 
 #[test]
-fn invalid_identifier_with_digits() {
+fn invalid_identifier_starting_with_digit() {
     assert!(matches!(
-        Identifier::new("hello1").unwrap_err(),
-        IdentifierError::InvalidIdentifier(s) if s == "hello1"
+        Identifier::new("1hello").unwrap_err(),
+        IdentifierError::InvalidIdentifier(s) if s == "1hello"
     ));
 }
 

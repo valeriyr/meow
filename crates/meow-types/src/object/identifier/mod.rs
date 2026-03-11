@@ -25,9 +25,16 @@ impl Identifier {
 
     /// Validates the identifier string.
     ///
-    /// A valid identifier is a non-empty string that contains only ASCII alphabetic characters or underscores.
+    /// A valid identifier starts with an ASCII letter or underscore, followed by
+    /// zero or more ASCII letters, digits, or underscores.
     fn is_valid(name: &str) -> bool {
-        !name.is_empty() && name.chars().all(|c| c.is_ascii_alphabetic() || c == '_')
+        let mut chars = name.chars();
+        match chars.next() {
+            Some(first) if first.is_ascii_alphabetic() || first == '_' => {
+                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+            }
+            _ => false,
+        }
     }
 }
 

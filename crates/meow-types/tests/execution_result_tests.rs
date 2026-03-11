@@ -148,6 +148,20 @@ fn execution_result_multiple_objects_per_category() {
     assert!(result.destroyed_objects().is_empty());
 }
 
+#[test]
+fn execution_result_failure_constructor() {
+    let digest = test_digest();
+    let result = ExecutionResult::failure("out of gas", digest.clone());
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Failure("out of gas".to_string())
+    );
+    assert_eq!(result.transaction_digest(), &digest);
+    assert!(result.created_objects().is_empty());
+    assert!(result.changed_objects().is_empty());
+    assert!(result.destroyed_objects().is_empty());
+}
+
 //
 // ExecutionResult equality.
 //

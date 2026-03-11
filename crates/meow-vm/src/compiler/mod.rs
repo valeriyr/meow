@@ -28,16 +28,21 @@
 /// - Struct/object literals: `Foo { field: expr, … }`
 /// - Function calls: `foo(arg, …)` (module or native)
 /// - String literals: `"..."` (for native function arguments)
+pub mod error;
+
 use std::collections::HashMap;
 
 use chumsky::prelude::*;
 
 use crate::{
     bytecode::Instruction,
-    error::{Result, VmError},
     module::{Function, Module},
     types::{StructDef, Type},
 };
+use error::CompilerError;
+
+/// An error that can occur during compilation.
+pub type Result<T> = std::result::Result<T, CompilerError>;
 
 // ─── AST ─────────────────────────────────────────────────────────────────────
 
@@ -86,16 +91,30 @@ enum BinOp {
 
 #[derive(Debug, Clone)]
 enum Stmt {
-    Let { name: String, expr: Expr },
+    Let {
+        name: String,
+        expr: Expr,
+    },
     /// Reassign an existing variable: `name = expr;`
-    Reassign { name: String, expr: Expr },
+    Reassign {
+        name: String,
+        expr: Expr,
+    },
     Return(Option<Expr>),
     /// A bare expression whose value is discarded.
     Expr(Expr),
-    /// An `if` statement without else.
-    If { cond: Expr, body: Vec<Stmt> },
+    /// An `if` statement with an optional `else` branch.
+    If {
+        cond: Expr,
+        body: Vec<Stmt>,
+        else_body: Option<Vec<Stmt>>,
+    },
     /// Field assignment: `ident.field = expr;`
-    FieldAssign { obj_name: String, field: String, expr: Expr },
+    FieldAssign {
+        obj_name: String,
+        field: String,
+        expr: Expr,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -125,9 +144,7 @@ type ParseErr<'src> = extra::Err<Rich<'src, char>>;
 
 fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> {
     // Helpers
-    let ident = text::ascii::ident()
-        .map(|s: &str| s.to_string())
-        .padded();
+    let ident = text::ascii::ident().map(|s: &str| s.to_string()).padded();
 
     let kw = |s: &'static str| text::ascii::keyword(s).padded().ignored();
 
@@ -202,17 +219,18 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
         let primary = choice((bool_lit, str_lit, int_lit, ident_expr));
 
         // Postfix: field access `a.field` (no tuple indices).
-        let postfix_op = just('.').padded().ignore_then(
-            text::ascii::ident()
-                .map(|s: &str| s.to_string())
-                .padded(),
-        );
+        let postfix_op = just('.')
+            .padded()
+            .ignore_then(text::ascii::ident().map(|s: &str| s.to_string()).padded());
 
         let postfix = primary
             .clone()
             .then(postfix_op.repeated().collect::<Vec<_>>())
             .map(|(e, fields)| {
-                fields.into_iter().fold(e, |e, f| Expr::FieldAccess { expr: Box::new(e), field: f })
+                fields.into_iter().fold(e, |e, f| Expr::FieldAccess {
+                    expr: Box::new(e),
+                    field: f,
+                })
             });
 
         // Multiplicative
@@ -260,7 +278,11 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
             .clone()
             .then(cmp_op.then(add).or_not())
             .map(|(l, rhs)| match rhs {
-                Some((op, r)) => Expr::BinOp { left: Box::new(l), op, right: Box::new(r) },
+                Some((op, r)) => Expr::BinOp {
+                    left: Box::new(l),
+                    op,
+                    right: Box::new(r),
+                },
                 None => l,
             });
 
@@ -319,16 +341,22 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
             .then_ignore(just(';').padded())
             .map(Stmt::Return);
 
-        // if statement: `if expr { stmts }`
+        // if statement: `if expr { stmts }` or `if expr { stmts } else { stmts }`
+        let block = stmt
+            .clone()
+            .repeated()
+            .collect::<Vec<_>>()
+            .delimited_by(just('{').padded(), just('}').padded());
+
         let if_stmt = kw("if")
             .ignore_then(expr.clone())
-            .then(
-                stmt.clone()
-                    .repeated()
-                    .collect::<Vec<_>>()
-                    .delimited_by(just('{').padded(), just('}').padded()),
-            )
-            .map(|(cond, body)| Stmt::If { cond, body });
+            .then(block.clone())
+            .then(kw("else").ignore_then(block.clone()).or_not())
+            .map(|((cond, body), else_body)| Stmt::If {
+                cond,
+                body,
+                else_body,
+            });
 
         // Variable reassignment: `ident = expr;`
         // Must be tried before expr_stmt. Uses `just('=').padded()` without `.` prefix
@@ -349,14 +377,22 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
             .then_ignore(just('=').padded())
             .then(expr.clone())
             .then_ignore(just(';').padded())
-            .map(|((obj_name, field), e)| Stmt::FieldAssign { obj_name, field, expr: e });
+            .map(|((obj_name, field), e)| Stmt::FieldAssign {
+                obj_name,
+                field,
+                expr: e,
+            });
 
-        let expr_stmt = expr
-            .clone()
-            .then_ignore(just(';').padded())
-            .map(Stmt::Expr);
+        let expr_stmt = expr.clone().then_ignore(just(';').padded()).map(Stmt::Expr);
 
-        choice((let_stmt, return_stmt, if_stmt, field_assign, reassign, expr_stmt))
+        choice((
+            let_stmt,
+            return_stmt,
+            if_stmt,
+            field_assign,
+            reassign,
+            expr_stmt,
+        ))
     });
 
     // ── Top-level items ───────────────────────────────────────────────────────
@@ -378,7 +414,11 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
         .ignore_then(ident.clone())
         .then(struct_body.clone())
         .map(|(name, fields)| {
-            AstItem::Struct(AstStruct { name, fields, is_object: false })
+            AstItem::Struct(AstStruct {
+                name,
+                fields,
+                is_object: false,
+            })
         });
 
     // object Foo { id: address, x: u64 }
@@ -386,11 +426,18 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
         .ignore_then(ident.clone())
         .then(struct_body.clone())
         .map(|(name, fields)| {
-            AstItem::Struct(AstStruct { name, fields, is_object: true })
+            AstItem::Struct(AstStruct {
+                name,
+                fields,
+                is_object: true,
+            })
         });
 
     // fn foo(a: u64, b: bool): RetType { ... }
-    let param = ident.clone().then_ignore(just(':').padded()).then(ty.clone());
+    let param = ident
+        .clone()
+        .then_ignore(just(':').padded())
+        .then(ty.clone());
 
     let fn_item = kw("fn")
         .ignore_then(ident.clone())
@@ -408,7 +455,12 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
                 .delimited_by(just('{').padded(), just('}').padded()),
         )
         .map(|(((name, params), return_type), body)| {
-            AstItem::Fn(AstFunction { name, params, return_type, body })
+            AstItem::Fn(AstFunction {
+                name,
+                params,
+                return_type,
+                body,
+            })
         });
 
     let item = choice((struct_item, object_item, fn_item));
@@ -427,7 +479,12 @@ struct Codegen<'m> {
 
 impl<'m> Codegen<'m> {
     fn new(structs: &'m [StructDef]) -> Self {
-        Self { structs, locals: HashMap::new(), next_slot: 0, code: Vec::new() }
+        Self {
+            structs,
+            locals: HashMap::new(),
+            next_slot: 0,
+            code: Vec::new(),
+        }
     }
 
     fn alloc_local(&mut self, name: String) -> u8 {
@@ -449,7 +506,7 @@ impl<'m> Codegen<'m> {
 
             Expr::Ident(name) => {
                 let slot = self.locals.get(&name).copied().ok_or_else(|| {
-                    VmError::CompileError(format!("undefined variable '{name}'"))
+                    CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
                 self.emit(Instruction::Load(slot));
             }
@@ -496,18 +553,31 @@ impl<'m> Codegen<'m> {
                     .structs
                     .iter()
                     .find(|s| s.name == name)
-                    .ok_or_else(|| {
-                        VmError::CompileError(format!("unknown struct '{name}'"))
-                    })?
+                    .ok_or_else(|| CompilerError::Message(format!("unknown struct '{name}'")))?
                     .clone();
 
                 let mut literal_map: HashMap<String, Expr> = fields.into_iter().collect();
 
-                let field_names: Vec<String> =
-                    def.fields.iter().map(|(n, _)| n.clone()).collect();
+                // Objects: the `id` field must be exactly `meow_vm_fresh_id()`.
+                if def.is_object {
+                    match literal_map.get("id") {
+                        Some(Expr::Call {
+                            name: fn_name,
+                            args,
+                        }) if fn_name == "meow_vm_fresh_id" && args.is_empty() => {}
+                        _ => {
+                            return Err(CompilerError::Message(format!(
+                                "object '{}': 'id' field must be initialized with meow_vm_fresh_id()",
+                                name
+                            )));
+                        }
+                    }
+                }
+
+                let field_names: Vec<String> = def.fields.iter().map(|(n, _)| n.clone()).collect();
                 for field_name in &field_names {
                     let expr = literal_map.remove(field_name).ok_or_else(|| {
-                        VmError::CompileError(format!(
+                        CompilerError::Message(format!(
                             "missing field '{field_name}' in struct literal '{name}'"
                         ))
                     })?;
@@ -540,7 +610,7 @@ impl<'m> Codegen<'m> {
 
             Stmt::Reassign { name, expr } => {
                 let slot = self.locals.get(&name).copied().ok_or_else(|| {
-                    VmError::CompileError(format!("undefined variable '{name}'"))
+                    CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
                 self.compile_expr(expr)?;
                 self.emit(Instruction::Store(slot));
@@ -559,24 +629,43 @@ impl<'m> Codegen<'m> {
                 self.emit(Instruction::Pop);
             }
 
-            Stmt::If { cond, body } => {
-                // Compile condition.
+            Stmt::If {
+                cond,
+                body,
+                else_body,
+            } => {
                 self.compile_expr(cond)?;
-                // Emit placeholder JumpIfNot.
-                let patch_pos = self.code.len();
+                let patch_cond = self.code.len();
                 self.emit(Instruction::JumpIfNot(0));
-                // Compile body.
                 for s in body {
                     self.compile_stmt(s)?;
                 }
-                // Patch: offset = code.len() - patch_pos.
-                let offset = (self.code.len() - patch_pos) as i32;
-                self.code[patch_pos] = Instruction::JumpIfNot(offset);
+                if let Some(else_stmts) = else_body {
+                    // Emit Jump to skip else body after then body executes.
+                    let patch_jump = self.code.len();
+                    self.emit(Instruction::Jump(0));
+                    // Patch JumpIfNot to land on first instruction of else body.
+                    self.code[patch_cond] =
+                        Instruction::JumpIfNot((self.code.len() - patch_cond) as i32);
+                    for s in else_stmts {
+                        self.compile_stmt(s)?;
+                    }
+                    // Patch Jump to land after else body.
+                    self.code[patch_jump] =
+                        Instruction::Jump((self.code.len() - patch_jump) as i32);
+                } else {
+                    self.code[patch_cond] =
+                        Instruction::JumpIfNot((self.code.len() - patch_cond) as i32);
+                }
             }
 
-            Stmt::FieldAssign { obj_name, field, expr } => {
+            Stmt::FieldAssign {
+                obj_name,
+                field,
+                expr,
+            } => {
                 let slot = self.locals.get(&obj_name).copied().ok_or_else(|| {
-                    VmError::CompileError(format!("undefined variable '{obj_name}'"))
+                    CompilerError::Message(format!("undefined variable '{obj_name}'"))
                 })?;
                 self.compile_expr(expr)?;
                 self.emit(Instruction::StoreField(slot, field));
@@ -585,10 +674,7 @@ impl<'m> Codegen<'m> {
         Ok(())
     }
 
-    fn compile_function(
-        structs: &'m [StructDef],
-        ast_fn: AstFunction,
-    ) -> Result<Function> {
+    fn compile_function(structs: &'m [StructDef], ast_fn: AstFunction) -> Result<Function> {
         let mut cg = Codegen::new(structs);
 
         // Validate return type: functions may not return an Object.
@@ -597,13 +683,11 @@ impl<'m> Codegen<'m> {
         if let Some(rt) = &ast_fn.return_type {
             let is_object_return = match rt {
                 Type::Object(_) => true,
-                Type::Struct(name) => {
-                    structs.iter().any(|s| s.name == *name && s.is_object)
-                }
+                Type::Struct(name) => structs.iter().any(|s| s.name == *name && s.is_object),
                 _ => false,
             };
             if is_object_return {
-                return Err(VmError::CompileError(format!(
+                return Err(CompilerError::Message(format!(
                     "function '{}': cannot return Object type '{}'",
                     ast_fn.name,
                     rt.name()
@@ -648,7 +732,7 @@ fn validate_struct_def(def: &AstStruct) -> Result<()> {
     // Validate field types: only primitives allowed.
     for (field_name, ty) in &def.fields {
         if !ty.is_valid_field_type() {
-            return Err(VmError::CompileError(format!(
+            return Err(CompilerError::Message(format!(
                 "{} '{}': field '{field_name}' has non-primitive type '{}' — only bool, u64, address are allowed",
                 if def.is_object { "object" } else { "struct" },
                 def.name,
@@ -662,7 +746,7 @@ fn validate_struct_def(def: &AstStruct) -> Result<()> {
         match def.fields.first() {
             Some((name, Type::Address)) if name == "id" => {}
             _ => {
-                return Err(VmError::CompileError(format!(
+                return Err(CompilerError::Message(format!(
                     "object '{}': first field must be 'id: address'",
                     def.name
                 )));
@@ -681,17 +765,14 @@ pub struct Compiler;
 impl Compiler {
     /// Compile `source` into a module named `module_name`.
     pub fn compile(module_name: &str, source: &str) -> Result<Module> {
-        let items = parser()
-            .parse(source)
-            .into_result()
-            .map_err(|errs| {
-                let msg = errs
-                    .iter()
-                    .map(|e| e.to_string())
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                VmError::CompileError(msg)
-            })?;
+        let items = parser().parse(source).into_result().map_err(|errs| {
+            let msg = errs
+                .iter()
+                .map(|e| e.to_string())
+                .collect::<Vec<_>>()
+                .join("; ");
+            CompilerError::Message(msg)
+        })?;
 
         let mut module = Module::new(module_name);
 

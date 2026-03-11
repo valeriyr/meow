@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{bytecode::Instruction, types::{StructDef, Type}};
+use crate::{
+    bytecode::Instruction,
+    types::{StructDef, Type},
+};
 
 /// A compiled function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,7 +32,11 @@ pub struct Module {
 
 impl Module {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), structs: Vec::new(), functions: Vec::new() }
+        Self {
+            name: name.into(),
+            structs: Vec::new(),
+            functions: Vec::new(),
+        }
     }
 
     /// Find a struct/object definition by name.

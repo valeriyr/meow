@@ -72,17 +72,6 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         }
     };
 
-    let abort = NativeFnEntry {
-        name: "meow_vm_abort".to_string(),
-        param_count: 2,
-        gas_cost: 1,
-        func: Box::new(|args| {
-            let code = args[0].as_u64().unwrap_or(0);
-            let message = args[1].as_str().unwrap_or("aborted").to_string();
-            NativeResult::Abort { code, message }
-        }),
-    };
-
     let sender = {
         let c = ctx.clone();
         NativeFnEntry {
@@ -95,5 +84,5 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         }
     };
 
-    vec![fresh_id, transfer, destroy, abort, sender]
+    vec![fresh_id, transfer, destroy, sender]
 }

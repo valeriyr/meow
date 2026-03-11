@@ -7,6 +7,8 @@ pub enum Type {
     U64,
     /// An address — a 32-byte array, freely copyable.
     Address,
+    /// A UTF-8 string value. Freely copyable; not allowed as a struct/object field type.
+    Str,
     /// A user-defined struct referenced by name.
     Struct(String),
     /// A user-defined object referenced by name.
@@ -20,6 +22,7 @@ impl Type {
             "bool" => Self::Bool,
             "u64" => Self::U64,
             "address" => Self::Address,
+            "string" => Self::Str,
             name => Self::Struct(name.to_string()),
         }
     }
@@ -29,13 +32,14 @@ impl Type {
             Self::Bool => "bool",
             Self::U64 => "u64",
             Self::Address => "address",
+            Self::Str => "string",
             Self::Struct(n) | Self::Object(n) => n,
         }
     }
 
     /// Returns true if this type is a primitive (freely copyable).
     pub fn is_primitive(&self) -> bool {
-        matches!(self, Self::Bool | Self::U64 | Self::Address)
+        matches!(self, Self::Bool | Self::U64 | Self::Address | Self::Str)
     }
 
     /// Returns true if this type can be used as a struct/object field type.
@@ -108,6 +112,13 @@ impl Value {
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s.as_str()),
+            _ => None,
+        }
+    }
+
+    pub fn into_str(self) -> Option<String> {
+        match self {
+            Self::Str(s) => Some(s),
             _ => None,
         }
     }

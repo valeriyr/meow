@@ -1,5 +1,5 @@
 [package]
-name = "meow-executor"
+name = "meow-vm-adapter"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -10,5 +10,5 @@ bcs.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 
-meow-vm.workspace = true
 meow-types.workspace = true
+meow-vm.workspace = true

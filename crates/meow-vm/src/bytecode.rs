@@ -75,33 +75,3 @@ pub enum Instruction {
     Return,
 }
 
-impl Instruction {
-    /// Gas cost for executing this instruction once.
-    pub fn gas_cost(&self) -> u64 {
-        match self {
-            Self::PushBool(_) | Self::PushU64(_) => 1,
-            Self::PushStr(_) => 2,
-
-            Self::Load(_) | Self::Store(_) => 1,
-            Self::LoadField(_, _) => 2,
-            Self::StoreField(_, _) => 5,
-
-            Self::Add | Self::Sub | Self::Mul => 2,
-            Self::Div => 5,
-
-            Self::Eq | Self::Ne | Self::Lt | Self::Le | Self::Gt | Self::Ge => 2,
-
-            Self::Not | Self::And | Self::Or => 1,
-
-            Self::NewStruct { field_names, .. } => 10 + field_names.len() as u64 * 2,
-            Self::GetField(_) => 3,
-
-            Self::Pop | Self::Dup => 1,
-
-            Self::Jump(_) | Self::JumpIf(_) | Self::JumpIfNot(_) => 2,
-
-            Self::Call(_) => 20,
-            Self::Return => 2,
-        }
-    }
-}

@@ -1,11 +1,11 @@
+pub mod error;
+
 use std::collections::HashMap;
 
-use crate::{
-    bytecode::Instruction,
-    error::{Result, VmError},
-    module::Module,
-    types::Value,
-};
+use crate::{bytecode::Instruction, module::Module, types::Value, vm::error::VmError};
+
+/// An error that can occur during VM execution.
+pub type Result<T> = std::result::Result<T, VmError>;
 
 const MAX_CALL_DEPTH: usize = 256;
 
@@ -44,6 +44,89 @@ pub struct VmCallResult {
     pub final_args: Vec<Option<Value>>,
 }
 
+// ─── Gas schedule ────────────────────────────────────────────────────────────
+
+/// Per-instruction gas costs. Pass a custom schedule to [`Vm::with_gas_schedule`].
+#[derive(Debug, Clone)]
+pub struct GasSchedule {
+    push_primitive: u64,
+    push_str: u64,
+    load_store: u64,
+    load_field: u64,
+    store_field: u64,
+    add_sub_mul: u64,
+    div: u64,
+    compare: u64,
+    logic: u64,
+    new_struct_base: u64,
+    new_struct_per_field: u64,
+    get_field: u64,
+    stack: u64,
+    jump: u64,
+    call: u64,
+    return_: u64,
+}
+
+impl Default for GasSchedule {
+    fn default() -> Self {
+        Self {
+            push_primitive: 1,
+            push_str: 2,
+            load_store: 1,
+            load_field: 2,
+            store_field: 5,
+            add_sub_mul: 2,
+            div: 5,
+            compare: 2,
+            logic: 1,
+            new_struct_base: 10,
+            new_struct_per_field: 2,
+            get_field: 3,
+            stack: 1,
+            jump: 2,
+            call: 20,
+            return_: 2,
+        }
+    }
+}
+
+impl GasSchedule {
+    pub fn cost_of(&self, instr: &Instruction) -> u64 {
+        match instr {
+            Instruction::PushBool(_) | Instruction::PushU64(_) => self.push_primitive,
+            Instruction::PushStr(_) => self.push_str,
+
+            Instruction::Load(_) | Instruction::Store(_) => self.load_store,
+            Instruction::LoadField(_, _) => self.load_field,
+            Instruction::StoreField(_, _) => self.store_field,
+
+            Instruction::Add | Instruction::Sub | Instruction::Mul => self.add_sub_mul,
+            Instruction::Div => self.div,
+
+            Instruction::Eq
+            | Instruction::Ne
+            | Instruction::Lt
+            | Instruction::Le
+            | Instruction::Gt
+            | Instruction::Ge => self.compare,
+
+            Instruction::Not | Instruction::And | Instruction::Or => self.logic,
+
+            Instruction::NewStruct { field_names, .. } => {
+                self.new_struct_base + field_names.len() as u64 * self.new_struct_per_field
+            }
+            Instruction::GetField(_) => self.get_field,
+
+            Instruction::Pop | Instruction::Dup => self.stack,
+
+            Instruction::Jump(_) | Instruction::JumpIf(_) | Instruction::JumpIfNot(_) => self.jump,
+
+            Instruction::Call(_) => self.call,
+            Instruction::Return => self.return_,
+        }
+    }
+}
+
 // ─── Gas metering ────────────────────────────────────────────────────────────
 
 /// Tracks gas consumption during execution.
@@ -67,7 +150,10 @@ impl GasMeter {
     pub fn charge(&mut self, cost: u64) -> Result<()> {
         let new = self.consumed.saturating_add(cost);
         if new > self.limit {
-            return Err(VmError::OutOfGas { consumed: new, limit: self.limit });
+            return Err(VmError::OutOfGas {
+                consumed: new,
+                limit: self.limit,
+            });
         }
         self.consumed = new;
         Ok(())
@@ -97,12 +183,16 @@ struct Frame {
 
 impl Frame {
     fn new(code: Vec<Instruction>, args: Vec<Value>, local_count: u8) -> Self {
-        let mut locals: Vec<Option<Value>> =
-            (0..local_count as usize).map(|_| None).collect();
+        let mut locals: Vec<Option<Value>> = (0..local_count as usize).map(|_| None).collect();
         for (i, v) in args.into_iter().enumerate() {
             locals[i] = Some(v);
         }
-        Self { locals, stack: Vec::new(), pc: 0, code }
+        Self {
+            locals,
+            stack: Vec::new(),
+            pc: 0,
+            code,
+        }
     }
 
     fn push(&mut self, v: Value) {
@@ -127,15 +217,48 @@ impl Frame {
 pub struct Vm {
     module: Module,
     natives: HashMap<String, NativeFnEntry>,
+    gas_schedule: GasSchedule,
 }
 
 impl Vm {
-    pub fn new(module: Module, natives: Vec<NativeFnEntry>) -> Self {
+    pub fn new(module: Module, natives: Vec<NativeFnEntry>, gas_schedule: GasSchedule) -> Self {
         let mut native_map = HashMap::new();
         for entry in natives {
             native_map.insert(entry.name.clone(), entry);
         }
-        Self { module, natives: native_map }
+        // Inject a default meow_vm_abort implementation if the caller didn't supply one.
+        native_map
+            .entry("meow_vm_abort".to_string())
+            .or_insert_with(|| NativeFnEntry {
+                name: "meow_vm_abort".to_string(),
+                param_count: 3,
+                gas_cost: 0,
+                func: Box::new(|mut args| {
+                    let condition = match args[0] {
+                        Value::Bool(b) => b,
+                        _ => {
+                            return NativeResult::Error(
+                                "meow_vm_abort: first argument must be bool".into(),
+                            );
+                        }
+                    };
+                    if condition {
+                        NativeResult::Return(None)
+                    } else {
+                        let code = args[1].as_u64().unwrap_or(0);
+                        let message = args
+                            .remove(2)
+                            .into_str()
+                            .unwrap_or_else(|| "aborted".into());
+                        NativeResult::Abort { code, message }
+                    }
+                }),
+            });
+        Self {
+            module,
+            natives: native_map,
+            gas_schedule,
+        }
     }
 
     /// Call `fn_name` with the given arguments.
@@ -154,16 +277,15 @@ impl Vm {
             .ok_or_else(|| VmError::UndefinedFunction(fn_name.to_string()))?;
         let param_count = func.params.len();
 
-        let (return_value, final_locals) =
-            self.call_inner(fn_name, args, gas, 0)?;
+        let (return_value, final_locals) = self.call_inner(fn_name, args, gas, 0)?;
 
         // Expose the final state of each parameter slot as final_args.
-        let final_args = final_locals
-            .into_iter()
-            .take(param_count)
-            .collect();
+        let final_args = final_locals.into_iter().take(param_count).collect();
 
-        Ok(VmCallResult { return_value, final_args })
+        Ok(VmCallResult {
+            return_value,
+            final_args,
+        })
     }
 
     /// Inner recursive call. Returns `(return_value, final_locals)`.
@@ -191,7 +313,7 @@ impl Vm {
                 None => break,
             };
 
-            gas.charge(instr.gas_cost())?;
+            gas.charge(self.gas_schedule.cost_of(&instr))?;
             frame.pc += 1;
 
             match instr {
@@ -216,9 +338,9 @@ impl Vm {
                             v.clone()
                         }
                         None => {
-                            return Err(VmError::UseAfterMove(
-                                format!("local slot {slot} has already been moved")
-                            ));
+                            return Err(VmError::UseAfterMove(format!(
+                                "local slot {slot} has already been moved"
+                            )));
                         }
                     };
                     frame.push(value);
@@ -236,8 +358,7 @@ impl Vm {
                 Instruction::LoadField(slot, ref field) => {
                     let idx = slot as usize;
                     let field_val = match frame.locals.get(idx).and_then(|o| o.as_ref()) {
-                        Some(Value::Struct { fields, .. })
-                        | Some(Value::Object { fields, .. }) => {
+                        Some(Value::Struct { fields, .. }) | Some(Value::Object { fields, .. }) => {
                             fields
                                 .iter()
                                 .find(|(n, _)| n == field)
@@ -257,9 +378,9 @@ impl Vm {
                             )));
                         }
                         None => {
-                            return Err(VmError::UseAfterMove(
-                                format!("local slot {slot} has already been moved")
-                            ));
+                            return Err(VmError::UseAfterMove(format!(
+                                "local slot {slot} has already been moved"
+                            )));
                         }
                     };
                     frame.push(field_val);
@@ -269,8 +390,7 @@ impl Vm {
                     let new_val = frame.pop()?;
                     let idx = slot as usize;
                     match frame.locals.get_mut(idx).and_then(|o| o.as_mut()) {
-                        Some(Value::Struct { fields, .. })
-                        | Some(Value::Object { fields, .. }) => {
+                        Some(Value::Struct { fields, .. }) | Some(Value::Object { fields, .. }) => {
                             let entry = fields.iter_mut().find(|(n, _)| n == field);
                             match entry {
                                 Some((_, v)) => *v = new_val,
@@ -292,9 +412,9 @@ impl Vm {
                             )));
                         }
                         None => {
-                            return Err(VmError::UseAfterMove(
-                                format!("local slot {slot} has already been moved")
-                            ));
+                            return Err(VmError::UseAfterMove(format!(
+                                "local slot {slot} has already been moved"
+                            )));
                         }
                     }
                 }
@@ -388,15 +508,18 @@ impl Vm {
                 }
 
                 // ── Struct / Object operations ─────────────────────────────────
-                Instruction::NewStruct { type_name, field_names } => {
-                    let def = self.module.get_struct(&type_name).ok_or_else(|| {
-                        VmError::UndefinedStruct(type_name.clone())
-                    })?;
+                Instruction::NewStruct {
+                    type_name,
+                    field_names,
+                } => {
+                    let def = self
+                        .module
+                        .get_struct(&type_name)
+                        .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
                     let is_object = def.is_object;
 
                     // Pop values in reverse field order.
-                    let mut fields: Vec<(String, Value)> =
-                        Vec::with_capacity(field_names.len());
+                    let mut fields: Vec<(String, Value)> = Vec::with_capacity(field_names.len());
                     for name in field_names.iter().rev() {
                         let v = frame.pop()?;
                         fields.push((name.clone(), v));
@@ -414,8 +537,14 @@ impl Vm {
                 Instruction::GetField(field) => {
                     let v = frame.pop()?;
                     match v {
-                        Value::Struct { ref type_name, ref fields }
-                        | Value::Object { ref type_name, ref fields } => {
+                        Value::Struct {
+                            ref type_name,
+                            ref fields,
+                        }
+                        | Value::Object {
+                            ref type_name,
+                            ref fields,
+                        } => {
                             let fv = fields
                                 .iter()
                                 .find(|(n, _)| *n == field)
@@ -446,27 +575,23 @@ impl Vm {
 
                 // ── Control flow ──────────────────────────────────────────────
                 Instruction::Jump(offset) => {
-                    frame.pc =
-                        (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                    frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
                 }
                 Instruction::JumpIf(offset) => {
                     let v = frame.pop()?;
                     if v.as_bool() == Some(true) {
-                        frame.pc =
-                            (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                        frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
                     }
                 }
                 Instruction::JumpIfNot(offset) => {
                     let v = frame.pop()?;
                     if v.as_bool() == Some(false) {
-                        frame.pc =
-                            (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                        frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
                     }
                 }
 
                 // ── Functions ─────────────────────────────────────────────────
                 Instruction::Call(name) => {
-                    // Try module function first.
                     if let Some(callee) = self.module.get_function(&name) {
                         let arg_count = callee.params.len();
                         let mut args: Vec<Value> = (0..arg_count)
@@ -474,8 +599,7 @@ impl Vm {
                             .collect::<Result<Vec<_>>>()?;
                         args.reverse();
 
-                        let (ret, _) =
-                            self.call_inner(&name, args, gas, depth + 1)?;
+                        let (ret, _) = self.call_inner(&name, args, gas, depth + 1)?;
                         frame.push(ret.unwrap_or(Value::Void));
                     } else if let Some(native) = self.natives.get(&name) {
                         let param_count = native.param_count;
@@ -516,22 +640,22 @@ impl Vm {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
-    let a = l.as_u64().ok_or_else(|| {
-        VmError::TypeError(format!("expected integer, got {}", l.type_name()))
-    })?;
-    let b = r.as_u64().ok_or_else(|| {
-        VmError::TypeError(format!("expected integer, got {}", r.type_name()))
-    })?;
+    let a = l
+        .as_u64()
+        .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", l.type_name())))?;
+    let b = r
+        .as_u64()
+        .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", r.type_name())))?;
     Ok(Value::U64(op(a, b)))
 }
 
 /// Returns `true` if `l < r` (unsigned comparison).
 fn cmp_values(l: &Value, r: &Value) -> Result<bool> {
-    let a = l.as_u64().ok_or_else(|| {
-        VmError::TypeError(format!("expected integer, got {}", l.type_name()))
-    })?;
-    let b = r.as_u64().ok_or_else(|| {
-        VmError::TypeError(format!("expected integer, got {}", r.type_name()))
-    })?;
+    let a = l
+        .as_u64()
+        .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", l.type_name())))?;
+    let b = r
+        .as_u64()
+        .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", r.type_name())))?;
     Ok(a < b)
 }

@@ -2,10 +2,10 @@
 resolver = "3"
 members = [
     "crates/meow",
-    "crates/meow-executor",
     "crates/meow-node",
     "crates/meow-types",
     "crates/meow-vm",
+    "crates/meow-vm-adapter",
     "crates/meow-framework",
     ]
 
