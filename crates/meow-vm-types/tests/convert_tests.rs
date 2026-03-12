@@ -1,4 +1,4 @@
-use meow_vm::{
+use meow_vm_types::{
     convert::{error::ConversionError, object_from_rust, value_from_rust, value_to_rust},
     types::Value,
 };
@@ -181,7 +181,9 @@ fn unsupported_type_returns_error() {
     struct WithSeq {
         items: Vec<u64>,
     }
-    let v = WithSeq { items: vec![1, 2, 3] };
+    let v = WithSeq {
+        items: vec![1, 2, 3],
+    };
     assert!(matches!(
         value_from_rust(&v).unwrap_err(),
         ConversionError::UnsupportedType(_)

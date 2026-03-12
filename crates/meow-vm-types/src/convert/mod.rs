@@ -10,8 +10,8 @@
 //! a `Value` without any template or BCS round-trip. Field names are preserved.
 //!
 //! ```rust
-//! use meow_vm::types::Value;
-//! use meow_vm::convert::{value_to_rust, value_from_rust};
+//! use meow_vm_types::types::Value;
+//! use meow_vm_types::convert::{value_to_rust, value_from_rust};
 //! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Debug, PartialEq, Serialize, Deserialize)]

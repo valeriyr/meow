@@ -7,4 +7,6 @@ pub enum BuilderError {
     IoError(#[from] std::io::Error),
     #[error("invalid file name: {0}")]
     InvalidFileName(String),
+    #[error("source too large: {size} bytes exceeds limit of {limit} bytes")]
+    SourceTooLarge { size: usize, limit: usize },
 }

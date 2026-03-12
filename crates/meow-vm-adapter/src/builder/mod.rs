@@ -1,6 +1,10 @@
 pub mod error;
 
-use std::path::Path;
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    path::Path,
+};
 
 use meow_vm::{compiler::Compiler, module::Module};
 
@@ -9,10 +13,22 @@ use crate::builder::error::BuilderError;
 /// The result type related to the builder.
 pub type Result<T> = std::result::Result<T, BuilderError>;
 
+/// Maximum byte length of source code passed to the compiler.
+pub const MAX_SOURCE_SIZE: usize = 64 * 1024; // 64 KiB
+
+/// Build a module from source code.
 pub fn build(module_name: &str, source: &str) -> Result<Module> {
+    if source.len() > MAX_SOURCE_SIZE {
+        return Err(BuilderError::SourceTooLarge {
+            size: source.len(),
+            limit: MAX_SOURCE_SIZE,
+        });
+    }
+
     Ok(Compiler::compile(module_name, source)?)
 }
 
+/// Build a module from a source file.
 pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
     let file_path = file_path.as_ref();
 
@@ -21,7 +37,20 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
         .and_then(|s| s.to_str())
         .ok_or_else(|| BuilderError::InvalidFileName(file_path.display().to_string()))?;
 
-    let source = std::fs::read_to_string(file_path)?;
+    let file = File::open(file_path)?;
+    let file_size = file.metadata()?.len();
+
+    if file_size > MAX_SOURCE_SIZE as u64 {
+        return Err(BuilderError::SourceTooLarge {
+            size: file_size as usize,
+            limit: MAX_SOURCE_SIZE,
+        });
+    }
+
+    let mut reader = BufReader::new(file);
+
+    let mut source = String::new();
+    reader.read_to_string(&mut source)?;
 
     build(module_name, &source)
 }

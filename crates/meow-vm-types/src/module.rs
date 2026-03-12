@@ -22,7 +22,7 @@ pub struct Function {
 /// A compiled module — the unit of compilation and execution.
 ///
 /// A module contains struct/object definitions (schemas) and compiled functions.
-/// It is produced by [`crate::compiler::Compiler`] and consumed by [`crate::vm::Vm`].
+/// It is produced by the compiler and consumed by the VM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Module {
     pub name: String,

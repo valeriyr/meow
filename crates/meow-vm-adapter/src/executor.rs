@@ -25,6 +25,9 @@ use crate::{
     natives,
 };
 
+/// Maximum serialized byte size of a compiled [`crate::module::Module`].
+pub const MAX_MODULE_SIZE_BYTES: usize = 512 * 1024; // 512 KiB
+
 /// Execute a transaction against a set of input objects.
 ///
 /// The `inputs` slice must contain the module object (identified by
@@ -131,9 +134,7 @@ fn execute_meow_call(
         match resolve_arg(input, param_type, inputs) {
             Ok(v) => {
                 if let Input::Object(object_ref) = input {
-                    if let Some(obj) =
-                        inputs.iter().find(|o| o.address() == object_ref.address())
-                    {
+                    if let Some(obj) = inputs.iter().find(|o| o.address() == object_ref.address()) {
                         input_object_args.push((i, obj));
                     }
                 }
@@ -196,7 +197,19 @@ fn execute_meow_module_publish(
     _inputs: &[Object],
     gas: &mut GasMeter,
 ) -> ExecutionResult {
-    let cost = module.len() as u64 * GAS_PER_MODULE_BYTE;
+    let module_size = module.len();
+
+    if module_size > MAX_MODULE_SIZE_BYTES {
+        return ExecutionResult::failure(
+            format!(
+                "module size {} bytes exceeds maximum of {} bytes",
+                module_size, MAX_MODULE_SIZE_BYTES
+            ),
+            *tx_digest,
+        );
+    }
+
+    let cost = module_size as u64 * GAS_PER_MODULE_BYTE;
     if let Err(e) = gas.charge(cost) {
         return ExecutionResult::failure(e.to_string(), *tx_digest);
     }
@@ -208,7 +221,9 @@ fn execute_meow_module_publish(
         module_id,
         ObjectOwner::Immutable,
         *tx_digest,
-        ObjectVersion::ZERO.next().expect("ZERO.next() is always Some"),
+        ObjectVersion::ZERO
+            .next()
+            .expect("ZERO.next() is always Some"),
         ObjectType::Module,
         module.clone(),
     )];
@@ -230,7 +245,9 @@ fn bump_version(obj: &Object) -> ObjectVersion {
 
 /// Version for a newly created object (no prior history): starts at 1.
 fn new_object_version() -> ObjectVersion {
-    ObjectVersion::ZERO.next().expect("ZERO.next() is always Some")
+    ObjectVersion::ZERO
+        .next()
+        .expect("ZERO.next() is always Some")
 }
 
 /// Determine the owner for an output object.

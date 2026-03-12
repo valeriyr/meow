@@ -646,6 +646,7 @@ dependencies = [
  "dirs",
  "ed25519-consensus",
  "hex",
+ "meow-vm-types",
  "prefix-hex",
  "rand",
  "serde",
@@ -666,6 +667,7 @@ version = "0.1.0"
 dependencies = [
  "bcs",
  "chumsky",
+ "meow-vm-types",
  "serde",
  "thiserror 2.0.18",
 ]
@@ -677,6 +679,15 @@ dependencies = [
  "bcs",
  "meow-types",
  "meow-vm",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "meow-vm-types"
+version = "0.1.0"
+dependencies = [
+ "bcs",
  "serde",
  "thiserror 2.0.18",
 ]

@@ -2,12 +2,12 @@ pub mod error;
 
 use std::collections::HashMap;
 
-use crate::{bytecode::Instruction, module::Module, types::Value, vm::error::VmError};
+use meow_vm_types::{limits, types::Value};
+
+use crate::{bytecode::Instruction, module::Module, vm::error::VmError};
 
 /// An error that can occur during VM execution.
 pub type Result<T> = std::result::Result<T, VmError>;
-
-const MAX_CALL_DEPTH: usize = 256;
 
 // ─── Native functions ────────────────────────────────────────────────────────
 
@@ -296,8 +296,8 @@ impl Vm {
         gas: &mut GasMeter,
         depth: usize,
     ) -> Result<(Option<Value>, Vec<Option<Value>>)> {
-        if depth >= MAX_CALL_DEPTH {
-            return Err(VmError::CallStackOverflow(MAX_CALL_DEPTH));
+        if depth >= limits::MAX_CALL_DEPTH {
+            return Err(VmError::CallStackOverflow(limits::MAX_CALL_DEPTH));
         }
 
         let func = self

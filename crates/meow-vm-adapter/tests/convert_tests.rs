@@ -1,6 +1,7 @@
 use meow_types::{
     address::Address,
     digest::Digest,
+    identifier::Identifier,
     object::{
         Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
         object_version::ObjectVersion,
@@ -161,7 +162,7 @@ fn round_trip_object_to_vm_and_back() {
 
 fn make_object(id: [u8; 32], fields: Vec<(String, Value)>) -> Object {
     let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let ident = meow_types::object::identifier::Identifier::new("Foo").unwrap();
+    let ident = Identifier::new("Foo").unwrap();
     let decl_ref = ObjectDeclRef::new(Address::new(MODULE_ADDR), ident);
     Object::new(
         Address::new(id),

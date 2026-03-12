@@ -1,14 +1,11 @@
 [package]
-name = "meow-vm"
+name = "meow-vm-types"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
-chumsky = "0.12"
 bcs.workspace = true
 thiserror.workspace = true
 serde.workspace = true
-
-meow-vm-types.workspace = true

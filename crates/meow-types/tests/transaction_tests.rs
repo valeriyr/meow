@@ -1,8 +1,8 @@
 use meow_types::{
     address::Address,
     digest::Digest,
+    identifier::Identifier,
     keypair::{KeyPair, error::KeyPairError, signature_scheme::SignatureScheme},
-    object::identifier::Identifier,
     transaction::{
         SignedTransaction, Transaction, call::Call, error::TransactionError,
         transaction_type::TransactionType,

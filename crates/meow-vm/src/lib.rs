@@ -28,9 +28,7 @@
 //! println!("gas consumed: {}", gas.consumed());
 //! ```
 
-pub mod bytecode;
 pub mod compiler;
-pub mod convert;
-pub mod module;
-pub mod types;
 pub mod vm;
+
+pub use meow_vm_types::{bytecode, convert, limits, module, types};

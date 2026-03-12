@@ -1,6 +1,7 @@
 use meow_types::{
     address::Address,
     digest::Digest,
+    identifier::Identifier,
     object::{
         Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
         object_version::ObjectVersion,
@@ -234,11 +235,9 @@ fn exhausted_gas_coin_goes_to_changed() {
     // Gas coin with balance 0: budget is 0, execution fails with OutOfGas,
     // gas coin survives with balance 0 in changed_objects.
     let gas_obj = {
-        let fields: Vec<(String, Value)> = vec![
-            ("balance".to_string(), Value::U64(0)),
-        ];
+        let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(0))];
         let content = bcs::to_bytes(&fields).expect("fields must serialize");
-        let ident = meow_types::object::identifier::Identifier::new("MeowCoin").unwrap();
+        let ident = Identifier::new("MeowCoin").unwrap();
         let decl_ref = ObjectDeclRef::new(MEOW_COIN_MODULE_ADDRESS, ident);
         Object::new(
             Address::new(GAS_ADDR),
@@ -296,11 +295,9 @@ fn make_module_object() -> Object {
 }
 
 fn make_coin_object(id: [u8; 32], owner: [u8; 32], balance: u64) -> Object {
-    let fields: Vec<(String, Value)> = vec![
-        ("balance".to_string(), Value::U64(balance)),
-    ];
+    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(balance))];
     let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let ident = meow_types::object::identifier::Identifier::new("MeowCoin").unwrap();
+    let ident = Identifier::new("MeowCoin").unwrap();
     let decl_ref = ObjectDeclRef::new(Address::new(MODULE_ADDR), ident);
     Object::new(
         Address::new(id),
@@ -313,7 +310,7 @@ fn make_coin_object(id: [u8; 32], owner: [u8; 32], balance: u64) -> Object {
 }
 
 fn make_transaction(fn_name: &str, arguments: Vec<Input>) -> Transaction {
-    let function = meow_types::object::identifier::Identifier::new(fn_name).unwrap();
+    let function = Identifier::new(fn_name).unwrap();
     let call = Call::new(Address::new(MODULE_ADDR), function, arguments);
     Transaction::new(
         Address::new(SENDER),
@@ -323,11 +320,9 @@ fn make_transaction(fn_name: &str, arguments: Vec<Input>) -> Transaction {
 }
 
 fn make_gas_coin_object() -> Object {
-    let fields: Vec<(String, Value)> = vec![
-        ("balance".to_string(), Value::U64(GAS_BALANCE)),
-    ];
+    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(GAS_BALANCE))];
     let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let ident = meow_types::object::identifier::Identifier::new("MeowCoin").unwrap();
+    let ident = Identifier::new("MeowCoin").unwrap();
     let decl_ref = ObjectDeclRef::new(MEOW_COIN_MODULE_ADDRESS, ident);
     Object::new(
         Address::new(GAS_ADDR),

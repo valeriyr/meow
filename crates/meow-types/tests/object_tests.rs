@@ -1,9 +1,10 @@
 use meow_types::{
     address::Address,
     digest::Digest,
+    identifier::Identifier,
     object::{
-        Object, identifier::Identifier, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner,
-        object_ref::ObjectRef, object_type::ObjectType, object_version::ObjectVersion,
+        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
+        object_type::ObjectType, object_version::ObjectVersion,
     },
     system_framework::{MEOW_COIN_MODULE_ADDRESS, MEOW_COIN_OBJECT_NAME},
 };

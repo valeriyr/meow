@@ -34,10 +34,14 @@ use std::collections::HashMap;
 
 use chumsky::prelude::*;
 
+use meow_vm_types::{
+    limits,
+    types::{StructDef, Type},
+};
+
 use crate::{
     bytecode::Instruction,
     module::{Function, Module},
-    types::{StructDef, Type},
 };
 use error::CompilerError;
 
@@ -468,6 +472,22 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
     item.repeated().collect::<Vec<_>>().padded()
 }
 
+// ─── Identifier helpers ───────────────────────────────────────────────────────
+
+fn validate_identifier(name: &str, context: &str) -> Result<()> {
+    if !meow_vm_types::identifier::is_valid_identifier(name) {
+        Err(CompilerError::Message(format!(
+            "{context}: '{}' is not a valid identifier \
+             (must start with a letter or underscore, followed by letters, digits, or underscores; \
+             max {} characters)",
+            name,
+            limits::MAX_IDENTIFIER_LEN,
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 // ─── Codegen ─────────────────────────────────────────────────────────────────
 
 struct Codegen<'m> {
@@ -487,11 +507,18 @@ impl<'m> Codegen<'m> {
         }
     }
 
-    fn alloc_local(&mut self, name: String) -> u8 {
+    fn alloc_local(&mut self, name: String) -> Result<u8> {
+        validate_identifier(&name, "variable")?;
+        if self.next_slot as usize >= limits::MAX_LOCALS {
+            return Err(CompilerError::Message(format!(
+                "too many local variables: limit is {}",
+                limits::MAX_LOCALS,
+            )));
+        }
         let slot = self.next_slot;
         self.locals.insert(name, slot);
         self.next_slot += 1;
-        slot
+        Ok(slot)
     }
 
     fn emit(&mut self, instr: Instruction) {
@@ -604,7 +631,7 @@ impl<'m> Codegen<'m> {
         match stmt {
             Stmt::Let { name, expr } => {
                 self.compile_expr(expr)?;
-                let slot = self.alloc_local(name);
+                let slot = self.alloc_local(name)?;
                 self.emit(Instruction::Store(slot));
             }
 
@@ -675,6 +702,17 @@ impl<'m> Codegen<'m> {
     }
 
     fn compile_function(structs: &'m [StructDef], ast_fn: AstFunction) -> Result<Function> {
+        validate_identifier(&ast_fn.name, "function name")?;
+
+        if ast_fn.params.len() > limits::MAX_PARAMS {
+            return Err(CompilerError::Message(format!(
+                "function '{}': too many parameters ({} > limit of {})",
+                ast_fn.name,
+                ast_fn.params.len(),
+                limits::MAX_PARAMS,
+            )));
+        }
+
         let mut cg = Codegen::new(structs);
 
         // Validate return type: functions may not return an Object.
@@ -696,14 +734,12 @@ impl<'m> Codegen<'m> {
         }
 
         // Allocate slots for parameters.
-        let params: Vec<(String, Type)> = ast_fn
-            .params
-            .into_iter()
-            .map(|(name, ty)| {
-                cg.alloc_local(name.clone());
-                (name, ty)
-            })
-            .collect();
+        let mut params: Vec<(String, Type)> = Vec::with_capacity(ast_fn.params.len());
+        for (name, ty) in ast_fn.params {
+            validate_identifier(&name, &format!("parameter in function '{}'", ast_fn.name))?;
+            cg.alloc_local(name.clone())?;
+            params.push((name, ty));
+        }
 
         let return_type = ast_fn.return_type;
 
@@ -714,6 +750,15 @@ impl<'m> Codegen<'m> {
         // Ensure the function always ends with Return.
         if cg.code.last() != Some(&Instruction::Return) {
             cg.emit(Instruction::Return);
+        }
+
+        if cg.code.len() > limits::MAX_CODE_SIZE {
+            return Err(CompilerError::Message(format!(
+                "function '{}': bytecode too large ({} instructions > limit of {})",
+                ast_fn.name,
+                cg.code.len(),
+                limits::MAX_CODE_SIZE,
+            )));
         }
 
         Ok(Function {
@@ -729,12 +774,25 @@ impl<'m> Codegen<'m> {
 // ─── Validation ──────────────────────────────────────────────────────────────
 
 fn validate_struct_def(def: &AstStruct) -> Result<()> {
+    let kind = if def.is_object { "object" } else { "struct" };
+
+    validate_identifier(&def.name, &format!("{kind} name"))?;
+
+    if def.fields.len() > limits::MAX_FIELDS {
+        return Err(CompilerError::Message(format!(
+            "{kind} '{}': too many fields ({} > limit of {})",
+            def.name,
+            def.fields.len(),
+            limits::MAX_FIELDS,
+        )));
+    }
+
     // Validate field types: only primitives allowed.
     for (field_name, ty) in &def.fields {
+        validate_identifier(field_name, &format!("field in {kind} '{}'", def.name))?;
         if !ty.is_valid_field_type() {
             return Err(CompilerError::Message(format!(
-                "{} '{}': field '{field_name}' has non-primitive type '{}' — only bool, u64, address are allowed",
-                if def.is_object { "object" } else { "struct" },
+                "{kind} '{}': field '{field_name}' has non-primitive type '{}' — only bool, u64, address are allowed",
                 def.name,
                 ty.name()
             )));
@@ -765,6 +823,8 @@ pub struct Compiler;
 impl Compiler {
     /// Compile `source` into a module named `module_name`.
     pub fn compile(module_name: &str, source: &str) -> Result<Module> {
+        validate_identifier(module_name, "module name")?;
+
         let items = parser().parse(source).into_result().map_err(|errs| {
             let msg = errs
                 .iter()
@@ -773,6 +833,27 @@ impl Compiler {
                 .join("; ");
             CompilerError::Message(msg)
         })?;
+
+        let struct_count = items
+            .iter()
+            .filter(|i| matches!(i, AstItem::Struct(_)))
+            .count();
+        if struct_count > limits::MAX_STRUCTS {
+            return Err(CompilerError::Message(format!(
+                "too many struct/object definitions: {} > limit of {}",
+                struct_count,
+                limits::MAX_STRUCTS,
+            )));
+        }
+
+        let fn_count = items.iter().filter(|i| matches!(i, AstItem::Fn(_))).count();
+        if fn_count > limits::MAX_FUNCTIONS {
+            return Err(CompilerError::Message(format!(
+                "too many functions: {} > limit of {}",
+                fn_count,
+                limits::MAX_FUNCTIONS,
+            )));
+        }
 
         let mut module = Module::new(module_name);
 

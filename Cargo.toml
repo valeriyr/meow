@@ -5,6 +5,7 @@ members = [
     "crates/meow-node",
     "crates/meow-types",
     "crates/meow-vm",
+    "crates/meow-vm-types",
     "crates/meow-vm-adapter",
     "crates/meow-framework",
     ]
@@ -33,3 +34,4 @@ tokio = { version = "1.50", features = ["full"] }
 
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }
+meow-vm-types = { path = "crates/meow-vm-types" }

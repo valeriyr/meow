@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{address::Address, object::identifier::Identifier};
+use crate::{address::Address, identifier::Identifier};
 
 /// The type of an object reference.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

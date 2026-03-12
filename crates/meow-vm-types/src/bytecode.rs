@@ -74,4 +74,3 @@ pub enum Instruction {
     /// Return the top-of-stack value to the caller (or Void if stack is empty).
     Return,
 }
-

@@ -2,7 +2,7 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::object::identifier::error::IdentifierError;
+use crate::identifier::error::IdentifierError;
 
 pub mod error;
 
@@ -28,13 +28,7 @@ impl Identifier {
     /// A valid identifier starts with an ASCII letter or underscore, followed by
     /// zero or more ASCII letters, digits, or underscores.
     fn is_valid(name: &str) -> bool {
-        let mut chars = name.chars();
-        match chars.next() {
-            Some(first) if first.is_ascii_alphabetic() || first == '_' => {
-                chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
-            }
-            _ => false,
-        }
+        meow_vm_types::identifier::is_valid_identifier(name)
     }
 }
 

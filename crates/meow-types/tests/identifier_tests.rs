@@ -1,4 +1,4 @@
-use meow_types::object::identifier::{Identifier, error::IdentifierError};
+use meow_types::identifier::{Identifier, error::IdentifierError};
 
 //
 // Identifier creation tests.
@@ -85,6 +85,15 @@ fn invalid_identifier_try_from_non_ascii() {
     assert!(matches!(
         Identifier::try_from("🦀").unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == "🦀"
+    ));
+}
+
+#[test]
+fn invalid_too_long_identifier() {
+    let long_identifier = "a".repeat(meow_vm_types::limits::MAX_IDENTIFIER_LEN + 1);
+    assert!(matches!(
+        Identifier::new(long_identifier.clone()).unwrap_err(),
+        IdentifierError::InvalidIdentifier(s) if s == long_identifier
     ));
 }
 

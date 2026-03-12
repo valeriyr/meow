@@ -1,9 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    address::Address,
-    object::{identifier::Identifier, object_ref::ObjectRef},
-};
+use crate::{address::Address, identifier::Identifier, object::object_ref::ObjectRef};
 
 /// The input of a transaction call.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
