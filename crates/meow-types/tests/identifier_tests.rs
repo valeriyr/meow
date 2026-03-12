@@ -1,7 +1,7 @@
 use meow_types::identifier::{Identifier, error::IdentifierError};
 
 //
-// Identifier creation tests.
+// ─── Identifier creation tests ───
 //
 
 #[test]
@@ -45,7 +45,7 @@ fn valid_identifier_with_digits() {
 }
 
 //
-// Identifier validation tests.
+// ─── Identifier validation tests ───
 //
 
 #[test]
@@ -98,7 +98,7 @@ fn invalid_too_long_identifier() {
 }
 
 //
-// Identifier serialization tests.
+// ─── Identifier serialization tests ───
 //
 
 #[test]
@@ -122,7 +122,7 @@ fn identifier_serialized_value() {
 }
 
 //
-// Identifier equality and ordering tests.
+// ─── Identifier equality and ordering tests ───
 //
 
 #[test]

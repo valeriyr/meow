@@ -3,7 +3,7 @@ use std::str::FromStr;
 use meow_types::digest::{DIGEST_LENGTH, Digest, error::DigestError};
 
 //
-// Digest creation tests.
+// ─── Digest creation tests ───
 //
 
 #[test]
@@ -21,7 +21,7 @@ fn custom_digest() {
 }
 
 //
-// Digest computation tests.
+// ─── Digest computation tests ───
 //
 
 #[test]
@@ -48,7 +48,7 @@ fn compute_not_zero() {
 }
 
 //
-// Digest conversion tests.
+// ─── Digest conversion tests ───
 //
 
 #[test]

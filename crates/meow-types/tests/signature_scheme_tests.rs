@@ -3,7 +3,7 @@ use std::str::FromStr;
 use meow_types::keypair::{error::KeyPairError, signature_scheme::SignatureScheme};
 
 //
-// Signature scheme flag tests.
+// ─── Signature scheme flag tests ───
 //
 
 #[test]
@@ -12,7 +12,7 @@ fn signature_scheme_flag() {
 }
 
 //
-// Signature scheme conversion tests.
+// ─── Signature scheme conversion tests ───
 //
 
 #[test]

@@ -4,7 +4,7 @@ use meow_vm_adapter::runner::{
 };
 
 //
-// Tests.
+// ─── Tests ───
 //
 
 #[test]
@@ -193,7 +193,7 @@ fn split_with_exact_balance_zeroes_from() {
 }
 
 //
-// Utilities.
+// ─── Utilities ───
 //
 
 const MEOW_COIN_SRC: &str = include_str!("../modules/meow_coin.meow");

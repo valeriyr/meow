@@ -17,6 +17,7 @@ pub enum Type {
 }
 
 impl Type {
+    /// Converts a type name string to a [`Type`].
     pub fn from_name(s: &str) -> Self {
         match s {
             "bool" => Self::Bool,
@@ -27,6 +28,7 @@ impl Type {
         }
     }
 
+    /// Returns the canonical name string for this type.
     pub fn name(&self) -> &str {
         match self {
             Self::Bool => "bool",
@@ -76,6 +78,7 @@ pub enum Value {
 }
 
 impl Value {
+    /// Returns the type name of this value.
     pub fn type_name(&self) -> &str {
         match self {
             Self::Bool(_) => "bool",
@@ -95,6 +98,7 @@ impl Value {
         }
     }
 
+    /// Returns the `bool` if this is a `Bool` value, or `None` otherwise.
     pub fn as_bool(&self) -> Option<bool> {
         match self {
             Self::Bool(v) => Some(*v),
@@ -102,6 +106,7 @@ impl Value {
         }
     }
 
+    /// Returns the address bytes if this is an `Address` value, or `None` otherwise.
     pub fn as_address(&self) -> Option<[u8; 32]> {
         match self {
             Self::Address(a) => Some(*a),
@@ -109,6 +114,7 @@ impl Value {
         }
     }
 
+    /// Returns the string slice if this is a `Str` value, or `None` otherwise.
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Self::Str(s) => Some(s.as_str()),
@@ -116,6 +122,7 @@ impl Value {
         }
     }
 
+    /// Consumes this value and returns the inner `String` if it is a `Str` value, or `None` otherwise.
     pub fn into_str(self) -> Option<String> {
         match self {
             Self::Str(s) => Some(s),
@@ -148,7 +155,9 @@ impl Value {
 /// Schema of a user-defined struct or object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructDef {
+    /// The struct or object name.
     pub name: String,
+    /// Fields in declaration order (name, type).
     pub fields: Vec<(String, Type)>,
     /// True if declared with the `object` keyword.
     /// Object structs must have `id: address` as their first field.
@@ -156,7 +165,7 @@ pub struct StructDef {
 }
 
 impl StructDef {
-    /// Return the index of `field_name` in this struct, if it exists.
+    /// Returns the index of `field_name` in this struct, or `None` if not found.
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
         self.fields.iter().position(|(n, _)| n == field_name)
     }

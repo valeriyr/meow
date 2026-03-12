@@ -5,9 +5,9 @@ use crate::{address::Address, identifier::Identifier, object::object_ref::Object
 /// The input of a transaction call.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Input {
-    /// Input is an object instance stored on-chain; identified by the address.
+    /// Wraps an `ObjectRef` referring to an existing on-chain object passed by reference.
     Object(ObjectRef),
-    /// Input is a raw BCS serialized data.
+    /// Contains BCS-serialized bytes representing a plain value argument (not an object).
     Raw(Vec<u8>),
 }
 

@@ -7,7 +7,7 @@ use meow_vm::{
 use utils::{compile, fresh_id_native, run, vm_with_natives};
 
 //
-// Address.
+// ─── Address ───
 //
 
 #[test]
@@ -47,7 +47,7 @@ fn address_equality() {
 }
 
 //
-// Struct.
+// ─── Struct ───
 //
 
 #[test]
@@ -124,7 +124,7 @@ fn struct_field_mutation() {
 }
 
 //
-// String.
+// ─── String ───
 //
 
 #[test]
@@ -198,7 +198,7 @@ fn string_struct_field_round_trip() {
 }
 
 //
-// Object.
+// ─── Object ───
 //
 
 #[test]
@@ -239,7 +239,7 @@ fn object_field_mutation_reflected_in_final_args() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_counter(value: u64) -> Value {

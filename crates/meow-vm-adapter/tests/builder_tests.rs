@@ -1,4 +1,4 @@
-use meow_vm_adapter::builder::{self, error::BuilderError};
+use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
 
 const MEOW_COIN_FILE_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -38,7 +38,7 @@ fn build_module_from_file_successful() {
 }
 
 //
-// Errors.
+// ─── Errors ───
 //
 
 #[test]
@@ -65,4 +65,19 @@ fn build_from_file_without_extension_returns_invalid_file_name() {
         builder::build_from_file("/").unwrap_err(),
         BuilderError::InvalidFileName(_)
     ));
+}
+
+#[test]
+fn build_source_size_limit() {
+    // Create a source string that exceeds MAX_SOURCE_SIZE by 1 byte.
+    // Padding with spaces produces syntactically irrelevant but still-too-large input.
+    let oversized = " ".repeat(MAX_SOURCE_SIZE + 1);
+
+    assert!(
+        matches!(
+            builder::build("test", &oversized).unwrap_err(),
+            BuilderError::SourceTooLarge { .. }
+        ),
+        "source exceeding MAX_SOURCE_SIZE must return SourceTooLarge"
+    );
 }

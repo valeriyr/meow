@@ -7,7 +7,7 @@ use meow_vm::{
 use utils::{compile, run};
 
 //
-// Arithmetic.
+// ─── Arithmetic ───
 //
 
 #[test]
@@ -73,7 +73,7 @@ fn division_by_zero() {
 }
 
 //
-// Comparisons.
+// ─── Comparisons ───
 //
 
 #[test]
@@ -171,7 +171,7 @@ fn ge() {
 }
 
 //
-// Boolean logic.
+// ─── Boolean logic ───
 //
 
 #[test]

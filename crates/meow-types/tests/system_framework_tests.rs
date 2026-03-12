@@ -11,7 +11,7 @@ use meow_types::{
 use meow_vm_types::{convert, types::Value};
 
 //
-// System address tests.
+// ─── System address tests ───
 //
 
 #[test]
@@ -23,7 +23,7 @@ fn system_address_to_string() {
 }
 
 //
-// MeowCoin tests.
+// ─── MeowCoin tests ───
 //
 
 #[test]

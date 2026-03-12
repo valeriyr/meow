@@ -7,7 +7,7 @@ use meow_vm::{
 use utils::{consume_native, vm_with_natives};
 
 //
-// Native function calls.
+// ─── Native function calls ───
 //
 
 #[test]
@@ -39,7 +39,7 @@ fn void_native_does_not_leave_stack_garbage() {
 }
 
 //
-// meow_vm_abort.
+// ─── meow_vm_abort ───
 //
 
 #[test]
@@ -77,7 +77,7 @@ fn abort_can_be_overridden_by_custom_native() {
 }
 
 //
-// Move semantics.
+// ─── Move semantics ───
 //
 
 #[test]
@@ -96,7 +96,7 @@ fn use_after_move_is_an_error() {
 }
 
 //
-// final_args tracking.
+// ─── final_args tracking ───
 //
 
 #[test]
@@ -157,7 +157,7 @@ fn final_args_reflects_mutations_on_surviving_object() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_token(amount: u64) -> Value {

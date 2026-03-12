@@ -12,7 +12,9 @@ pub const MEOW_COIN_OBJECT_NAME: &str = "MeowCoin";
 /// The MeowCoin struct represents a coin in the Meow system, with an id and a balance.
 #[derive(Serialize, Deserialize)]
 pub struct MeowCoin {
+    /// The unique on-chain object identifier for this coin.
     id: Address,
+    /// The coin balance denominated in the smallest indivisible unit.
     balance: u64,
 }
 

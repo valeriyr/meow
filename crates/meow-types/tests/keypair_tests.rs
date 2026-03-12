@@ -10,7 +10,7 @@ const SEED: &str = "34e52ea12212a4b6ce7301eba2cbd9c089886ffb2af0c8835cd565106039
 const DERIVATION_PATH: &str = "m/44'/9999'/0'/0'/0'";
 
 //
-// Keypair derivation tests.
+// ─── Keypair derivation tests ───
 //
 
 #[test]
@@ -55,7 +55,7 @@ fn ed25519_keypair_derive_with_invalid_derivation_path() {
 }
 
 //
-// Keypair generation tests.
+// ─── Keypair generation tests ───
 //
 
 #[test]
@@ -72,7 +72,7 @@ fn ed25519_keypair_generate_produces_unique_keypairs() {
 }
 
 //
-// Keypair random generation tests.
+// ─── Keypair random generation tests ───
 //
 
 #[test]
@@ -101,7 +101,7 @@ fn ed25519_keypair_random() {
 }
 
 //
-// Keypair conversion tests.
+// ─── Keypair conversion tests ───
 //
 
 #[test]
@@ -172,7 +172,7 @@ fn ed25519_keypair_deserialize_from_str() {
 }
 
 //
-// Signing tests.
+// ─── Signing tests ───
 //
 
 #[test]
@@ -205,7 +205,7 @@ fn signature_clone_equality() {
 }
 
 //
-// Signature display tests.
+// ─── Signature display tests ───
 //
 
 #[test]
@@ -218,7 +218,7 @@ fn signature_display_known_value() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_ed25519_keypair() -> KeyPair {

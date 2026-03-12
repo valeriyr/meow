@@ -7,7 +7,7 @@ use meow_vm::{
 use utils::{compile, run};
 
 //
-// let.
+// ─── let ───
 //
 
 #[test]
@@ -22,7 +22,7 @@ fn let_binding() {
 }
 
 //
-// if.
+// ─── if ───
 //
 
 #[test]
@@ -60,7 +60,7 @@ fn if_mutates_local() {
 }
 
 //
-// if / else.
+// ─── if / else ───
 //
 
 #[test]
@@ -96,7 +96,7 @@ fn if_else_with_let_in_both_branches() {
 }
 
 //
-// Function calls.
+// ─── Function calls ───
 //
 
 #[test]
@@ -109,7 +109,7 @@ fn function_call_chain() {
 }
 
 //
-// Void functions.
+// ─── Void functions ───
 //
 
 #[test]

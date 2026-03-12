@@ -4,7 +4,7 @@ use meow_vm::{
 };
 
 //
-// Object rules.
+// ─── Object rules ───
 //
 
 #[test]
@@ -52,7 +52,7 @@ fn object_cannot_be_returned_from_function() {
 }
 
 //
-// Struct rules.
+// ─── Struct rules ───
 //
 
 #[test]
@@ -65,7 +65,9 @@ fn struct_field_can_be_string_type() {
     assert!(Compiler::compile("test", src).is_ok());
 }
 
-// ─── Identifier rules ─────────────────────────────────────────────────────────
+//
+// ─── Identifier rules ───
+//
 
 #[test]
 fn invalid_module_name_rejected() {
@@ -116,7 +118,9 @@ fn invalid_param_name_rejected() {
     assert!(Compiler::compile("test", src).is_err());
 }
 
-// ─── Limits ───────────────────────────────────────────────────────────────────
+//
+// ─── Limits ───
+//
 
 #[test]
 fn too_many_functions_rejected() {

@@ -32,7 +32,7 @@ pub struct Transaction {
 pub struct SignedTransaction(Transaction, Signature);
 
 //
-// Implementation of [Transaction].
+// ─── Implementation of [Transaction] ───
 //
 
 impl Transaction {
@@ -67,7 +67,7 @@ impl Transaction {
 }
 
 //
-// Implementation of [SignedTransaction].
+// ─── Implementation of [SignedTransaction] ───
 //
 
 impl SignedTransaction {

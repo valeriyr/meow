@@ -66,7 +66,9 @@ pub fn object_from_rust<T: Serialize>(val: &T) -> Result<Value> {
     val.serialize(ValueSerializer { is_object: true })
 }
 
-// ── Custom serializers ────────────────────────────────────────────────────────
+//
+// ─── Custom serializers ───
+//
 
 /// Newtype wrapper that serializes a [`Value`] as its underlying data,
 /// without the enum discriminant. The output is identical to what the
@@ -241,7 +243,9 @@ impl serde::Serializer for ValueSerializer {
     }
 }
 
-// ── StructSerializer ─────────────────────────────────────────────────────────
+//
+// ─── StructSerializer ───
+//
 
 struct StructSerializer {
     type_name: String,
@@ -292,7 +296,9 @@ impl SerializeStruct for StructSerializer {
     }
 }
 
-// ── TupleSerializer ───────────────────────────────────────────────────────────
+//
+// ─── TupleSerializer ───
+//
 // Used for [u8; N] arrays: serde serializes them as N-element tuples of u8.
 // We detect the 32-element case and produce Value::Address.
 
@@ -337,7 +343,9 @@ impl SerializeTuple for TupleSerializer {
     }
 }
 
-// ── Impossible ────────────────────────────────────────────────────────────────
+//
+// ─── Impossible ───
+//
 // Placeholder for serializer associated types that are never constructed.
 
 struct Impossible;

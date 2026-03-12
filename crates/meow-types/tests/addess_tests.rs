@@ -8,7 +8,7 @@ use meow_types::{
 use rand::{SeedableRng, rngs::StdRng};
 
 //
-// Address creation tests.
+// ─── Address creation tests ───
 //
 
 #[test]
@@ -30,7 +30,7 @@ fn custom_address() {
 }
 
 //
-// Address derive tests.
+// ─── Address derive tests ───
 //
 
 #[test]
@@ -71,7 +71,7 @@ fn derive_differs_by_digest() {
 }
 
 //
-// Address conversion tests.
+// ─── Address conversion tests ───
 //
 
 #[test]
@@ -117,7 +117,36 @@ fn address_from_bytes() {
 }
 
 //
-// Utility functions.
+// ─── Address derive extended tests ───
+//
+
+#[test]
+fn derive_known_value() {
+    let digest = test_digest();
+    let address = Address::derive(digest, 0, 0);
+    assert_eq!(
+        address.to_string(),
+        "0xd1e6d801472b1f9d8383da1fea101d4476f15d6641dda0487fc39ae073c66183"
+    );
+}
+
+#[test]
+fn derive_different_counters_produce_different_addresses() {
+    let digest = test_digest();
+    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a1 = Address::derive(digest, 0, 1);
+    assert_ne!(a0, a1);
+}
+
+#[test]
+fn derive_different_digests_produce_different_addresses() {
+    let a0 = Address::derive(test_digest(), 0, 0);
+    let a1 = Address::derive(other_digest(), 0, 0);
+    assert_ne!(a0, a1);
+}
+
+//
+// ─── Utility functions ───
 //
 
 fn test_keypair() -> KeyPair {

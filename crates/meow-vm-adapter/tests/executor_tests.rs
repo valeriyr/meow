@@ -278,7 +278,111 @@ fn exhausted_gas_coin_goes_to_changed() {
 }
 
 //
-// Utility functions.
+// ─── Error path tests ───
+//
+
+#[test]
+fn execute_with_function_not_found() {
+    let module_obj = make_module_object();
+    let gas_obj = make_gas_coin_object();
+    let tx = make_transaction("nonexistent_function", vec![]);
+
+    let result = executor::execute(&tx, vec![module_obj, gas_obj]);
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(_)),
+        "calling a missing function must produce Failure"
+    );
+    // Gas coin is always returned as changed even on failure.
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must be returned as changed even on failure"
+    );
+    assert_eq!(
+        result.changed_objects()[0].address(),
+        &Address::new(GAS_ADDR)
+    );
+}
+
+#[test]
+fn execute_with_no_gas_coin() {
+    // Build a transaction whose gas_coin address does not appear in the inputs.
+    let module_obj = make_module_object();
+    let function = Identifier::new("mint").unwrap();
+    let call = Call::new(
+        Address::new(MODULE_ADDR),
+        function,
+        vec![
+            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
+            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
+        ],
+    );
+    // gas_coin address points to nothing in inputs.
+    let missing_gas_addr: [u8; 32] = [0xFEu8; 32];
+    let tx = Transaction::new(
+        Address::new(SENDER),
+        Address::new(missing_gas_addr),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = executor::execute(&tx, vec![module_obj]);
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(_)),
+        "missing gas coin must produce Failure"
+    );
+}
+
+//
+// ─── Module publish tests ───
+//
+
+#[test]
+fn execute_module_publish() {
+    // Compile a trivial module and BCS-serialize it to bytes for the publish payload.
+    let src = "fn noop() {}";
+    let module = meow_vm::compiler::Compiler::compile("publish_test", src)
+        .expect("module must compile");
+    let module_bytes = bcs::to_bytes(&module).expect("module must serialize");
+
+    let gas_obj = make_gas_coin_object();
+    let tx = Transaction::new(
+        Address::new(SENDER),
+        Address::new(GAS_ADDR),
+        TransactionType::MeowModulePublish(module_bytes),
+    );
+
+    let result = executor::execute(&tx, vec![gas_obj]);
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "module publish must succeed"
+    );
+    assert_eq!(
+        result.created_objects().len(),
+        1,
+        "publish must create exactly one module object"
+    );
+    assert!(
+        matches!(
+            result.created_objects()[0].type_(),
+            meow_types::object::object_type::ObjectType::Module
+        ),
+        "created object must have type Module"
+    );
+    assert_eq!(result.destroyed_objects().len(), 0);
+    // Gas coin is returned as changed.
+    let gas_changed = result
+        .changed_objects()
+        .iter()
+        .any(|o| o.address() == &Address::new(GAS_ADDR));
+    assert!(gas_changed, "gas coin must appear in changed_objects");
+}
+
+//
+// ─── Utility functions ───
 //
 
 fn make_module_object() -> Object {

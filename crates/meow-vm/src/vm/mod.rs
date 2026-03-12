@@ -9,7 +9,9 @@ use crate::{bytecode::Instruction, module::Module, vm::error::VmError};
 /// An error that can occur during VM execution.
 pub type Result<T> = std::result::Result<T, VmError>;
 
-// ─── Native functions ────────────────────────────────────────────────────────
+//
+// ─── Native functions ───
+//
 
 /// Result returned by a native function.
 pub enum NativeResult {
@@ -23,13 +25,19 @@ pub enum NativeResult {
 
 /// A registered native function entry.
 pub struct NativeFnEntry {
+    /// The function name as referenced in bytecode.
     pub name: String,
+    /// The number of parameters this function expects.
     pub param_count: usize,
+    /// The gas cost charged when this function is called.
     pub gas_cost: u64,
+    /// The function implementation.
     pub func: Box<dyn Fn(Vec<Value>) -> NativeResult>,
 }
 
-// ─── Execution result ────────────────────────────────────────────────────────
+//
+// ─── Execution result ───
+//
 
 /// The outcome of a top-level VM function call.
 #[derive(Debug, Clone)]
@@ -44,26 +52,44 @@ pub struct VmCallResult {
     pub final_args: Vec<Option<Value>>,
 }
 
-// ─── Gas schedule ────────────────────────────────────────────────────────────
+//
+// ─── Gas schedule ───
+//
 
 /// Per-instruction gas costs. Pass a custom schedule to [`Vm::with_gas_schedule`].
 #[derive(Debug, Clone)]
 pub struct GasSchedule {
+    /// Cost of pushing a primitive value (`bool`, `u64`, or `address`) onto the stack.
     push_primitive: u64,
+    /// Cost of pushing a string literal onto the stack.
     push_str: u64,
+    /// Cost of a local variable load or store (`Load`/`Store`).
     load_store: u64,
+    /// Cost of borrowing a field from a struct or object slot via `LoadField`.
     load_field: u64,
+    /// Cost of writing a value back into a field of a struct or object slot via `StoreField`.
     store_field: u64,
+    /// Cost of addition, subtraction, or multiplication (`Add`, `Sub`, `Mul`).
     add_sub_mul: u64,
+    /// Cost of integer division (`Div`), which is more expensive due to the divide-by-zero check.
     div: u64,
+    /// Cost of any comparison operation (`Eq`, `Ne`, `Lt`, `Le`, `Gt`, `Ge`).
     compare: u64,
+    /// Cost of boolean logic operations (`Not`, `And`, `Or`).
     logic: u64,
+    /// Base cost charged once per `NewStruct` instruction, before per-field costs.
     new_struct_base: u64,
+    /// Additional cost charged per field when constructing a struct or object.
     new_struct_per_field: u64,
+    /// Cost of extracting a field from a struct or object value on the stack via `GetField`.
     get_field: u64,
+    /// Cost of stack manipulation instructions (`Pop`, `Dup`).
     stack: u64,
+    /// Cost of any jump instruction (`Jump`, `JumpIf`, `JumpIfNot`).
     jump: u64,
+    /// Cost of a function call dispatch (`Call`), covering frame setup overhead.
     call: u64,
+    /// Cost of the `Return` instruction.
     return_: u64,
 }
 
@@ -91,6 +117,7 @@ impl Default for GasSchedule {
 }
 
 impl GasSchedule {
+    /// Returns the gas cost for a single instruction.
     pub fn cost_of(&self, instr: &Instruction) -> u64 {
         match instr {
             Instruction::PushBool(_) | Instruction::PushU64(_) => self.push_primitive,
@@ -127,7 +154,9 @@ impl GasSchedule {
     }
 }
 
-// ─── Gas metering ────────────────────────────────────────────────────────────
+//
+// ─── Gas metering ───
+//
 
 /// Tracks gas consumption during execution.
 #[derive(Debug, Clone)]
@@ -137,6 +166,7 @@ pub struct GasMeter {
 }
 
 impl GasMeter {
+    /// Creates a new gas meter with the given limit.
     pub fn new(limit: u64) -> Self {
         Self { limit, consumed: 0 }
     }
@@ -159,16 +189,20 @@ impl GasMeter {
         Ok(())
     }
 
+    /// Returns the total gas consumed so far.
     pub fn consumed(&self) -> u64 {
         self.consumed
     }
 
+    /// Returns the remaining gas available.
     pub fn remaining(&self) -> u64 {
         self.limit.saturating_sub(self.consumed)
     }
 }
 
-// ─── Execution frame ─────────────────────────────────────────────────────────
+//
+// ─── Execution frame ───
+//
 
 struct Frame {
     /// Local variable slots. `None` means uninitialized or moved-out.
@@ -208,7 +242,9 @@ impl Frame {
     }
 }
 
-// ─── VM ──────────────────────────────────────────────────────────────────────
+//
+// ─── VM ───
+//
 
 /// The virtual machine executor.
 ///
@@ -221,6 +257,7 @@ pub struct Vm {
 }
 
 impl Vm {
+    /// Creates a new VM from a compiled module, native function bindings, and a gas schedule.
     pub fn new(module: Module, natives: Vec<NativeFnEntry>, gas_schedule: GasSchedule) -> Self {
         let mut native_map = HashMap::new();
         for entry in natives {
@@ -637,7 +674,9 @@ impl Vm {
     }
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+//
+// ─── Helpers ───
+//
 
 fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
     let a = l

@@ -30,7 +30,11 @@ impl Address {
         Self(bytes)
     }
 
-    /// Derives a new address from the given digest, tag and number.
+    /// Derives a new address from the given digest, tag, and counter.
+    ///
+    /// Constructs a 33-byte input buffer as `[tag, digest_bytes...]`, appends the
+    /// 8-byte little-endian encoding of `number`, then Blake2b-256 hashes the
+    /// result to produce the 32-byte address.
     pub fn derive(digest: Digest, tag: u8, number: u64) -> Self {
         use blake2::Digest;
 

@@ -4,7 +4,7 @@ use meow_types::{
 };
 
 //
-// ExecutionStatus tests.
+// ─── ExecutionStatus tests ───
 //
 
 #[test]
@@ -22,7 +22,7 @@ fn execution_result_serde_round_trip_failure() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_digest() -> Digest {

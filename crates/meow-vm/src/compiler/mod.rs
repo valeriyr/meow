@@ -48,7 +48,9 @@ use error::CompilerError;
 /// An error that can occur during compilation.
 pub type Result<T> = std::result::Result<T, CompilerError>;
 
-// ─── AST ─────────────────────────────────────────────────────────────────────
+//
+// ─── AST ───
+//
 
 #[derive(Debug, Clone)]
 enum Expr {
@@ -142,7 +144,9 @@ enum AstItem {
     Fn(AstFunction),
 }
 
-// ─── Parser ──────────────────────────────────────────────────────────────────
+//
+// ─── Parser ───
+//
 
 type ParseErr<'src> = extra::Err<Rich<'src, char>>;
 
@@ -472,7 +476,9 @@ fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'src>> 
     item.repeated().collect::<Vec<_>>().padded()
 }
 
-// ─── Identifier helpers ───────────────────────────────────────────────────────
+//
+// ─── Identifier helpers ───
+//
 
 fn validate_identifier(name: &str, context: &str) -> Result<()> {
     if !meow_vm_types::identifier::is_valid_identifier(name) {
@@ -488,7 +494,9 @@ fn validate_identifier(name: &str, context: &str) -> Result<()> {
     }
 }
 
-// ─── Codegen ─────────────────────────────────────────────────────────────────
+//
+// ─── Codegen ───
+//
 
 struct Codegen<'m> {
     structs: &'m [StructDef],
@@ -771,7 +779,9 @@ impl<'m> Codegen<'m> {
     }
 }
 
-// ─── Validation ──────────────────────────────────────────────────────────────
+//
+// ─── Validation ───
+//
 
 fn validate_struct_def(def: &AstStruct) -> Result<()> {
     let kind = if def.is_object { "object" } else { "struct" };
@@ -815,7 +825,9 @@ fn validate_struct_def(def: &AstStruct) -> Result<()> {
     Ok(())
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────────
+//
+// ─── Public API ───
+//
 
 /// Compiles source text into a [`Module`].
 pub struct Compiler;

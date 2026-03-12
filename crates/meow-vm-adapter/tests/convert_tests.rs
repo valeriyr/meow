@@ -18,7 +18,7 @@ const OWNER: [u8; 32] = [0xAAu8; 32];
 const OBJECT_ID: [u8; 32] = [0xBBu8; 32];
 
 //
-// object_to_vm_object_value.
+// ─── object_to_vm_object_value ───
 //
 
 #[test]
@@ -74,7 +74,7 @@ fn object_to_vm_fails_for_module_type() {
 }
 
 //
-// vm_object_value_to_object.
+// ─── vm_object_value_to_object ───
 //
 
 #[test]
@@ -128,7 +128,7 @@ fn vm_to_object_fails_for_non_object_value() {
 }
 
 //
-// Round-trip.
+// ─── Round-trip ───
 //
 
 #[test]
@@ -157,7 +157,7 @@ fn round_trip_object_to_vm_and_back() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn make_object(id: [u8; 32], fields: Vec<(String, Value)>) -> Object {

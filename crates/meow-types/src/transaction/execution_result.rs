@@ -5,7 +5,9 @@ use crate::{digest::Digest, object::Object};
 /// The execution status of a transaction.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionStatus {
+    /// The transaction executed successfully.
     Success,
+    /// The transaction failed with an error message.
     Failure(String),
 }
 

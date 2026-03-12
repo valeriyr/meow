@@ -1,7 +1,7 @@
 use meow_vm_types::{identifier::is_valid_identifier, limits};
 
 //
-// Identifier validity tests.
+// ─── Identifier validity tests ───
 //
 
 #[test]

@@ -1,7 +1,7 @@
 use meow_types::object::object_version::ObjectVersion;
 
 //
-// ObjectVersion comparison tests.
+// ─── ObjectVersion comparison tests ───
 //
 
 #[test]
@@ -37,7 +37,7 @@ fn next_increments_sequentially() {
 }
 
 //
-// ObjectVersion constraint tests.
+// ─── ObjectVersion constraint tests ───
 //
 
 #[test]
@@ -46,7 +46,7 @@ fn next_at_max_returns_none() {
 }
 
 //
-// ObjectVersion conversion tests.
+// ─── ObjectVersion conversion tests ───
 //
 
 #[test]

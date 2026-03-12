@@ -40,7 +40,7 @@ pub struct Ed25519KeyPair {
 }
 
 //
-// Implementation of [Ed25519KeyPair].
+// ─── Implementation of [Ed25519KeyPair] ───
 //
 
 impl Ed25519KeyPair {
@@ -118,7 +118,7 @@ impl TryFrom<&[u8]> for Ed25519KeyPair {
 }
 
 //
-// Implementation of [Ed25519PublicKey].
+// ─── Implementation of [Ed25519PublicKey] ───
 //
 impl Ed25519PublicKey {
     /// Returns the bytes representation of the public key.
@@ -144,7 +144,7 @@ impl From<&Ed25519PrivateKey> for Ed25519PublicKey {
 }
 
 //
-// Implementation of [Ed25519PrivateKey].
+// ─── Implementation of [Ed25519PrivateKey] ───
 //
 
 impl fmt::Debug for Ed25519PrivateKey {
@@ -162,7 +162,7 @@ impl PartialEq for Ed25519PrivateKey {
 impl Eq for Ed25519PrivateKey {}
 
 //
-// Implementation of [Ed25519Signature].
+// ─── Implementation of [Ed25519Signature] ───
 //
 
 impl Ed25519Signature {
@@ -186,7 +186,7 @@ impl fmt::Display for Ed25519Signature {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn validate_path(path: Option<DerivationPath>) -> Result<DerivationPath> {

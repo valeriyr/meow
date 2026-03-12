@@ -28,7 +28,7 @@ pub fn vm_with_natives(source: &str, natives: Vec<NativeFnEntry>) -> Vm {
 }
 
 //
-// Common native functions.
+// ─── Common native functions ───
 //
 
 pub fn fresh_id_native() -> NativeFnEntry {

@@ -11,7 +11,7 @@ use meow_types::{
 use rand::{SeedableRng, rngs::StdRng};
 
 //
-// Transaction digest.
+// ─── Transaction digest ───
 //
 
 #[test]
@@ -34,7 +34,7 @@ fn known_transaction_digest() {
 }
 
 //
-// SignedTransaction.
+// ─── SignedTransaction ───
 //
 
 #[test]
@@ -58,7 +58,7 @@ fn signed_transaction_verify_wrong_digest() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn sender() -> Address {

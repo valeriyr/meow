@@ -1,7 +1,7 @@
 use meow_types::{address::Address, object::object_owner::ObjectOwner};
 
 //
-// ObjectOwner tests.
+// ─── ObjectOwner tests ───
 //
 
 #[test]

@@ -9,7 +9,7 @@ use rand::{SeedableRng, rngs::StdRng};
 use temp_dir::TempDir;
 
 //
-// In-memory keystore tests.
+// ─── In-memory keystore tests ───
 //
 
 #[test]
@@ -88,7 +88,7 @@ fn remove_key_from_in_memory_keystore() {
 }
 
 //
-// File-based keystore tests.
+// ─── File-based keystore tests ───
 //
 
 #[test]
@@ -218,7 +218,7 @@ fn remove_key_from_file_based_keystore() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_file_based_keystore(tmp_dir: &Path) -> Keystore {

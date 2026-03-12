@@ -3,7 +3,7 @@ use std::str::FromStr;
 use meow_types::keypair::mnemonic::MnemonicType;
 
 //
-// Mnemonic type tests.
+// ─── Mnemonic type tests ───
 //
 
 #[test]

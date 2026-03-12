@@ -5,7 +5,7 @@ use meow_vm_types::{
 use serde::{Deserialize, Serialize};
 
 //
-// Primitives.
+// ─── Primitives ───
 //
 
 #[test]
@@ -34,7 +34,7 @@ fn string_to_rust() {
 }
 
 //
-// Struct.
+// ─── Struct ───
 //
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -56,7 +56,7 @@ fn struct_from_value() {
 }
 
 //
-// Object.
+// ─── Object ───
 //
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -82,7 +82,7 @@ fn object_from_value() {
 }
 
 //
-// Newtype address wrapper (mirrors meow_types::Address).
+// ─── Newtype address wrapper (mirrors meow_types::Address) ───
 //
 
 /// Mimics `meow_types::Address` — a newtype over `[u8; 32]`.
@@ -126,7 +126,7 @@ fn round_trip_with_address_newtype() {
 }
 
 //
-// struct_from_rust — Rust → Value.
+// ─── struct_from_rust — Rust → Value ───
 //
 
 #[test]
@@ -215,7 +215,59 @@ fn object_from_rust_rejects_empty_struct() {
 }
 
 //
-// Errors.
+// ─── struct_from_rust — rejection of unsupported field types ───
+//
+
+#[test]
+fn struct_from_rust_rejects_f32() {
+    #[derive(Serialize)]
+    struct WithFloat {
+        value: f32,
+    }
+    let v = WithFloat { value: 1.0 };
+    assert!(matches!(
+        struct_from_rust(&v).unwrap_err(),
+        ConversionError::UnsupportedType(msg) if msg == "f32"
+    ));
+}
+
+#[test]
+fn struct_from_rust_rejects_option() {
+    #[derive(Serialize)]
+    struct WithOption {
+        maybe: Option<u64>,
+    }
+    // Option::None serializes via serialize_none.
+    let v_none = WithOption { maybe: None };
+    assert!(matches!(
+        struct_from_rust(&v_none).unwrap_err(),
+        ConversionError::UnsupportedType(msg) if msg.contains("Option")
+    ));
+    // Option::Some serializes via serialize_some.
+    let v_some = WithOption { maybe: Some(42) };
+    assert!(matches!(
+        struct_from_rust(&v_some).unwrap_err(),
+        ConversionError::UnsupportedType(msg) if msg.contains("Option")
+    ));
+}
+
+#[test]
+fn tuple_of_wrong_length_rejected() {
+    // A [u8; 4] array serializes as a 4-element tuple of u8, which is not the
+    // supported 32-element address tuple.
+    #[derive(Serialize)]
+    struct WithSmallArray {
+        tag: [u8; 4],
+    }
+    let v = WithSmallArray { tag: [1, 2, 3, 4] };
+    assert!(matches!(
+        struct_from_rust(&v).unwrap_err(),
+        ConversionError::UnsupportedType(msg) if msg.contains("tuple of length 4")
+    ));
+}
+
+//
+// ─── Errors ───
 //
 
 #[test]

@@ -236,7 +236,9 @@ fn execute_meow_module_publish(
     )
 }
 
-// ─── Version helpers ──────────────────────────────────────────────────────────
+//
+// ─── Version helpers ───
+//
 
 /// Bump an object's version by 1, capping at MAX.
 fn bump_version(obj: &Object) -> ObjectVersion {
@@ -262,7 +264,9 @@ fn owner_for_version(owner: Address, new_version: &ObjectVersion) -> ObjectOwner
     }
 }
 
-// ─── Gas spending ─────────────────────────────────────────────────────────────
+//
+// ─── Gas spending ───
+//
 
 /// Read the balance field of a gas coin object.
 fn gas_coin_balance(gas_coin: &Object) -> u64 {
@@ -332,7 +336,9 @@ fn apply_gas_spending(
     )
 }
 
-// ─── Argument resolution ──────────────────────────────────────────────────────
+//
+// ─── Argument resolution ───
+//
 
 /// Resolve a single call argument to a VM value.
 fn resolve_arg(input: &Input, expected_type: &Type, inputs: &[Object]) -> Result<Value, String> {
@@ -373,7 +379,9 @@ fn resolve_arg(input: &Input, expected_type: &Type, inputs: &[Object]) -> Result
     }
 }
 
-// ─── Object effects ───────────────────────────────────────────────────────────
+//
+// ─── Object effects ───
+//
 
 /// Build the created/changed/destroyed object lists from execution results.
 ///

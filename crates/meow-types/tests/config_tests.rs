@@ -2,7 +2,7 @@ use meow_types::config::{error::ConfigError, meow_config_dir, meow_keystore_path
 use temp_dir::TempDir;
 
 //
-// Configuration tests.
+// ─── Configuration tests ───
 //
 
 #[test]

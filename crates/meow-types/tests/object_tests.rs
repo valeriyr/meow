@@ -10,7 +10,7 @@ use meow_types::{
 };
 
 //
-// ObjectRef accessor tests.
+// ─── ObjectRef accessor tests ───
 //
 
 #[test]
@@ -22,7 +22,7 @@ fn known_object_ref() {
 }
 
 //
-// Object content-related tests.
+// ─── Object content-related tests ───
 //
 
 #[test]
@@ -54,7 +54,7 @@ fn object_decl_ref_is_not_meow_coin() {
 }
 
 //
-// Utility functions.
+// ─── Utility functions ───
 //
 
 fn test_address() -> Address {
