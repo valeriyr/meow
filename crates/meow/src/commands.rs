@@ -2,7 +2,10 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use crate::{keytool::KeyToolCommand, output_formatter::OutputFormatter};
+use crate::{
+    keytool::KeyToolCommand, output_formatter::OutputFormatter,
+    smart_contract::SmartContractCommand,
+};
 
 use meow_types::{config::meow_keystore_path, keystore::Keystore};
 
@@ -25,6 +28,16 @@ pub enum Command {
         #[command(subcommand)]
         cmd: KeyToolCommand,
     },
+    /// MEOW smart contract tools.
+    #[command(name = "smart-contract")]
+    SmartContract {
+        /// The command output is formatted using this formatter before printing.
+        #[arg(long, global = true)]
+        output_formatter: Option<OutputFormatter>,
+        /// Subcommands.
+        #[command(subcommand)]
+        cmd: SmartContractCommand,
+    },
 }
 
 impl Command {
@@ -43,6 +56,19 @@ impl Command {
                 let mut keystore = Keystore::file_based(&keystore_path)?;
 
                 let output = cmd.run(&mut keystore)?;
+
+                println!(
+                    "{}",
+                    output_formatter
+                        .unwrap_or(OutputFormatter::Table)
+                        .format(&output)?
+                );
+            }
+            Command::SmartContract {
+                output_formatter,
+                cmd,
+            } => {
+                let output = cmd.run()?;
 
                 println!(
                     "{}",

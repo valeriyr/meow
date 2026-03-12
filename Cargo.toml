@@ -34,4 +34,5 @@ tokio = { version = "1.50", features = ["full"] }
 
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }
+meow-vm-adapter = { path = "crates/meow-vm-adapter" }
 meow-vm-types = { path = "crates/meow-vm-types" }

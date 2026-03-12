@@ -1,12 +1,14 @@
 pub mod error;
 
+pub use meow_vm::module::Module;
+
 use std::{
     fs::File,
     io::{BufReader, Read},
     path::Path,
 };
 
-use meow_vm::{compiler::Compiler, module::Module};
+use meow_vm::compiler::Compiler;
 
 use crate::builder::error::BuilderError;
 

@@ -24,10 +24,12 @@ impl OutputFormatter {
             OutputFormatter::Table => {
                 let json = json![output];
 
-                let mut table = json_to_table(&json);
+                let mut builder = json_to_table(&json);
+                builder.with(tabled::settings::Style::rounded().horizontals([]));
+                builder.array_orientation(Orientation::Column);
 
-                table.with(tabled::settings::Style::rounded().horizontals([]));
-                table.array_orientation(Orientation::Column);
+                let mut table = builder.into_table();
+                table.with(tabled::settings::Width::wrap(120));
 
                 format!("{}", table)
             }
