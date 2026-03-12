@@ -30,6 +30,7 @@
 
 pub mod bytecode;
 pub mod compiler;
+pub mod convert;
 pub mod module;
 pub mod types;
 pub mod vm;

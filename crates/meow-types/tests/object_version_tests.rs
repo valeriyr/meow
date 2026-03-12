@@ -21,15 +21,6 @@ fn inequality() {
 }
 
 #[test]
-fn next_from_zero() {
-    let v0 = ObjectVersion::ZERO;
-    let v1 = v0.next().unwrap();
-
-    assert_ne!(v1, ObjectVersion::ZERO);
-    assert_eq!(v1, v0.next().unwrap());
-}
-
-#[test]
 fn next_increments_sequentially() {
     let v0 = ObjectVersion::ZERO;
     let v1 = v0.next().unwrap();

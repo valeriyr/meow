@@ -38,6 +38,14 @@ impl Identifier {
     }
 }
 
+impl TryFrom<&str> for Identifier {
+    type Error = IdentifierError;
+
+    fn try_from(value: &str) -> Result<Self> {
+        Identifier::new(value)
+    }
+}
+
 impl fmt::Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_ref())

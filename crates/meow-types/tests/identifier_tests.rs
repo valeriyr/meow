@@ -11,6 +11,12 @@ fn valid_identifier() {
 }
 
 #[test]
+fn valid_identifier_try_from() {
+    let id = Identifier::try_from("hello").unwrap();
+    assert_eq!(id.as_ref(), "hello");
+}
+
+#[test]
 fn valid_identifier_single_char() {
     assert!(Identifier::new("a").is_ok());
 }
@@ -70,6 +76,14 @@ fn invalid_identifier_with_spaces() {
 fn invalid_identifier_with_non_ascii() {
     assert!(matches!(
         Identifier::new("🦀").unwrap_err(),
+        IdentifierError::InvalidIdentifier(s) if s == "🦀"
+    ));
+}
+
+#[test]
+fn invalid_identifier_try_from_non_ascii() {
+    assert!(matches!(
+        Identifier::try_from("🦀").unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == "🦀"
     ));
 }

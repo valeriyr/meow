@@ -1,12 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{address::Address, object::identifier::Identifier};
+use crate::{
+    address::Address,
+    object::{identifier::Identifier, object_ref::ObjectRef},
+};
 
 /// The input of a transaction call.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum Input {
     /// Input is an object instance stored on-chain; identified by the address.
-    Object(Address),
+    Object(ObjectRef),
     /// Input is a raw BCS serialized data.
     Raw(Vec<u8>),
 }

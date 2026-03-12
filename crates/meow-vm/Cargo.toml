@@ -7,5 +7,6 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
 chumsky = "0.12"
+bcs.workspace = true
 thiserror.workspace = true
 serde.workspace = true

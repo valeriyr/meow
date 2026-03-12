@@ -1,5 +1,10 @@
 use meow_vm_adapter::builder::{self, error::BuilderError};
 
+const MEOW_COIN_FILE_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../meow-framework/modules/meow_coin.meow"
+);
+
 #[test]
 fn build_module_successful() {
     let src = r#"
@@ -26,10 +31,38 @@ fn build_module_successful() {
 }
 
 #[test]
+fn build_module_from_file_successful() {
+    let module = builder::build_from_file(MEOW_COIN_FILE_PATH).unwrap();
+
+    assert_eq!(module.name, "meow_coin");
+}
+
+//
+// Errors.
+//
+
+#[test]
 fn build_invalid_source_returns_error() {
     let src = "this is not valid meow";
     assert!(matches!(
         builder::build("test", src).unwrap_err(),
         BuilderError::CompileError(_)
+    ));
+}
+
+#[test]
+fn build_from_nonexistent_file_returns_io_error() {
+    assert!(matches!(
+        builder::build_from_file("/nonexistent/path/module.meow").unwrap_err(),
+        BuilderError::IoError(_)
+    ));
+}
+
+#[test]
+fn build_from_file_without_extension_returns_invalid_file_name() {
+    // A path with no file stem (e.g. "/") cannot produce a module name.
+    assert!(matches!(
+        builder::build_from_file("/").unwrap_err(),
+        BuilderError::InvalidFileName(_)
     ));
 }

@@ -52,7 +52,7 @@ impl Context {
 
     /// Derives a fresh object ID from the transaction digest and a counter.
     pub fn next_fresh_id(&mut self) -> Address {
-        let address = Address::derive(self.tx_digest, 0u8, self.id_counter);
+        let address = Address::derive(self.tx_digest, 0, self.id_counter);
 
         self.fresh_ids.push(address);
         self.id_counter += 1;

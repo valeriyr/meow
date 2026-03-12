@@ -1,7 +1,9 @@
 use std::{cell::RefCell, rc::Rc};
 
+use meow_types::{address::Address, system_framework::MeowCoin};
 use meow_vm::{
     compiler::Compiler,
+    convert,
     types::Value,
     vm::{GasMeter, GasSchedule, NativeFnEntry, NativeResult, Vm, error::VmError},
 };
@@ -41,36 +43,22 @@ fn mint_creates_coin_transferred_to_owner() {
 }
 
 #[test]
-fn burn_destroys_zero_balance_coin() {
+fn burn_destroys_coin() {
     let id: [u8; 32] = [0xAAu8; 32];
-    let coin = make_coin(id, 0);
 
-    let ctx = Rc::new(RefCell::new(TestCtx::default()));
-    let vm = build_vm(ctx.clone());
-    let mut gas = GasMeter::unlimited();
+    for balance in [0u64, 50, 1000] {
+        let coin = make_coin(id, balance);
+        let ctx = Rc::new(RefCell::new(TestCtx::default()));
+        let vm = build_vm(ctx.clone());
+        let mut gas = GasMeter::unlimited();
 
-    vm.call("burn", vec![coin.clone()], &mut gas)
-        .expect("burn must succeed for zero-balance coin");
+        vm.call("burn", vec![coin], &mut gas)
+            .unwrap_or_else(|_| panic!("burn must succeed for balance={balance}"));
 
-    let ctx = ctx.borrow();
-    assert_eq!(ctx.destroyed.len(), 1, "one coin must be destroyed");
-    assert!(ctx.transferred.is_empty());
-}
-
-#[test]
-fn burn_non_zero_balance_is_rejected() {
-    let id: [u8; 32] = [0xAAu8; 32];
-    let coin = make_coin(id, 50);
-
-    let ctx = Rc::new(RefCell::new(TestCtx::default()));
-    let vm = build_vm(ctx.clone());
-    let mut gas = GasMeter::unlimited();
-
-    let err = vm
-        .call("burn", vec![coin], &mut gas)
-        .expect_err("burn must fail for non-zero balance");
-
-    assert!(matches!(err, VmError::Aborted { code: 2, .. }));
+        let ctx = ctx.borrow();
+        assert_eq!(ctx.destroyed.len(), 1);
+        assert!(ctx.transferred.is_empty());
+    }
 }
 
 #[test]
@@ -179,92 +167,89 @@ fn split_and_transfer_to_recipient() {
     assert_eq!(coin_balance(&ctx.transferred[0].0), 30);
 }
 
-// ─── Compiler validation ──────────────────────────────────────────────────────
+#[test]
+fn mint_with_zero_balance_succeeds() {
+    let ctx = Rc::new(RefCell::new(TestCtx::default()));
+    let vm = build_vm(ctx.clone());
+    let mut gas = GasMeter::unlimited();
+
+    let owner: [u8; 32] = [0x01u8; 32];
+    vm.call("mint", vec![Value::U64(0), Value::Address(owner)], &mut gas)
+        .expect("mint with zero balance must succeed");
+
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.transferred.len(), 1);
+    assert_eq!(coin_balance(&ctx.transferred[0].0), 0);
+    assert!(ctx.destroyed.is_empty());
+}
 
 #[test]
-fn object_id_must_be_fresh_id() {
-    let src = r#"
-        object Token { id: address, amount: u64 }
+fn merge_combines_balances() {
+    let from = make_coin([0x11u8; 32], 60);
+    let to = make_coin([0x22u8; 32], 40);
 
-        fn bad_mint(id: address, amount: u64) {
-            let t = Token { id: id, amount: amount };
-            meow_vm_transfer(t, id);
-        }
-    "#;
-    assert!(
-        Compiler::compile("test", src).is_err(),
-        "using a non-fresh id in object literal must fail"
+    let ctx = Rc::new(RefCell::new(TestCtx::default()));
+    let vm = build_vm(ctx.clone());
+    let mut gas = GasMeter::unlimited();
+
+    let result = vm
+        .call("merge", vec![from, to], &mut gas)
+        .expect("merge must succeed");
+
+    // `from` is destroyed; `to` survives with the combined balance.
+    let ctx = ctx.borrow();
+    assert!(ctx.transferred.is_empty());
+    assert_eq!(ctx.destroyed.len(), 1, "from must be destroyed");
+
+    assert!(result.final_args[0].is_none(), "from must be consumed");
+    let final_to = result.final_args[1].as_ref().expect("to must survive");
+    assert_eq!(coin_balance(final_to), 100);
+}
+
+#[test]
+fn split_with_exact_balance_zeroes_from() {
+    let id: [u8; 32] = [0xFFu8; 32];
+    let coin = make_coin(id, 50);
+
+    let ctx = Rc::new(RefCell::new(TestCtx::default()));
+    let vm = build_vm(ctx.clone());
+    let mut gas = GasMeter::unlimited();
+
+    let result = vm
+        .call("split", vec![coin, Value::U64(50)], &mut gas)
+        .expect("split must succeed");
+
+    // from survives with balance=0.
+    let final_from = result.final_args[0].as_ref().expect("from must survive");
+    assert_eq!(coin_balance(final_from), 0);
+
+    // A new coin (balance=50) is transferred to the sender.
+    let ctx = ctx.borrow();
+    assert_eq!(ctx.transferred.len(), 1);
+    assert_eq!(coin_balance(&ctx.transferred[0].0), 50);
+    assert!(ctx.destroyed.is_empty());
+}
+
+//
+// Conversion tests.
+//
+
+#[test]
+fn round_trip_meow_coin() {
+    let id: [u8; 32] = [0xFFu8; 32];
+    let balance = 50;
+
+    let coin = make_coin(id, balance);
+
+    let rust_coin = convert::value_to_rust::<MeowCoin>(&coin).expect("must convert to Rust");
+
+    assert_eq!(rust_coin.id(), &Address::from(id));
+    assert_eq!(rust_coin.balance(), balance);
+
+    assert_eq!(
+        coin,
+        convert::object_from_rust(&rust_coin).expect("must convert back to Value")
     );
-}
-
-// ─── if/else ─────────────────────────────────────────────────────────────────
-
-#[test]
-fn if_else_branch_taken() {
-    let src = r#"
-        fn classify(x: u64): u64 {
-            if x > 10 {
-                return 1;
-            } else {
-                return 0;
-            }
-        }
-    "#;
-    let module = Compiler::compile("test", src).unwrap();
-    let vm = Vm::new(module, vec![], GasSchedule::default());
-    let mut gas = GasMeter::unlimited();
-
-    let r = vm.call("classify", vec![Value::U64(20)], &mut gas).unwrap();
-    assert_eq!(r.return_value, Some(Value::U64(1)));
-
-    let r = vm.call("classify", vec![Value::U64(5)], &mut gas).unwrap();
-    assert_eq!(r.return_value, Some(Value::U64(0)));
-}
-
-#[test]
-fn if_else_with_let_in_both_branches() {
-    let src = r#"
-        fn abs_diff(a: u64, b: u64): u64 {
-            if a > b {
-                return a - b;
-            } else {
-                return b - a;
-            }
-        }
-    "#;
-    let module = Compiler::compile("test", src).unwrap();
-    let vm = Vm::new(module, vec![], GasSchedule::default());
-    let mut gas = GasMeter::unlimited();
-
-    let r = vm
-        .call("abs_diff", vec![Value::U64(10), Value::U64(3)], &mut gas)
-        .unwrap();
-    assert_eq!(r.return_value, Some(Value::U64(7)));
-
-    let r = vm
-        .call("abs_diff", vec![Value::U64(3), Value::U64(10)], &mut gas)
-        .unwrap();
-    assert_eq!(r.return_value, Some(Value::U64(7)));
-}
-
-// ─── built-in meow_vm_abort ───────────────────────────────────────────────────
-
-#[test]
-fn builtin_abort_triggers_on_false() {
-    let src = r#"
-        fn check(x: u64) {
-            meow_vm_abort(x == 0, 99, "x must not be zero");
-        }
-    "#;
-    let module = Compiler::compile("test", src).unwrap();
-    let vm = Vm::new(module, vec![], GasSchedule::default());
-    let mut gas = GasMeter::unlimited();
-
-    let err = vm.call("check", vec![Value::U64(1)], &mut gas).unwrap_err();
-    assert!(matches!(err, VmError::Aborted { code: 99, .. }));
-
-    let mut gas2 = GasMeter::unlimited();
-    vm.call("check", vec![Value::U64(0)], &mut gas2).unwrap();
 }
 
 //

@@ -6,7 +6,6 @@ fn mint(balance: u64, owner: address) {
 }
 
 fn burn(coin: MeowCoin) {
-    meow_vm_abort(coin.balance == 0, 2, "Cannot burn a coin with non-zero balance");
     meow_vm_destroy(coin);
 }
 
@@ -15,9 +14,10 @@ fn transfer(coin: MeowCoin, to: address) {
 }
 
 fn merge(from: MeowCoin, to: MeowCoin) {
-    from.balance = from.balance + to.balance;
-    to.balance = 0;
-    meow_vm_destroy(to);
+    to.balance = to.balance + from.balance;
+
+    from.balance = 0;
+    meow_vm_destroy(from);
 }
 
 fn split(from: MeowCoin, amount: u64) {

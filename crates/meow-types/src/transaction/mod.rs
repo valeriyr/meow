@@ -1,6 +1,7 @@
 pub mod call;
 pub mod error;
 pub mod execution_result;
+pub mod transaction_type;
 
 use serde::{Deserialize, Serialize};
 
@@ -8,7 +9,7 @@ use crate::{
     address::Address,
     digest::Digest,
     keypair::signature::Signature,
-    transaction::{call::Call, error::TransactionError},
+    transaction::{error::TransactionError, transaction_type::TransactionType},
 };
 
 /// The result type related to transactions.
@@ -21,9 +22,9 @@ pub struct Transaction {
     sender: Address,
     /// The MEOW coin to be used for paying the transaction fee.
     /// Acts as a nonce of the transaction.
-    gas: Address,
-    /// The transaction call.
-    call: Call,
+    gas_coin: Address,
+    /// The transaction type.
+    type_: TransactionType,
 }
 
 /// A signed transaction.
@@ -36,8 +37,12 @@ pub struct SignedTransaction(Transaction, Signature);
 
 impl Transaction {
     /// Creates a new transaction.
-    pub fn new(sender: Address, gas: Address, call: Call) -> Self {
-        Self { sender, gas, call }
+    pub fn new(sender: Address, gas_coin: Address, type_: TransactionType) -> Self {
+        Self {
+            sender,
+            gas_coin,
+            type_,
+        }
     }
 
     /// Returns the transaction sender.
@@ -45,9 +50,14 @@ impl Transaction {
         &self.sender
     }
 
-    /// Returns the transaction call.
-    pub fn call(&self) -> &Call {
-        &self.call
+    /// Returns the gas coin used for the transaction.
+    pub fn gas_coin(&self) -> &Address {
+        &self.gas_coin
+    }
+
+    /// Returns the transaction type.
+    pub fn type_(&self) -> &TransactionType {
+        &self.type_
     }
 
     /// Computes the transaction digest.
