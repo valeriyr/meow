@@ -1,0 +1,57 @@
+use std::{cell::RefCell, rc::Rc};
+
+use meow_types::{address::Address, digest::Digest};
+use meow_vm::vm::{GasSchedule, Vm};
+
+pub use meow_vm::{
+    compiler::Compiler,
+    convert::{object_from_rust, value_to_rust},
+    module::Module,
+    types::Value,
+    vm::{GasMeter, error::VmError},
+};
+
+use crate::{context::Context, natives};
+
+/// Result of a test VM run — the call outcome plus all native side-effects.
+#[derive(Debug)]
+pub struct RunResult {
+    /// Post-call slot state: `None` means the object was consumed (moved out).
+    pub final_args: Vec<Option<Value>>,
+    /// Objects transferred out during the call: `(object, new_owner)`.
+    pub transfers: Vec<(Value, [u8; 32])>,
+    /// Objects destroyed during the call.
+    pub destroyed: Vec<Value>,
+}
+
+/// Run a compiled module function with a fixed context, real natives, and unlimited gas.
+pub fn run(module: Module, fn_name: &str, args: Vec<Value>) -> Result<RunResult, VmError> {
+    let mut gas = GasMeter::unlimited();
+    run_with_gas_meter(module, fn_name, args, &mut gas)
+}
+
+/// Run a compiled module function with a fixed context, real natives, and the given gas meter.
+pub fn run_with_gas_meter(
+    module: Module,
+    fn_name: &str,
+    args: Vec<Value>,
+    gas: &mut GasMeter,
+) -> Result<RunResult, VmError> {
+    let ctx = Rc::new(RefCell::new(Context::new(Address::ZERO, Digest::ZERO)));
+    let natives = natives::build_natives(ctx.clone());
+    let vm = Vm::new(module, natives, GasSchedule::default());
+
+    let call_result = vm.call(fn_name, args, gas)?;
+
+    let ctx = ctx.borrow();
+    Ok(RunResult {
+        final_args: call_result.final_args,
+        transfers: ctx
+            .transfers()
+            .to_owned()
+            .into_iter()
+            .map(|(v, o)| (v.clone(), o.into()))
+            .collect(),
+        destroyed: ctx.destroyed().to_vec(),
+    })
+}

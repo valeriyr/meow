@@ -48,7 +48,7 @@ pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> ExecutionResul
         Some(o) => o,
         None => return ExecutionResult::failure("gas coin not found in inputs", *tx_digest),
     };
-    if !gas_coin.is_gas_coin() {
+    if !gas_coin.is_meow_coin() {
         return ExecutionResult::failure("gas coin object is not a valid gas coin", *tx_digest);
     }
 

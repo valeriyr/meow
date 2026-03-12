@@ -5,8 +5,6 @@ edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
-[dependencies]
-meow-types.workspace = true
-
 [dev-dependencies]
-meow-vm.workspace = true
+meow-types.workspace = true
+meow-vm-adapter = { path = "../meow-vm-adapter", features = ["testing"] }

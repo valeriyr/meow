@@ -6,7 +6,7 @@ use meow_types::{
         Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
         object_version::ObjectVersion,
     },
-    system_framework::MEOW_COIN_MODULE_ADDRESS,
+    system_framework::meow_coin::MEOW_COIN_MODULE_ADDRESS,
     transaction::{
         Transaction,
         call::{Call, Input},

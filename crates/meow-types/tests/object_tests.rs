@@ -6,7 +6,7 @@ use meow_types::{
         Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
         object_type::ObjectType, object_version::ObjectVersion,
     },
-    system_framework::{MEOW_COIN_MODULE_ADDRESS, MEOW_COIN_OBJECT_NAME},
+    system_framework::meow_coin::{MEOW_COIN_MODULE_ADDRESS, MEOW_COIN_OBJECT_NAME},
 };
 
 //
@@ -26,17 +26,31 @@ fn known_object_ref() {
 //
 
 #[test]
-fn object_is_gas_coin() {
-    let object = test_gas_coin_object();
+fn object_is_meow_coin() {
+    let object = test_meow_coin_object();
 
-    assert!(object.is_gas_coin());
+    assert!(object.is_meow_coin());
 }
 
 #[test]
-fn object_is_not_gas_coin() {
+fn object_is_not_meow_coin() {
     let object = test_object();
 
-    assert!(!object.is_gas_coin());
+    assert!(!object.is_meow_coin());
+}
+
+#[test]
+fn object_decl_ref_is_meow_coin() {
+    let decl_ref = test_meow_coin_object_decl_ref();
+
+    assert!(decl_ref.is_meow_coin());
+}
+
+#[test]
+fn object_decl_ref_is_not_meow_coin() {
+    let decl_ref = test_random_object_decl_ref();
+
+    assert!(!decl_ref.is_meow_coin());
 }
 
 //
@@ -62,16 +76,27 @@ fn test_object() -> Object {
     )
 }
 
-fn test_gas_coin_object() -> Object {
+fn test_meow_coin_object() -> Object {
     Object::new(
         test_address(),
         test_owner(),
         Digest::compute(b"test transaction").unwrap(),
         ObjectVersion::ZERO,
-        ObjectType::Object(ObjectDeclRef::new(
-            MEOW_COIN_MODULE_ADDRESS,
-            Identifier::try_from(MEOW_COIN_OBJECT_NAME).unwrap(),
-        )),
+        ObjectType::Object(test_meow_coin_object_decl_ref()),
         vec![1, 2, 3],
+    )
+}
+
+fn test_meow_coin_object_decl_ref() -> ObjectDeclRef {
+    ObjectDeclRef::new(
+        MEOW_COIN_MODULE_ADDRESS,
+        Identifier::try_from(MEOW_COIN_OBJECT_NAME).unwrap(),
+    )
+}
+
+fn test_random_object_decl_ref() -> ObjectDeclRef {
+    ObjectDeclRef::new(
+        MEOW_COIN_MODULE_ADDRESS,
+        Identifier::try_from("Coin").unwrap(),
     )
 }

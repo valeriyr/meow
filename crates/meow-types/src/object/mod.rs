@@ -1,3 +1,9 @@
+pub mod object_decl_ref;
+pub mod object_owner;
+pub mod object_ref;
+pub mod object_type;
+pub mod object_version;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -7,15 +13,7 @@ use crate::{
         object_owner::ObjectOwner, object_ref::ObjectRef, object_type::ObjectType,
         object_version::ObjectVersion,
     },
-    system_framework::is_gas_coin,
 };
-
-pub mod error;
-pub mod object_decl_ref;
-pub mod object_owner;
-pub mod object_ref;
-pub mod object_type;
-pub mod object_version;
 
 /// The meow object type.
 /// Acts as UTXO in the meow world, and is the only way to store data on-chain.
@@ -92,12 +90,10 @@ impl Object {
         ObjectRef::new(self.address.clone(), self.version.clone(), self.digest())
     }
 
-    /// Checks if the object is a gas coin.
-    pub fn is_gas_coin(&self) -> bool {
+    /// Checks if the object is a MeowCoin.
+    pub fn is_meow_coin(&self) -> bool {
         match self.type_() {
-            ObjectType::Object(object_decl_ref) => {
-                is_gas_coin(object_decl_ref.module(), object_decl_ref.name().as_ref())
-            }
+            ObjectType::Object(object_decl_ref) => object_decl_ref.is_meow_coin(),
             _ => false,
         }
     }

@@ -621,7 +621,7 @@ name = "meow-framework"
 version = "0.1.0"
 dependencies = [
  "meow-types",
- "meow-vm",
+ "meow-vm-adapter",
 ]
 
 [[package]]

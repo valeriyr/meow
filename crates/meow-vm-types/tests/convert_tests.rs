@@ -1,5 +1,5 @@
 use meow_vm_types::{
-    convert::{error::ConversionError, object_from_rust, value_from_rust, value_to_rust},
+    convert::{error::ConversionError, object_from_rust, struct_from_rust, value_to_rust},
     types::Value,
 };
 use serde::{Deserialize, Serialize};
@@ -126,14 +126,14 @@ fn round_trip_with_address_newtype() {
 }
 
 //
-// value_from_rust — Rust → Value.
+// struct_from_rust — Rust → Value.
 //
 
 #[test]
-fn struct_from_rust() {
+fn struct_from_rust_produces_struct_value() {
     let point = Point { x: 3, y: 7 };
     assert_eq!(
-        value_from_rust(&point).unwrap(),
+        struct_from_rust(&point).unwrap(),
         Value::Struct {
             type_name: "Point".to_string(),
             fields: vec![
@@ -163,7 +163,7 @@ fn object_from_rust_produces_object_value() {
 #[test]
 fn round_trip_struct() {
     let original = Point { x: 10, y: 20 };
-    let value = value_from_rust(&original).unwrap();
+    let value = struct_from_rust(&original).unwrap();
     assert_eq!(value_to_rust::<Point>(&value).unwrap(), original);
 }
 
@@ -185,7 +185,7 @@ fn unsupported_type_returns_error() {
         items: vec![1, 2, 3],
     };
     assert!(matches!(
-        value_from_rust(&v).unwrap_err(),
+        struct_from_rust(&v).unwrap_err(),
         ConversionError::UnsupportedType(_)
     ));
 }

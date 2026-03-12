@@ -4,21 +4,21 @@
 //!
 //! Serializes a `Value` with BCS-compatible byte layout, then deserializes as `T`.
 //!
-//! # `value_from_rust` / `object_from_rust` — Rust → Value
+//! # `struct_from_rust` / `object_from_rust` — Rust → Value
 //!
 //! Uses a custom `serde::Serializer` to convert a `T: Serialize` directly into
 //! a `Value` without any template or BCS round-trip. Field names are preserved.
 //!
 //! ```rust
 //! use meow_vm_types::types::Value;
-//! use meow_vm_types::convert::{value_to_rust, value_from_rust};
+//! use meow_vm_types::convert::{value_to_rust, struct_from_rust};
 //! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Debug, PartialEq, Serialize, Deserialize)]
 //! struct Point { x: u64, y: u64 }
 //!
 //! let point = Point { x: 3, y: 7 };
-//! let value = value_from_rust(&point).unwrap();
+//! let value = struct_from_rust(&point).unwrap();
 //! assert_eq!(value_to_rust::<Point>(&value).unwrap(), point);
 //! ```
 
@@ -55,13 +55,13 @@ pub fn value_to_rust<T: DeserializeOwned>(value: &Value) -> Result<T> {
 ///
 /// Only structs with named fields are supported. For object values (with `id: [u8; 32]`
 /// as the first field), use [`object_from_rust`].
-pub fn value_from_rust<T: Serialize>(val: &T) -> Result<Value> {
+pub fn struct_from_rust<T: Serialize>(val: &T) -> Result<Value> {
     val.serialize(ValueSerializer { is_object: false })
 }
 
 /// Convert a Rust type into a [`Value::Object`].
 ///
-/// Same as [`value_from_rust`] but produces `Value::Object` instead of `Value::Struct`.
+/// Same as [`struct_from_rust`] but produces `Value::Object` instead of `Value::Struct`.
 pub fn object_from_rust<T: Serialize>(val: &T) -> Result<Value> {
     val.serialize(ValueSerializer { is_object: true })
 }
