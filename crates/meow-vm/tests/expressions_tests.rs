@@ -1,9 +1,7 @@
 mod utils;
 
-use meow_vm::{
-    types::Value,
-    vm::{GasMeter, GasSchedule, Vm, error::VmError},
-};
+use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::types::Value;
 use utils::{compile, run};
 
 //

@@ -1,6 +1,6 @@
 pub mod error;
 
-pub use meow_vm::module::Module;
+pub use meow_vm_types::module::Module;
 
 use std::{
     fs::File,
@@ -8,7 +8,7 @@ use std::{
     path::Path,
 };
 
-use meow_vm::compiler::Compiler;
+use meow_vm_compiler::Compiler;
 
 use crate::builder::error::BuilderError;
 

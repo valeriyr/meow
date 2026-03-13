@@ -2,12 +2,13 @@
 resolver = "3"
 members = [
     "crates/meow",
+    "crates/meow-framework",
     "crates/meow-node",
     "crates/meow-types",
     "crates/meow-vm",
-    "crates/meow-vm-types",
     "crates/meow-vm-adapter",
-    "crates/meow-framework",
+    "crates/meow-vm-compiler",
+    "crates/meow-vm-types",
     ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -35,4 +36,5 @@ tokio = { version = "1.50", features = ["full"] }
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }
 meow-vm-adapter = { path = "crates/meow-vm-adapter" }
+meow-vm-compiler = { path = "crates/meow-vm-compiler" }
 meow-vm-types = { path = "crates/meow-vm-types" }

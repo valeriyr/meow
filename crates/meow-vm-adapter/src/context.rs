@@ -1,5 +1,5 @@
 use meow_types::{address::Address, digest::Digest};
-use meow_vm::types::Value;
+use meow_vm_types::types::Value;
 
 /// Tracks side effects of native function calls during execution.
 pub struct Context {

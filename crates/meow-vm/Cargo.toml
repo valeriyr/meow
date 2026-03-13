@@ -6,9 +6,11 @@ license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
-chumsky = "0.12"
 bcs.workspace = true
 thiserror.workspace = true
 serde.workspace = true
 
 meow-vm-types.workspace = true
+
+[dev-dependencies]
+meow-vm-compiler.workspace = true

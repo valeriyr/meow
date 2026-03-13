@@ -1,9 +1,7 @@
 mod utils;
 
-use meow_vm::{
-    types::Value,
-    vm::{GasMeter, error::VmError},
-};
+use meow_vm::{error::VmError, gas_meter::GasMeter};
+use meow_vm_types::types::Value;
 use utils::vm_with_natives;
 
 const SRC: &str = "fn add(a: u64, b: u64): u64 { return a + b; }";

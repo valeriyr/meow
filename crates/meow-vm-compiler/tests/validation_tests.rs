@@ -1,7 +1,5 @@
-use meow_vm::{
-    compiler::{Compiler, error::CompilerError},
-    limits,
-};
+use meow_vm_compiler::{Compiler, error::CompilerError};
+use meow_vm_types::limits;
 
 //
 // ─── Object rules ───

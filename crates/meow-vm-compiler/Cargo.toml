@@ -1,11 +1,12 @@
 [package]
-name = "meow-framework"
+name = "meow-vm-compiler"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
-[dev-dependencies]
-meow-types.workspace = true
-meow-vm-adapter = { path = "../meow-vm-adapter", features = ["testing"] }
+[dependencies]
+chumsky = "0.12"
+thiserror.workspace = true
+
 meow-vm-types.workspace = true

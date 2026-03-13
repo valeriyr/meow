@@ -1,9 +1,7 @@
 mod utils;
 
-use meow_vm::{
-    types::Value,
-    vm::{GasMeter, GasSchedule, Vm},
-};
+use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::types::Value;
 use utils::{compile, fresh_id_native, run, vm_with_natives};
 
 //
@@ -147,7 +145,7 @@ fn string_parameter_round_trip() {
 
 #[test]
 fn string_passed_to_native() {
-    use meow_vm::vm::{NativeFnEntry, NativeResult};
+    use meow_vm::{NativeFnEntry, NativeResult};
     use utils::vm_with_natives;
 
     let src = r#"fn send_msg() { log_native("hello from meow"); }"#;

@@ -1,6 +1,12 @@
 use meow_types::system_framework::meow_coin::MeowCoin;
-use meow_vm_adapter::runner::{
-    self, Compiler, Module, Value, VmError, object_from_rust, value_to_rust,
+use meow_vm_adapter::{
+    builder,
+    runner::{self, VmError},
+};
+use meow_vm_types::{
+    convert::{object_from_rust, value_to_rust},
+    module::Module,
+    types::Value,
 };
 
 //
@@ -9,7 +15,7 @@ use meow_vm_adapter::runner::{
 
 #[test]
 fn compile_meow_coin() {
-    Compiler::compile("meow_coin", MEOW_COIN_SRC).expect("compilation must succeed");
+    builder::build("meow_coin", MEOW_COIN_SRC).expect("compilation must succeed");
 }
 
 #[test]
@@ -199,7 +205,7 @@ fn split_with_exact_balance_zeroes_from() {
 const MEOW_COIN_SRC: &str = include_str!("../modules/meow_coin.meow");
 
 fn meow_coin_module() -> Module {
-    Compiler::compile("meow_coin", MEOW_COIN_SRC).expect("meow_coin.meow must compile")
+    builder::build("meow_coin", MEOW_COIN_SRC).expect("meow_coin.meow must compile")
 }
 
 fn make_coin(id: [u8; 32], balance: u64) -> Value {

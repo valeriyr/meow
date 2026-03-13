@@ -1,11 +1,8 @@
 #![allow(dead_code)]
 
-use meow_vm::{
-    compiler::Compiler,
-    module::Module,
-    types::Value,
-    vm::{GasMeter, GasSchedule, NativeFnEntry, NativeResult, Vm},
-};
+use meow_vm::{NativeFnEntry, NativeResult, Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_compiler::Compiler;
+use meow_vm_types::{module::Module, types::Value};
 
 /// Compile a source snippet, run `fn_name` with `args`, and return the return value.
 /// Panics if compilation or execution fails.

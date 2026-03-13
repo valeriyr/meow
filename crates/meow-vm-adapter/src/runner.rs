@@ -1,17 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
 use meow_types::{address::Address, digest::Digest};
-use meow_vm::vm::{GasSchedule, Vm};
-
-pub use meow_vm::{
-    compiler::Compiler,
-    convert::{object_from_rust, value_to_rust},
-    module::Module,
-    types::Value,
-    vm::{GasMeter, error::VmError},
-};
+use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::{module::Module, types::Value};
 
 use crate::{context::Context, natives};
+
+pub use meow_vm::error::VmError;
 
 /// Result of a test VM run — the call outcome plus all native side-effects.
 #[derive(Debug)]

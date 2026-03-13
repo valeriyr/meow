@@ -7,8 +7,8 @@ use meow_types::{
         object_version::ObjectVersion,
     },
 };
-use meow_vm::types::Value;
 use meow_vm_adapter::convert::{object_to_vm_object_value, vm_object_value_to_object};
+use meow_vm_types::types::Value;
 
 /// Fixed module address used in all tests.
 const MODULE_ADDR: [u8; 32] = [0x01u8; 32];

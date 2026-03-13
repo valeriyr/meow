@@ -14,8 +14,9 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm::{compiler::Compiler, types::Value};
 use meow_vm_adapter::executor;
+use meow_vm_compiler::Compiler;
+use meow_vm_types::types::Value;
 
 const MEOW_COIN_SRC: &str = include_str!("../../meow-framework/modules/meow_coin.meow");
 
@@ -342,8 +343,7 @@ fn execute_with_no_gas_coin() {
 fn execute_module_publish() {
     // Compile a trivial module and BCS-serialize it to bytes for the publish payload.
     let src = "fn noop() {}";
-    let module = meow_vm::compiler::Compiler::compile("publish_test", src)
-        .expect("module must compile");
+    let module = Compiler::compile("publish_test", src).expect("module must compile");
     let module_bytes = bcs::to_bytes(&module).expect("module must serialize");
 
     let gas_obj = make_gas_coin_object();

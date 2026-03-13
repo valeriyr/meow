@@ -641,6 +641,7 @@ version = "0.1.0"
 dependencies = [
  "meow-types",
  "meow-vm-adapter",
+ "meow-vm-types",
 ]
 
 [[package]]
@@ -685,7 +686,7 @@ name = "meow-vm"
 version = "0.1.0"
 dependencies = [
  "bcs",
- "chumsky",
+ "meow-vm-compiler",
  "meow-vm-types",
  "serde",
  "thiserror 2.0.18",
@@ -698,7 +699,18 @@ dependencies = [
  "bcs",
  "meow-types",
  "meow-vm",
+ "meow-vm-compiler",
+ "meow-vm-types",
  "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "meow-vm-compiler"
+version = "0.1.0"
+dependencies = [
+ "chumsky",
+ "meow-vm-types",
  "thiserror 2.0.18",
 ]
 

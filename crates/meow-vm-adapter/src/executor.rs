@@ -13,10 +13,10 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm::{
+use meow_vm::{Vm, VmCallResult, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::{
     module::Module,
     types::{Type, Value},
-    vm::{GasMeter, GasSchedule, Vm, VmCallResult, error::VmError},
 };
 
 use crate::{

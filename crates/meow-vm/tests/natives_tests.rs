@@ -1,9 +1,7 @@
 mod utils;
 
-use meow_vm::{
-    types::Value,
-    vm::{GasMeter, NativeFnEntry, NativeResult, error::VmError},
-};
+use meow_vm::{NativeFnEntry, NativeResult, error::VmError, gas_meter::GasMeter};
+use meow_vm_types::types::Value;
 use utils::{consume_native, vm_with_natives};
 
 //

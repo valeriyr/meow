@@ -9,7 +9,7 @@ use meow_types::{
         object_version::ObjectVersion,
     },
 };
-use meow_vm::types::Value;
+use meow_vm_types::types::Value;
 
 use crate::convert::error::ConversionError;
 
