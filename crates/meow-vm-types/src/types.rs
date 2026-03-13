@@ -152,6 +152,26 @@ impl Value {
     }
 }
 
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bool(v) => write!(f, "{}", v),
+            Self::U64(v) => write!(f, "{}", v),
+            Self::Address(a) => write!(f, "0x{}", hex::encode(a)),
+            Self::Str(s) => write!(f, "\"{}\"", s),
+            Self::Void => write!(f, "void"),
+            Self::Struct { type_name, fields } | Self::Object { type_name, fields } => {
+                let fields_str = fields
+                    .iter()
+                    .map(|(name, value)| format!("{}: {}", name, value))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "{} {{ {} }}", type_name, fields_str)
+            }
+        }
+    }
+}
+
 /// Schema of a user-defined struct or object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructDef {

@@ -7,7 +7,7 @@ use meow_types::{
     keypair::{KeyPair, mnemonic::MnemonicType, signature_scheme::SignatureScheme},
     keystore::Keystore,
 };
-use output::{Key, KeyToolCommandOutput};
+use output::{KeyOutput, KeyToolCommandOutput};
 
 /// The keytool commands.
 #[derive(Parser)]
@@ -44,7 +44,7 @@ impl KeyToolCommand {
             } => {
                 let keypair = KeyPair::generate(scheme, derivation_path, word_length)?;
 
-                let key = Key::from(&keypair);
+                let key = KeyOutput::from(&keypair);
 
                 keystore.add_key(keypair)?;
 
@@ -53,13 +53,13 @@ impl KeyToolCommand {
             KeyToolCommand::List => {
                 let keys = keystore
                     .iter()
-                    .map(|(_, keypair)| Key::from(keypair))
+                    .map(|(_, keypair)| KeyOutput::from(keypair))
                     .collect();
 
                 KeyToolCommandOutput::List(keys)
             }
             KeyToolCommand::Remove { address } => {
-                let key = keystore.remove_key(&address)?.as_ref().map(Key::from);
+                let key = keystore.remove_key(&address)?.as_ref().map(KeyOutput::from);
 
                 KeyToolCommandOutput::Remove(key)
             }

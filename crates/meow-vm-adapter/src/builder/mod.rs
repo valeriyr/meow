@@ -1,7 +1,5 @@
 pub mod error;
 
-pub use meow_vm_types::module::Module;
-
 use std::{
     fs::File,
     io::{BufReader, Read},
@@ -10,7 +8,7 @@ use std::{
 
 use meow_vm_compiler::Compiler;
 
-use crate::builder::error::BuilderError;
+use crate::{Module, builder::error::BuilderError};
 
 /// The result type related to the builder.
 pub type Result<T> = std::result::Result<T, BuilderError>;

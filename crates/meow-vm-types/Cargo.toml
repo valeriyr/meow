@@ -7,5 +7,6 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dependencies]
 bcs.workspace = true
+hex.workspace = true
 thiserror.workspace = true
 serde.workspace = true

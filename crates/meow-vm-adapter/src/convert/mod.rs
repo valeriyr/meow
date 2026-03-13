@@ -9,9 +9,8 @@ use meow_types::{
         object_version::ObjectVersion,
     },
 };
-use meow_vm_types::types::Value;
 
-use crate::convert::error::ConversionError;
+use crate::{Value, convert::error::ConversionError};
 
 /// An error that can occur during conversion.
 pub type Result<T> = std::result::Result<T, ConversionError>;

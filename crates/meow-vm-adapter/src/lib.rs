@@ -9,5 +9,6 @@ mod natives;
 
 pub mod builder;
 pub mod executor;
-#[cfg(any(test, feature = "testing"))]
 pub mod runner;
+
+pub use meow_vm_types::{module::Module, types::Value};

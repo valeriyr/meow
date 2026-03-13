@@ -7,5 +7,5 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
 [dev-dependencies]
 meow-types.workspace = true
-meow-vm-adapter = { path = "../meow-vm-adapter", features = ["testing"] }
+meow-vm-adapter.workspace = true
 meow-vm-types.workspace = true

@@ -625,6 +625,7 @@ dependencies = [
  "bcs",
  "bip32",
  "clap",
+ "hex",
  "json_to_table",
  "meow-types",
  "meow-vm-adapter",
@@ -719,6 +720,7 @@ name = "meow-vm-types"
 version = "0.1.0"
 dependencies = [
  "bcs",
+ "hex",
  "serde",
  "thiserror 2.0.18",
 ]

@@ -1,9 +1,8 @@
 use std::{cell::RefCell, rc::Rc};
 
 use meow_vm::{NativeFnEntry, NativeResult};
-use meow_vm_types::types::Value;
 
-use crate::context::Context;
+use crate::{Value, context::Context};
 
 /// Constructs the native function table used by the executor.
 ///

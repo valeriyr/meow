@@ -14,9 +14,8 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm_adapter::executor;
+use meow_vm_adapter::{Value, executor};
 use meow_vm_compiler::Compiler;
-use meow_vm_types::types::Value;
 
 const MEOW_COIN_SRC: &str = include_str!("../../meow-framework/modules/meow_coin.meow");
 

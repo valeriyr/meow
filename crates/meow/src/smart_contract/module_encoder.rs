@@ -1,5 +1,5 @@
 use base64::{Engine, engine::general_purpose};
-use meow_vm_adapter::builder::Module;
+use meow_vm_adapter::Module;
 use strum_macros::EnumString;
 
 /// The module encoder.

@@ -4,7 +4,7 @@ use serde::Serialize;
 /// The key information.
 #[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
-pub struct Key {
+pub struct KeyOutput {
     /// The MEOW address associated with the key.
     pub address: String,
     /// The Base64-encoded public key.
@@ -18,18 +18,18 @@ pub struct Key {
 #[serde(untagged)]
 pub enum KeyToolCommandOutput {
     /// The generate command output.
-    Generate(Key),
+    Generate(KeyOutput),
     /// The list command output.
-    List(Vec<Key>),
+    List(Vec<KeyOutput>),
     /// The remove command output.
-    Remove(Option<Key>),
+    Remove(Option<KeyOutput>),
 }
 
-impl From<&KeyPair> for Key {
+impl From<&KeyPair> for KeyOutput {
     fn from(keypair: &KeyPair) -> Self {
         let public_key = keypair.public();
 
-        Key {
+        KeyOutput {
             address: Address::from(keypair).to_string(),
             public_key: public_key.encode_base64(),
             scheme: public_key.scheme().to_string(),

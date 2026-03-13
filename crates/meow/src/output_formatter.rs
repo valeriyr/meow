@@ -29,7 +29,7 @@ impl OutputFormatter {
                 builder.array_orientation(Orientation::Column);
 
                 let mut table = builder.into_table();
-                table.with(tabled::settings::Width::wrap(120));
+                table.with(tabled::settings::Width::wrap(140));
 
                 format!("{}", table)
             }
