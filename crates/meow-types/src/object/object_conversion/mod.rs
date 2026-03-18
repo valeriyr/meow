@@ -1,19 +1,19 @@
 pub mod error;
 
-use meow_types::{
+use meow_vm_types::types::Value;
+
+use crate::{
     address::Address,
     digest::Digest,
     identifier::Identifier,
     object::{
-        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
-        object_version::ObjectVersion,
+        Object, object_conversion::error::ObjectConversionError, object_decl_ref::ObjectDeclRef,
+        object_owner::ObjectOwner, object_type::ObjectType, object_version::ObjectVersion,
     },
 };
 
-use crate::{Value, convert::error::ConversionError};
-
 /// An error that can occur during conversion.
-pub type Result<T> = std::result::Result<T, ConversionError>;
+pub type Result<T> = std::result::Result<T, ObjectConversionError>;
 
 /// Convert a meow-types Object to a meow-vm Value::Object.
 ///
@@ -23,7 +23,7 @@ pub type Result<T> = std::result::Result<T, ConversionError>;
 pub fn object_to_vm_object_value(obj: &Object) -> Result<Value> {
     let type_name = match obj.type_() {
         ObjectType::Object(decl) => Ok(decl.name().as_ref().to_string()),
-        _ => Err(ConversionError::InvalidObjectType),
+        _ => Err(ObjectConversionError::InvalidObjectType),
     }?;
     let mut fields: Vec<(String, Value)> =
         bcs::from_bytes(obj.content()).expect("object content must be valid BCS");
@@ -45,7 +45,7 @@ pub fn vm_object_value_to_object(
 ) -> Result<Object> {
     let (type_name, fields) = match val {
         Value::Object { type_name, fields } => Ok((type_name.clone(), fields.clone())),
-        _ => Err(ConversionError::InvalidVMValueType),
+        _ => Err(ObjectConversionError::InvalidVMValueType),
     }?;
 
     let id: Address = val.object_id().expect("Object must have id field").into();

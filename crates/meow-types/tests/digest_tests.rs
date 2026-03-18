@@ -81,5 +81,7 @@ fn digest_from_invalid_bytes_length() {
 #[test]
 fn digest_from_invalid_base58() {
     let result = Digest::from_str("not_valid_base58!");
-    assert!(matches!(result.unwrap_err(), DigestError::Base58Error(_)));
+    let err = result.unwrap_err();
+    // `_` at index 8 is the first non-base58 character in the input string.
+    assert!(matches!(&err, DigestError::Base58Error(e) if e.to_string().contains("invalid character")));
 }

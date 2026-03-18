@@ -26,14 +26,14 @@ impl Digest {
     }
 
     /// Computes the digest of the given signable data.
-    pub fn compute<T: ?Sized + Serialize>(signable: &T) -> Result<Digest> {
+    pub fn compute<T: ?Sized + Serialize>(signable: &T) -> Result<Self> {
         use blake2::Digest;
 
         let mut hasher = Blake2b::<U32>::default();
 
         hasher.update(&bcs::to_bytes(signable)?);
 
-        Ok(crate::digest::Digest::new(hasher.finalize().into()))
+        Ok(Self::new(hasher.finalize().into()))
     }
 }
 

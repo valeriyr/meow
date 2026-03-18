@@ -1,3 +1,4 @@
+pub mod object_conversion;
 pub mod object_decl_ref;
 pub mod object_owner;
 pub mod object_ref;
@@ -10,8 +11,8 @@ use crate::{
     address::Address,
     digest::Digest,
     object::{
-        object_owner::ObjectOwner, object_ref::ObjectRef, object_type::ObjectType,
-        object_version::ObjectVersion,
+        object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
+        object_type::ObjectType, object_version::ObjectVersion,
     },
 };
 
@@ -55,6 +56,36 @@ impl Object {
         }
     }
 
+    /// Creates a fresh object.
+    pub fn fresh_object(
+        address: Address,
+        owner: Address,
+        transaction: Digest,
+        object_decl_ref: ObjectDeclRef,
+        content: Vec<u8>,
+    ) -> Self {
+        Self {
+            address,
+            owner: ObjectOwner::Address(owner),
+            transaction,
+            version: ObjectVersion::ONE,
+            type_: ObjectType::Object(object_decl_ref),
+            content,
+        }
+    }
+
+    /// Creates a fresh module object.
+    pub fn fresh_module(address: Address, transaction: Digest, content: Vec<u8>) -> Self {
+        Self {
+            address,
+            owner: ObjectOwner::Immutable,
+            transaction,
+            version: ObjectVersion::ONE,
+            type_: ObjectType::Module,
+            content,
+        }
+    }
+
     /// Returns the object address.
     pub fn address(&self) -> &Address {
         &self.address
@@ -88,13 +119,5 @@ impl Object {
     /// Returns the object reference.
     pub fn object_ref(&self) -> ObjectRef {
         ObjectRef::new(self.address.clone(), self.version.clone(), self.digest())
-    }
-
-    /// Checks if the object is a MeowCoin.
-    pub fn is_meow_coin(&self) -> bool {
-        match self.type_() {
-            ObjectType::Object(object_decl_ref) => object_decl_ref.is_meow_coin(),
-            _ => false,
-        }
     }
 }

@@ -9,6 +9,8 @@ pub struct ObjectVersion(u64);
 impl ObjectVersion {
     /// The zero object version.
     pub const ZERO: Self = Self(0);
+    /// The first object version.
+    pub const ONE: Self = Self(1);
     /// The maximum object version.
     pub const MAX: Self = Self(u64::MAX);
 

@@ -4,11 +4,13 @@
 //! transaction execution via `execute()` and module building via `build()`.
 
 mod context;
-pub mod convert;
 mod natives;
 
 pub mod builder;
 pub mod executor;
 pub mod runner;
 
+// Re-export commonly used types and functions for external use.
+//
+// TODO: These types should be replaced with abstractions to abstract the crates users from VM types.
 pub use meow_vm_types::{module::Module, types::Value};

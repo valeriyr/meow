@@ -10,6 +10,7 @@ fn equality() {
 
     assert_eq!(v0, v0.clone());
     assert_eq!(v0.next(), v0.next());
+    assert_eq!(v0.next(), Some(ObjectVersion::ONE));
 }
 
 #[test]
@@ -52,6 +53,11 @@ fn next_at_max_returns_none() {
 #[test]
 fn zero_object_version_to_string() {
     assert_eq!(ObjectVersion::ZERO.to_string(), "0");
+}
+
+#[test]
+fn one_object_version_to_string() {
+    assert_eq!(ObjectVersion::ONE.to_string(), "1");
 }
 
 #[test]

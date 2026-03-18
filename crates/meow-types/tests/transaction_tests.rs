@@ -52,8 +52,9 @@ fn signed_transaction_verify_wrong_digest() {
     let sig = test_keypair().sign(tx1.digest().as_ref());
     let signed = SignedTransaction::new(tx2, sig);
     assert!(matches!(
-        signed.verify().unwrap_err(),
-        TransactionError::KeyPairError(KeyPairError::Ed25519ConsensusError(_))
+        &signed.verify().unwrap_err(),
+        TransactionError::KeyPairError(KeyPairError::Ed25519ConsensusError(e))
+            if e.to_string() == "Invalid signature."
     ));
 }
 

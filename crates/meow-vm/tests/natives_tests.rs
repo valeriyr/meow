@@ -52,7 +52,7 @@ fn builtin_abort_triggers_on_false_condition() {
     // x=0: x!=0 = false → abort
     assert!(matches!(
         vm.call("check", vec![Value::U64(0)], &mut gas).unwrap_err(),
-        VmError::Aborted { code: 42, .. }
+        VmError::Aborted { code: 42, ref message } if message == "must not be zero"
     ));
 
     // x=1: x!=0 = true → no abort
@@ -71,7 +71,7 @@ fn abort_can_be_overridden_by_custom_native() {
     let mut gas = GasMeter::unlimited();
 
     let err = vm.call("check", vec![Value::U64(0)], &mut gas).unwrap_err();
-    assert!(matches!(err, VmError::Aborted { code: 198, .. }));
+    assert!(matches!(&err, VmError::Aborted { code: 198, message } if message == "custom"));
 }
 
 //
@@ -90,7 +90,7 @@ fn use_after_move_is_an_error() {
     let err = vm
         .call("consume_twice", vec![test_token(100)], &mut gas)
         .unwrap_err();
-    assert!(matches!(err, VmError::UseAfterMove(_)));
+    assert!(matches!(&err, VmError::UseAfterMove(msg) if msg == "local slot 0 has already been moved"));
 }
 
 //

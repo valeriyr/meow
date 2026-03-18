@@ -62,11 +62,97 @@ impl Context {
 
     /// Record an object transfer to a new owner.
     pub fn transfer(&mut self, obj: Value, new_owner: Address) {
+        debug_assert!(
+            matches!(obj, Value::Object { .. }),
+            "Only object values can be transferred"
+        );
         self.transfers.push((obj, new_owner));
     }
 
     /// Record an object destruction.
     pub fn destroy(&mut self, obj: Value) {
+        debug_assert!(
+            matches!(obj, Value::Object { .. }),
+            "Only object values can be destroyed"
+        );
         self.destroyed.push(obj);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use meow_types::{address::Address, digest::Digest};
+    use meow_vm_types::types::Value;
+
+    use super::Context;
+
+    const SENDER: [u8; 32] = [0xAAu8; 32];
+
+    fn make_ctx() -> Context {
+        Context::new(Address::new(SENDER), Digest::ZERO)
+    }
+
+    #[test]
+    fn initial_state_is_empty() {
+        let ctx = make_ctx();
+        assert!(ctx.fresh_ids().is_empty());
+        assert!(ctx.transfers().is_empty());
+        assert!(ctx.destroyed().is_empty());
+    }
+
+    #[test]
+    fn sender_returns_correct_address() {
+        let ctx = make_ctx();
+        assert_eq!(ctx.sender(), Address::new(SENDER));
+    }
+
+    #[test]
+    fn fresh_ids_are_unique() {
+        let mut ctx = make_ctx();
+        let id0 = ctx.next_fresh_id();
+        let id1 = ctx.next_fresh_id();
+        assert_ne!(id0, id1);
+    }
+
+    #[test]
+    fn fresh_ids_are_recorded_in_order() {
+        let mut ctx = make_ctx();
+        let id0 = ctx.next_fresh_id();
+        let id1 = ctx.next_fresh_id();
+        assert_eq!(ctx.fresh_ids(), &[id0, id1]);
+    }
+
+    #[test]
+    fn fresh_ids_are_deterministic() {
+        let mut ctx1 = Context::new(Address::new(SENDER), Digest::ZERO);
+        let mut ctx2 = Context::new(Address::new(SENDER), Digest::ZERO);
+        assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
+        assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
+    }
+
+    #[test]
+    fn transfer_is_recorded() {
+        let mut ctx = make_ctx();
+        let owner = Address::new([0x02u8; 32]);
+        ctx.transfer(test_object(), owner);
+        assert_eq!(ctx.transfers().len(), 1);
+        assert_eq!(ctx.transfers()[0].1, owner);
+    }
+
+    #[test]
+    fn destroy_is_recorded() {
+        let mut ctx = make_ctx();
+        ctx.destroy(test_object());
+        assert_eq!(ctx.destroyed().len(), 1);
+    }
+
+    fn test_object() -> Value {
+        Value::Object {
+            type_name: "MeowCoin".to_string(),
+            fields: vec![
+                ("id".to_string(), Value::Address([1; 32])),
+                ("balance".to_string(), Value::U64(100)),
+            ],
+        }
     }
 }

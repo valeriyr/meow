@@ -3,14 +3,15 @@ use meow_types::{
     digest::Digest,
     identifier::Identifier,
     object::{
-        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
+        Object,
+        object_conversion::{object_to_vm_object_value, vm_object_value_to_object},
+        object_decl_ref::ObjectDeclRef,
+        object_owner::ObjectOwner,
+        object_type::ObjectType,
         object_version::ObjectVersion,
     },
 };
-use meow_vm_adapter::{
-    Value,
-    convert::{object_to_vm_object_value, vm_object_value_to_object},
-};
+use meow_vm_types::types::Value;
 
 /// Fixed module address used in all tests.
 const MODULE_ADDR: [u8; 32] = [0x01u8; 32];

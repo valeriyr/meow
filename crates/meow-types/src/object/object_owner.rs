@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::address::Address;
 
 /// The owner of an object.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ObjectOwner {
     /// Object is owned by a specific address.
     Address(Address),

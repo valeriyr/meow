@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{address::Address, identifier::Identifier, system_framework::meow_coin::is_meow_coin};
+use crate::{address::Address, identifier::Identifier};
 
 /// The type of an object reference.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -25,10 +25,5 @@ impl ObjectDeclRef {
     /// Returns the object name.
     pub fn name(&self) -> &Identifier {
         &self.name
-    }
-
-    /// Checks if the object is a MeowCoin.
-    pub fn is_meow_coin(&self) -> bool {
-        is_meow_coin(self.module(), self.name().as_ref())
     }
 }

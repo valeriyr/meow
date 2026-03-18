@@ -44,10 +44,8 @@ fn build_module_from_file_successful() {
 #[test]
 fn build_invalid_source_returns_error() {
     let src = "this is not valid meow";
-    assert!(matches!(
-        builder::build("test", src).unwrap_err(),
-        BuilderError::CompileError(_)
-    ));
+    let err = builder::build("test", src).unwrap_err();
+    assert!(matches!(&err, BuilderError::CompileError(e) if e.to_string().contains("found 't'")));
 }
 
 #[test]

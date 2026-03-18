@@ -186,7 +186,7 @@ fn unsupported_type_returns_error() {
     };
     assert!(matches!(
         struct_from_rust(&v).unwrap_err(),
-        ConversionError::UnsupportedType(_)
+        ConversionError::UnsupportedType(ref msg) if msg == "seq"
     ));
 }
 

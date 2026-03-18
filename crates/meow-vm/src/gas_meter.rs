@@ -21,13 +21,16 @@ impl GasMeter {
     /// Charge `cost` units of gas. Returns [`VmError::OutOfGas`] if the limit is exceeded.
     pub fn charge(&mut self, cost: u64) -> Result<()> {
         let new = self.consumed.saturating_add(cost);
+
+        self.consumed = new;
+
         if new > self.limit {
             return Err(VmError::OutOfGas {
                 consumed: new,
                 limit: self.limit,
             });
         }
-        self.consumed = new;
+
         Ok(())
     }
 
@@ -39,5 +42,10 @@ impl GasMeter {
     /// Returns the remaining gas available.
     pub fn remaining(&self) -> u64 {
         self.limit.saturating_sub(self.consumed)
+    }
+
+    /// Returns the gas limit.
+    pub fn limit(&self) -> u64 {
+        self.limit
     }
 }
