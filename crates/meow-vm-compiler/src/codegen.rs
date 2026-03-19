@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use meow_vm_types::{
     bytecode::Instruction,
-    limits,
+    config::Config,
     module::Function,
     types::{StructDef, Type},
 };
@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub struct Codegen<'m> {
+    config: &'m Config,
     structs: &'m [StructDef],
     locals: HashMap<String, u8>,
     next_slot: u8,
@@ -22,19 +23,24 @@ pub struct Codegen<'m> {
 }
 
 impl<'m> Codegen<'m> {
-    pub fn compile_function(structs: &'m [StructDef], ast_fn: AstFunction) -> Result<Function> {
+    pub fn compile_function(
+        structs: &'m [StructDef],
+        ast_fn: AstFunction,
+        config: &'m Config,
+    ) -> Result<Function> {
         validator::validate_identifier(&ast_fn.name, "function name")?;
 
-        if ast_fn.params.len() > limits::MAX_PARAMS {
+        let max_params = config.max_params();
+        if ast_fn.params.len() > max_params {
             return Err(CompilerError::Message(format!(
                 "function '{}': too many parameters ({} > limit of {})",
                 ast_fn.name,
                 ast_fn.params.len(),
-                limits::MAX_PARAMS,
+                max_params,
             )));
         }
 
-        let mut cg = Codegen::new(structs);
+        let mut cg = Codegen::new(structs, config);
 
         // Validate return type: functions may not return an Object.
         // Note: the parser maps all named types to Type::Struct, so we also check
@@ -76,12 +82,13 @@ impl<'m> Codegen<'m> {
             cg.emit(Instruction::Return);
         }
 
-        if cg.code.len() > limits::MAX_CODE_SIZE {
+        let max_fun_code_size = config.max_fun_code_size();
+        if cg.code.len() > max_fun_code_size {
             return Err(CompilerError::Message(format!(
                 "function '{}': bytecode too large ({} instructions > limit of {})",
                 ast_fn.name,
                 cg.code.len(),
-                limits::MAX_CODE_SIZE,
+                max_fun_code_size,
             )));
         }
 
@@ -94,8 +101,9 @@ impl<'m> Codegen<'m> {
         })
     }
 
-    fn new(structs: &'m [StructDef]) -> Self {
+    fn new(structs: &'m [StructDef], config: &'m Config) -> Self {
         Self {
+            config,
             structs,
             locals: HashMap::new(),
             next_slot: 0,
@@ -105,10 +113,11 @@ impl<'m> Codegen<'m> {
 
     fn alloc_local(&mut self, name: String) -> Result<u8> {
         validator::validate_identifier(&name, "variable")?;
-        if self.next_slot as usize >= limits::MAX_LOCALS {
+        let max_locals = self.config.max_locals();
+        if self.next_slot as usize >= max_locals {
             return Err(CompilerError::Message(format!(
                 "too many local variables: limit is {}",
-                limits::MAX_LOCALS,
+                max_locals,
             )));
         }
         let slot = self.next_slot;

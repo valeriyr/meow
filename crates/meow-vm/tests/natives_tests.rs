@@ -90,7 +90,9 @@ fn use_after_move_is_an_error() {
     let err = vm
         .call("consume_twice", vec![test_token(100)], &mut gas)
         .unwrap_err();
-    assert!(matches!(&err, VmError::UseAfterMove(msg) if msg == "local slot 0 has already been moved"));
+    assert!(
+        matches!(&err, VmError::UseAfterMove(msg) if msg == "local slot 0 has already been moved")
+    );
 }
 
 //

@@ -1,5 +1,8 @@
-use meow_vm_compiler::{Compiler, error::CompilerError};
-use meow_vm_types::limits;
+use meow_vm_compiler::{Compiler, Result, error::CompilerError};
+use meow_vm_types::{
+    config::{self, Config},
+    module::Module,
+};
 
 //
 // ─── Object rules ───
@@ -13,7 +16,7 @@ fn object_first_field_must_be_id_address() {
         fn make(id: address, balance: u64) {}
     "#;
     assert!(matches!(
-        Compiler::compile("test", src).unwrap_err(),
+        compile("test", src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("first field must be 'id: address'")
     ));
 }
@@ -29,7 +32,7 @@ fn object_id_must_use_fresh_id() {
         }
     "#;
     assert!(matches!(
-        Compiler::compile("test", src).unwrap_err(),
+        compile("test", src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("'id' field must be initialized with meow_vm_fresh_id()")
     ));
 }
@@ -44,7 +47,7 @@ fn object_cannot_be_returned_from_function() {
         }
     "#;
     assert!(matches!(
-        Compiler::compile("test", src).unwrap_err(),
+        compile("test", src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("cannot return Object type")
     ));
 }
@@ -60,7 +63,7 @@ fn struct_field_can_be_string_type() {
 
         fn make(text: string): Msg { return Msg { text: text }; }
     "#;
-    assert!(Compiler::compile("test", src).is_ok());
+    assert!(compile("test", src).is_ok());
 }
 
 //
@@ -70,7 +73,7 @@ fn struct_field_can_be_string_type() {
 #[test]
 fn invalid_module_name_rejected() {
     assert!(matches!(
-        Compiler::compile("1bad", "fn f() {}").unwrap_err(),
+        compile("1bad", "fn f() {}").unwrap_err(),
         CompilerError::Message(msg) if msg.contains("module name")
     ));
 }
@@ -78,42 +81,45 @@ fn invalid_module_name_rejected() {
 #[test]
 fn module_name_with_dash_rejected() {
     assert!(matches!(
-        Compiler::compile("my-module", "fn f() {}").unwrap_err(),
+        compile("my-module", "fn f() {}").unwrap_err(),
         CompilerError::Message(msg) if msg.contains("module name")
     ));
 }
 
 #[test]
 fn module_name_too_long_rejected() {
-    let long = "a".repeat(limits::MAX_IDENTIFIER_LEN + 1);
+    let long = "a".repeat(config::MAX_IDENTIFIER_LEN + 1);
     assert!(matches!(
-        Compiler::compile(&long, "fn f() {}").unwrap_err(),
+        compile(&long, "fn f() {}").unwrap_err(),
         CompilerError::Message(msg) if msg.contains("module name")
     ));
 }
 
 #[test]
 fn invalid_function_name_rejected() {
-    let src = r#"fn 1bad() {}"#;
     // The parser won't accept a leading digit as a function name at all.
-    assert!(Compiler::compile("test", src).is_err());
+    assert!(matches!(
+        compile("test", "fn 1bad() {}").unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("expected identifier")
+    ));
 }
 
 #[test]
 fn invalid_struct_name_rejected() {
-    // Parser only accepts ASCII idents so we test the post-parse identifier
-    // check by smuggling an underscore-only name that is actually valid, then
-    // verify a name starting with a digit is rejected by the parser.
-    let src = r#"struct 2bad { x: u64 } fn f() {}"#;
-    assert!(Compiler::compile("test", src).is_err());
+    // The parser won't accept a leading digit as a struct name at all.
+    assert!(matches!(
+        compile("test", "struct 2bad { x: u64 } fn f() {}").unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("expected identifier")
+    ));
 }
 
 #[test]
 fn invalid_param_name_rejected() {
-    // The parser enforces ASCII idents, so a param starting with a digit won't
-    // parse. Verify via a mangled name that the parser itself catches this.
-    let src = r#"fn f(1x: u64) {}"#;
-    assert!(Compiler::compile("test", src).is_err());
+    // The parser won't accept a leading digit as a parameter name at all.
+    assert!(matches!(
+        compile("test", "fn f(1x: u64) {}").unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("expected identifier")
+    ));
 }
 
 //
@@ -122,50 +128,54 @@ fn invalid_param_name_rejected() {
 
 #[test]
 fn too_many_functions_rejected() {
-    let src = (0..=limits::MAX_FUNCTIONS)
+    let config = Config::default();
+    let src = (0..=config.max_functions())
         .map(|i| format!("fn f{i}() {{}}"))
         .collect::<Vec<_>>()
         .join("\n");
     assert!(matches!(
-        Compiler::compile("test", &src).unwrap_err(),
+        Compiler::compile("test", &src, config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many functions")
     ));
 }
 
 #[test]
 fn too_many_structs_rejected() {
-    let src = (0..=limits::MAX_STRUCTS)
+    let config = Config::default();
+    let src = (0..=config.max_structs())
         .map(|i| format!("struct S{i} {{ x: u64 }}"))
         .collect::<Vec<_>>()
         .join("\n");
     assert!(matches!(
-        Compiler::compile("test", &src).unwrap_err(),
+        Compiler::compile("test", &src, config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many struct/object definitions")
     ));
 }
 
 #[test]
 fn too_many_params_rejected() {
-    let params = (0..=limits::MAX_PARAMS)
+    let config = Config::default();
+    let params = (0..=config.max_params())
         .map(|i| format!("p{i}: u64"))
         .collect::<Vec<_>>()
         .join(", ");
     let src = format!("fn f({params}) {{}}");
     assert!(matches!(
-        Compiler::compile("test", &src).unwrap_err(),
+        Compiler::compile("test", &src, config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many parameters")
     ));
 }
 
 #[test]
 fn too_many_fields_rejected() {
-    let fields = (0..=limits::MAX_FIELDS)
+    let config = Config::default();
+    let fields = (0..=config.max_fields())
         .map(|i| format!("f{i}: u64"))
         .collect::<Vec<_>>()
         .join(", ");
     let src = format!("struct Big {{ {fields} }} fn noop() {{}}");
     assert!(matches!(
-        Compiler::compile("test", &src).unwrap_err(),
+        Compiler::compile("test", &src, config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many fields")
     ));
 }
@@ -180,7 +190,15 @@ fn struct_field_cannot_be_an_object_type() {
         fn make(id: address, amount: u64) {}
     "#;
     assert!(matches!(
-        Compiler::compile("test", src).unwrap_err(),
+        compile("test", src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("non-primitive type")
     ));
+}
+
+//
+// ─── Utility functions ───
+//
+
+fn compile(module_name: &str, source: &str) -> Result<Module> {
+    Compiler::compile(module_name, source, Config::default())
 }

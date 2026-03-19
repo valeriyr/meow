@@ -1,4 +1,4 @@
-use meow_vm_types::{identifier::is_valid_identifier, limits};
+use meow_vm_types::{identifier::is_valid_identifier, config};
 
 //
 // ─── Identifier validity tests ───
@@ -58,6 +58,6 @@ fn invalid_identifier_with_non_ascii() {
 
 #[test]
 fn invalid_too_long_identifier() {
-    let long_identifier = "a".repeat(limits::MAX_IDENTIFIER_LEN + 1);
+    let long_identifier = "a".repeat(config::MAX_IDENTIFIER_LEN + 1);
     assert!(!is_valid_identifier(&long_identifier));
 }

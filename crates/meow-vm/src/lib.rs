@@ -15,7 +15,7 @@
 //! use meow_vm::Vm;
 //! use meow_vm::gas_meter::GasMeter;
 //! use meow_vm::gas_schedule::GasSchedule;
-//! use meow_vm_types::types::Value;
+//! use meow_vm_types::{config::Config, types::Value};
 //!
 //! let source = r#"
 //!     fn add(a: u64, b: u64): u64 {
@@ -23,8 +23,9 @@
 //!     }
 //! "#;
 //!
-//! let module = Compiler::compile("math", source).unwrap();
-//! let vm = Vm::new(module, vec![], GasSchedule::default());
+//! let config = Config::default();
+//! let module = Compiler::compile("math", source, config.clone()).unwrap();
+//! let vm = Vm::new(module, vec![], GasSchedule::default(), config);
 //! let mut gas = GasMeter::new(1_000);
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
@@ -38,7 +39,7 @@ pub mod gas_schedule;
 
 use std::collections::HashMap;
 
-use meow_vm_types::{limits, types::Value};
+use meow_vm_types::{config::Config, types::Value};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
 
@@ -146,11 +147,17 @@ pub struct Vm {
     module: Module,
     natives: HashMap<String, NativeFnEntry>,
     gas_schedule: GasSchedule,
+    config: Config,
 }
 
 impl Vm {
-    /// Creates a new VM from a compiled module, native function bindings, and a gas schedule.
-    pub fn new(module: Module, natives: Vec<NativeFnEntry>, gas_schedule: GasSchedule) -> Self {
+    /// Creates a new VM from a compiled module, native function bindings, a gas schedule, and a config.
+    pub fn new(
+        module: Module,
+        natives: Vec<NativeFnEntry>,
+        gas_schedule: GasSchedule,
+        config: Config,
+    ) -> Self {
         let mut native_map = HashMap::new();
         for entry in natives {
             native_map.insert(entry.name.clone(), entry);
@@ -187,6 +194,7 @@ impl Vm {
             module,
             natives: native_map,
             gas_schedule,
+            config,
         }
     }
 
@@ -225,8 +233,9 @@ impl Vm {
         gas: &mut GasMeter,
         depth: usize,
     ) -> Result<(Option<Value>, Vec<Option<Value>>)> {
-        if depth >= limits::MAX_CALL_DEPTH {
-            return Err(VmError::CallStackOverflow(limits::MAX_CALL_DEPTH));
+        let max_call_depth = self.config.max_call_depth();
+        if depth >= max_call_depth {
+            return Err(VmError::CallStackOverflow(max_call_depth));
         }
 
         let func = self

@@ -20,6 +20,7 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::config::Config;
 
 use crate::{context::Context, executor::error::ExecutorError, natives};
 
@@ -114,7 +115,7 @@ fn execute_meow_call(
     // Build executor context and native functions.
     let ctx = Rc::new(RefCell::new(Context::new(*sender, *tx_digest)));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default());
+    let vm = Vm::new(module, natives, GasSchedule::default(), Config::default());
 
     // Execute the function.
     let call_result = match vm.call(fn_name, vm_args, gas) {

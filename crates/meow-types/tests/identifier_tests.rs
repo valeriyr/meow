@@ -90,7 +90,7 @@ fn invalid_identifier_try_from_non_ascii() {
 
 #[test]
 fn invalid_too_long_identifier() {
-    let long_identifier = "a".repeat(meow_vm_types::limits::MAX_IDENTIFIER_LEN + 1);
+    let long_identifier = "a".repeat(meow_vm_types::config::MAX_IDENTIFIER_LEN + 1);
     assert!(matches!(
         Identifier::new(long_identifier.clone()).unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == long_identifier

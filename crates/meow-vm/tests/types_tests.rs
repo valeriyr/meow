@@ -1,8 +1,8 @@
 mod utils;
 
-use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm::gas_meter::GasMeter;
 use meow_vm_types::types::Value;
-use utils::{compile, fresh_id_native, run, vm_with_natives};
+use utils::{compile, fresh_id_native, run, vm, vm_with_natives};
 
 //
 // ─── Address ───
@@ -56,8 +56,7 @@ fn struct_construction_and_field_access() {
         fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
         fn get_x(p: Point): u64 { return p.x; }
     "#;
-    let module = compile(src);
-    let vm = Vm::new(module, vec![], GasSchedule::default());
+    let vm = vm(compile(src));
     let mut gas = GasMeter::unlimited();
 
     let point = vm
@@ -88,7 +87,7 @@ fn struct_value_semantics() {
 
         fn get_value(c: Counter): u64 { return c.value; }
     "#;
-    let vm = Vm::new(compile(src), vec![], GasSchedule::default());
+    let vm = vm(compile(src));
     let mut gas = GasMeter::unlimited();
     let c = test_counter(42);
     assert_eq!(
@@ -174,8 +173,7 @@ fn string_struct_field_round_trip() {
         fn make(text: string): Msg { return Msg { text: text }; }
         fn get_text(m: Msg): string { return m.text; }
     "#;
-    let module = compile(src);
-    let vm = Vm::new(module, vec![], GasSchedule::default());
+    let vm = vm(compile(src));
     let mut gas = GasMeter::unlimited();
 
     let msg = vm
@@ -227,7 +225,7 @@ fn object_field_mutation_reflected_in_final_args() {
             return coin.balance;
         }
     "#;
-    let vm = Vm::new(compile(src), vec![], GasSchedule::default());
+    let vm = vm(compile(src));
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("double_balance", vec![test_coin([1u8; 32], 50)], &mut gas)

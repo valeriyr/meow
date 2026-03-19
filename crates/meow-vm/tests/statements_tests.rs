@@ -1,8 +1,10 @@
 mod utils;
 
-use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm::gas_meter::GasMeter;
 use meow_vm_types::types::Value;
 use utils::{compile, run};
+
+use crate::utils::vm;
 
 //
 // ─── let ───
@@ -112,11 +114,7 @@ fn function_call_chain() {
 
 #[test]
 fn void_function_returns_none() {
-    let vm = Vm::new(
-        compile("fn do_nothing() {}"),
-        vec![],
-        GasSchedule::default(),
-    );
+    let vm = vm(compile("fn do_nothing() {}"));
     let mut gas = GasMeter::unlimited();
     let r = vm.call("do_nothing", vec![], &mut gas).unwrap();
     assert_eq!(r.return_value, None);

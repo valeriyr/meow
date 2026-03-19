@@ -64,5 +64,11 @@ fn out_of_gas_returns_error() {
     let err = vm
         .call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)
         .unwrap_err();
-    assert!(matches!(err, VmError::OutOfGas { limit: 1, consumed: 2 }));
+    assert!(matches!(
+        err,
+        VmError::OutOfGas {
+            limit: 1,
+            consumed: 2
+        }
+    ));
 }

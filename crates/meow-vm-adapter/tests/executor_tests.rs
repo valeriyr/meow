@@ -15,10 +15,9 @@ use meow_types::{
     },
 };
 use meow_vm_adapter::{
-    Value,
+    Value, builder,
     executor::{self, error::ExecutorError},
 };
-use meow_vm_compiler::Compiler;
 
 //
 // ─── Happy path tests ───
@@ -589,7 +588,7 @@ fn make_module_object(address: Address, content: Vec<u8>) -> Object {
 }
 
 fn make_module(name: &str, src: &str) -> Vec<u8> {
-    let module = Compiler::compile(name, src).expect("must compile");
+    let module = builder::build(name, src).expect("must compile");
     bcs::to_bytes(&module).expect("module must serialize")
 }
 

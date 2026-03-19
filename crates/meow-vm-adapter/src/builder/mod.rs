@@ -7,6 +7,7 @@ use std::{
 };
 
 use meow_vm_compiler::Compiler;
+use meow_vm_types::config::Config;
 
 use crate::{Module, builder::error::BuilderError};
 
@@ -25,7 +26,7 @@ pub fn build(module_name: &str, source: &str) -> Result<Module> {
         });
     }
 
-    Ok(Compiler::compile(module_name, source)?)
+    compile(module_name, source)
 }
 
 /// Build a module from a source file.
@@ -52,5 +53,9 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
     let mut source = String::new();
     reader.read_to_string(&mut source)?;
 
-    build(module_name, &source)
+    compile(module_name, &source)
+}
+
+fn compile(module_name: &str, source: &str) -> Result<Module> {
+    Ok(Compiler::compile(module_name, source, Config::default())?)
 }

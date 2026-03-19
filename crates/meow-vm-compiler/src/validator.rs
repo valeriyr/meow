@@ -1,32 +1,37 @@
-use meow_vm_types::{limits, types::Type};
+use meow_vm_types::{
+    config::{self, Config},
+    identifier,
+    types::Type,
+};
 
 use crate::{Result, ast::AstStruct, error::CompilerError};
 
 pub fn validate_identifier(name: &str, context: &str) -> Result<()> {
-    if !meow_vm_types::identifier::is_valid_identifier(name) {
+    if !identifier::is_valid_identifier(name) {
         Err(CompilerError::Message(format!(
             "{context}: '{}' is not a valid identifier \
              (must start with a letter or underscore, followed by letters, digits, or underscores; \
              max {} characters)",
             name,
-            limits::MAX_IDENTIFIER_LEN,
+            config::MAX_IDENTIFIER_LEN,
         )))
     } else {
         Ok(())
     }
 }
 
-pub fn validate_struct_def(def: &AstStruct) -> Result<()> {
+pub fn validate_struct_def(def: &AstStruct, config: &Config) -> Result<()> {
     let kind = if def.is_object { "object" } else { "struct" };
 
     validate_identifier(&def.name, &format!("{kind} name"))?;
 
-    if def.fields.len() > limits::MAX_FIELDS {
+    let max_fields = config.max_fields();
+    if def.fields.len() > max_fields {
         return Err(CompilerError::Message(format!(
             "{kind} '{}': too many fields ({} > limit of {})",
             def.name,
             def.fields.len(),
-            limits::MAX_FIELDS,
+            max_fields,
         )));
     }
 

@@ -11,7 +11,7 @@ mod validator;
 pub mod error;
 
 use chumsky::Parser;
-use meow_vm_types::{limits, module::Module, types::StructDef};
+use meow_vm_types::{config::Config, module::Module, types::StructDef};
 
 use error::CompilerError;
 
@@ -57,8 +57,8 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 pub struct Compiler;
 
 impl Compiler {
-    /// Compile `source` into a module named `module_name`.
-    pub fn compile(module_name: &str, source: &str) -> Result<Module> {
+    /// Compile `source` into a module named `module_name` using the given `config`.
+    pub fn compile(module_name: &str, source: &str, config: Config) -> Result<Module> {
         validator::validate_identifier(module_name, "module name")?;
 
         let items = parser().parse(source).into_result().map_err(|errs| {
@@ -74,20 +74,20 @@ impl Compiler {
             .iter()
             .filter(|i| matches!(i, AstItem::Struct(_)))
             .count();
-        if struct_count > limits::MAX_STRUCTS {
+        let max_structs = config.max_structs();
+        if struct_count > max_structs {
             return Err(CompilerError::Message(format!(
                 "too many struct/object definitions: {} > limit of {}",
-                struct_count,
-                limits::MAX_STRUCTS,
+                struct_count, max_structs,
             )));
         }
 
         let fn_count = items.iter().filter(|i| matches!(i, AstItem::Fn(_))).count();
-        if fn_count > limits::MAX_FUNCTIONS {
+        let max_functions = config.max_functions();
+        if fn_count > max_functions {
             return Err(CompilerError::Message(format!(
                 "too many functions: {} > limit of {}",
-                fn_count,
-                limits::MAX_FUNCTIONS,
+                fn_count, max_functions,
             )));
         }
 
@@ -96,7 +96,7 @@ impl Compiler {
         // First pass: collect struct/object definitions.
         for item in &items {
             if let AstItem::Struct(ast_struct) = item {
-                validator::validate_struct_def(ast_struct)?;
+                validator::validate_struct_def(ast_struct, &config)?;
                 module.structs.push(StructDef {
                     name: ast_struct.name.clone(),
                     fields: ast_struct.fields.clone(),
@@ -109,7 +109,7 @@ impl Compiler {
         let structs_snapshot = module.structs.clone();
         for item in items {
             if let AstItem::Fn(ast_fn) = item {
-                let func = Codegen::compile_function(&structs_snapshot, ast_fn)?;
+                let func = Codegen::compile_function(&structs_snapshot, ast_fn, &config)?;
                 module.functions.push(func);
             }
         }

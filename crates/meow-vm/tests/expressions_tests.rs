@@ -1,7 +1,7 @@
 mod utils;
 
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::types::Value;
+use meow_vm_types::{config::Config, types::Value};
 use utils::{compile, run};
 
 //
@@ -62,6 +62,7 @@ fn division_by_zero() {
         compile("fn div(a: u64, b: u64): u64 { return a / b; }"),
         vec![],
         GasSchedule::default(),
+        Config::default(),
     );
     let mut gas = GasMeter::unlimited();
     let err = vm

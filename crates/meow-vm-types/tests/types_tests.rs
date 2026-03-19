@@ -100,10 +100,7 @@ fn struct_def_name() {
 fn struct_def_fields() {
     let def = StructDef {
         name: "Baz".to_string(),
-        fields: vec![
-            ("x".to_string(), Type::U64),
-            ("y".to_string(), Type::U64),
-        ],
+        fields: vec![("x".to_string(), Type::U64), ("y".to_string(), Type::U64)],
         is_object: false,
     };
     assert_eq!(def.fields.len(), 2);
