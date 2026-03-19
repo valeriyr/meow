@@ -7,7 +7,7 @@ use std::{
 };
 
 use meow_vm_compiler::Compiler;
-use meow_vm_types::config::Config;
+use meow_vm_types::config::CompilerConfig;
 
 use crate::{Module, builder::error::BuilderError};
 
@@ -57,5 +57,9 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
 }
 
 fn compile(module_name: &str, source: &str) -> Result<Module> {
-    Ok(Compiler::compile(module_name, source, Config::default())?)
+    Ok(Compiler::compile(
+        module_name,
+        source,
+        CompilerConfig::default(),
+    )?)
 }

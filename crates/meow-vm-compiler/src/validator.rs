@@ -1,5 +1,5 @@
 use meow_vm_types::{
-    config::{self, Config},
+    config::{self, CompilerConfig},
     identifier,
     types::Type,
 };
@@ -20,7 +20,7 @@ pub fn validate_identifier(name: &str, context: &str) -> Result<()> {
     }
 }
 
-pub fn validate_struct_def(def: &AstStruct, config: &Config) -> Result<()> {
+pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<()> {
     let kind = if def.is_object { "object" } else { "struct" };
 
     validate_identifier(&def.name, &format!("{kind} name"))?;

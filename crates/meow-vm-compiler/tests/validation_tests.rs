@@ -1,6 +1,6 @@
 use meow_vm_compiler::{Compiler, Result, error::CompilerError};
 use meow_vm_types::{
-    config::{self, Config},
+    config::{self, CompilerConfig},
     module::Module,
 };
 
@@ -128,7 +128,7 @@ fn invalid_param_name_rejected() {
 
 #[test]
 fn too_many_functions_rejected() {
-    let config = Config::default();
+    let config = CompilerConfig::default();
     let src = (0..=config.max_functions())
         .map(|i| format!("fn f{i}() {{}}"))
         .collect::<Vec<_>>()
@@ -141,7 +141,7 @@ fn too_many_functions_rejected() {
 
 #[test]
 fn too_many_structs_rejected() {
-    let config = Config::default();
+    let config = CompilerConfig::default();
     let src = (0..=config.max_structs())
         .map(|i| format!("struct S{i} {{ x: u64 }}"))
         .collect::<Vec<_>>()
@@ -154,7 +154,7 @@ fn too_many_structs_rejected() {
 
 #[test]
 fn too_many_params_rejected() {
-    let config = Config::default();
+    let config = CompilerConfig::default();
     let params = (0..=config.max_params())
         .map(|i| format!("p{i}: u64"))
         .collect::<Vec<_>>()
@@ -168,7 +168,7 @@ fn too_many_params_rejected() {
 
 #[test]
 fn too_many_fields_rejected() {
-    let config = Config::default();
+    let config = CompilerConfig::default();
     let fields = (0..=config.max_fields())
         .map(|i| format!("f{i}: u64"))
         .collect::<Vec<_>>()
@@ -200,5 +200,5 @@ fn struct_field_cannot_be_an_object_type() {
 //
 
 fn compile(module_name: &str, source: &str) -> Result<Module> {
-    Compiler::compile(module_name, source, Config::default())
+    Compiler::compile(module_name, source, CompilerConfig::default())
 }

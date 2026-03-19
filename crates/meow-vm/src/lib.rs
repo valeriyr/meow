@@ -15,7 +15,7 @@
 //! use meow_vm::Vm;
 //! use meow_vm::gas_meter::GasMeter;
 //! use meow_vm::gas_schedule::GasSchedule;
-//! use meow_vm_types::{config::Config, types::Value};
+//! use meow_vm_types::{config::{CompilerConfig, VmConfig}, types::Value};
 //!
 //! let source = r#"
 //!     fn add(a: u64, b: u64): u64 {
@@ -23,9 +23,8 @@
 //!     }
 //! "#;
 //!
-//! let config = Config::default();
-//! let module = Compiler::compile("math", source, config.clone()).unwrap();
-//! let vm = Vm::new(module, vec![], GasSchedule::default(), config);
+//! let module = Compiler::compile("math", source, CompilerConfig::default()).unwrap();
+//! let vm = Vm::new(module, vec![], GasSchedule::default(), VmConfig::default());
 //! let mut gas = GasMeter::new(1_000);
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
@@ -39,7 +38,7 @@ pub mod gas_schedule;
 
 use std::collections::HashMap;
 
-use meow_vm_types::{config::Config, types::Value};
+use meow_vm_types::{config::VmConfig, types::Value};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
 
@@ -147,7 +146,7 @@ pub struct Vm {
     module: Module,
     natives: HashMap<String, NativeFnEntry>,
     gas_schedule: GasSchedule,
-    config: Config,
+    config: VmConfig,
 }
 
 impl Vm {
@@ -156,7 +155,7 @@ impl Vm {
         module: Module,
         natives: Vec<NativeFnEntry>,
         gas_schedule: GasSchedule,
-        config: Config,
+        config: VmConfig,
     ) -> Self {
         let mut native_map = HashMap::new();
         for entry in natives {

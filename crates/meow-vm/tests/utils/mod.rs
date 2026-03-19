@@ -2,7 +2,11 @@
 
 use meow_vm::{NativeFnEntry, NativeResult, Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_compiler::Compiler;
-use meow_vm_types::{config::Config, module::Module, types::Value};
+use meow_vm_types::{
+    config::{CompilerConfig, VmConfig},
+    module::Module,
+    types::Value,
+};
 
 /// Compile a source snippet, run `fn_name` with `args`, and return the return value.
 /// Panics if compilation or execution fails.
@@ -16,12 +20,12 @@ pub fn run(source: &str, fn_name: &str, args: Vec<Value>) -> Option<Value> {
 
 /// Compile a source snippet. Panics if compilation fails.
 pub fn compile(source: &str) -> Module {
-    Compiler::compile("test", source, Config::default()).expect("compilation failed")
+    Compiler::compile("test", source, CompilerConfig::default()).expect("compilation failed")
 }
 
 /// Builds a `Vm` with a module.
 pub fn vm(module: Module) -> Vm {
-    Vm::new(module, vec![], GasSchedule::default(), Config::default())
+    Vm::new(module, vec![], GasSchedule::default(), VmConfig::default())
 }
 
 /// Build a `Vm` from source with the given native functions.
@@ -30,7 +34,7 @@ pub fn vm_with_natives(source: &str, natives: Vec<NativeFnEntry>) -> Vm {
         compile(source),
         natives,
         GasSchedule::default(),
-        Config::default(),
+        VmConfig::default(),
     )
 }
 

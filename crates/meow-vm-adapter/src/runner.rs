@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use meow_types::{address::Address, digest::Digest};
 use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::config::Config;
+use meow_vm_types::config::VmConfig;
 
 use crate::{Module, Value, context::Context, natives};
 
@@ -39,7 +39,7 @@ pub fn run_with_gas_meter(
 ) -> Result<RunResult> {
     let ctx = Rc::new(RefCell::new(Context::new(Address::ZERO, Digest::ZERO)));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default(), Config::default());
+    let vm = Vm::new(module, natives, GasSchedule::default(), VmConfig::default());
 
     let call_result = vm.call(fn_name, args, gas)?;
 

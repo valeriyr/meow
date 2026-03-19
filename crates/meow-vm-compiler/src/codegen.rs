@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use meow_vm_types::{
     bytecode::Instruction,
-    config::Config,
+    config::CompilerConfig,
     module::Function,
     types::{StructDef, Type},
 };
@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub struct Codegen<'m> {
-    config: &'m Config,
+    config: &'m CompilerConfig,
     structs: &'m [StructDef],
     locals: HashMap<String, u8>,
     next_slot: u8,
@@ -26,7 +26,7 @@ impl<'m> Codegen<'m> {
     pub fn compile_function(
         structs: &'m [StructDef],
         ast_fn: AstFunction,
-        config: &'m Config,
+        config: &'m CompilerConfig,
     ) -> Result<Function> {
         validator::validate_identifier(&ast_fn.name, "function name")?;
 
@@ -101,7 +101,7 @@ impl<'m> Codegen<'m> {
         })
     }
 
-    fn new(structs: &'m [StructDef], config: &'m Config) -> Self {
+    fn new(structs: &'m [StructDef], config: &'m CompilerConfig) -> Self {
         Self {
             config,
             structs,

@@ -1,9 +1,17 @@
+//
+// ─── Constants ───
+//
+
 /// Maximum character length of any identifier (module, function, struct, field, or variable name).
 pub const MAX_IDENTIFIER_LEN: usize = 128;
 
-/// The compiler and VM configuration.
+//
+// ─── Compiler configuration ───
+//
+
+/// The compiler configuration.
 #[derive(Debug, Clone)]
-pub struct Config {
+pub struct CompilerConfig {
     /// Maximum number of struct/object definitions in a module.
     max_structs: usize,
     /// Maximum number of functions in a module.
@@ -16,11 +24,9 @@ pub struct Config {
     max_locals: usize,
     /// Maximum number of bytecode instructions in a single function.
     max_fun_code_size: usize,
-    /// Maximum VM call stack depth.
-    max_call_depth: usize,
 }
 
-impl Config {
+impl CompilerConfig {
     /// Returns the maximum number of struct/object definitions allowed in a module.
     pub fn max_structs(&self) -> usize {
         self.max_structs
@@ -50,14 +56,9 @@ impl Config {
     pub fn max_fun_code_size(&self) -> usize {
         self.max_fun_code_size
     }
-
-    /// Returns the maximum VM call stack depth.
-    pub fn max_call_depth(&self) -> usize {
-        self.max_call_depth
-    }
 }
 
-impl Default for Config {
+impl Default for CompilerConfig {
     fn default() -> Self {
         Self {
             max_structs: 128,
@@ -66,6 +67,31 @@ impl Default for Config {
             max_params: 16,
             max_locals: 255,
             max_fun_code_size: 65_536,
+        }
+    }
+}
+
+//
+// ─── VM configuration ───
+//
+
+/// The VM configuration.
+#[derive(Debug, Clone)]
+pub struct VmConfig {
+    /// Maximum VM call stack depth.
+    max_call_depth: usize,
+}
+
+impl VmConfig {
+    /// Returns the maximum VM call stack depth.
+    pub fn max_call_depth(&self) -> usize {
+        self.max_call_depth
+    }
+}
+
+impl Default for VmConfig {
+    fn default() -> Self {
+        Self {
             max_call_depth: 256,
         }
     }
