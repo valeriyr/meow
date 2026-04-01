@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use meow_types::identifier::{Identifier, error::IdentifierError};
 
 //
@@ -13,6 +15,12 @@ fn valid_identifier() {
 #[test]
 fn valid_identifier_try_from() {
     let id = Identifier::try_from("hello").unwrap();
+    assert_eq!(id.as_ref(), "hello");
+}
+
+#[test]
+fn valid_identifier_from_str() {
+    let id = Identifier::from_str("hello").unwrap();
     assert_eq!(id.as_ref(), "hello");
 }
 
@@ -84,6 +92,14 @@ fn invalid_identifier_with_non_ascii() {
 fn invalid_identifier_try_from_non_ascii() {
     assert!(matches!(
         Identifier::try_from("🦀").unwrap_err(),
+        IdentifierError::InvalidIdentifier(s) if s == "🦀"
+    ));
+}
+
+#[test]
+fn invalid_identifier_from_str_non_ascii() {
+    assert!(matches!(
+        Identifier::from_str("🦀").unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == "🦀"
     ));
 }

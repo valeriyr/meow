@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use meow_types::{address::Address, digest::Digest};
+use meow_types::{address::Address, digest::Digest, identifier::Identifier};
 use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_types::config::VmConfig;
 
@@ -22,10 +22,12 @@ pub struct RunResult {
     pub transfers: Vec<(Value, [u8; 32])>,
     /// Objects destroyed during the call.
     pub destroyed: Vec<Value>,
+    /// Gas spent during the call.
+    pub gas_spent: u64,
 }
 
 /// Run a compiled module function with a fixed context, real natives, and unlimited gas.
-pub fn run(module: Module, fn_name: &str, args: Vec<Value>) -> Result<RunResult> {
+pub fn run(module: Module, fn_name: &Identifier, args: Vec<Value>) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
     run_with_gas_meter(module, fn_name, args, &mut gas)
 }
@@ -33,7 +35,7 @@ pub fn run(module: Module, fn_name: &str, args: Vec<Value>) -> Result<RunResult>
 /// Run a compiled module function with a fixed context, real natives, and the given gas meter.
 pub fn run_with_gas_meter(
     module: Module,
-    fn_name: &str,
+    fn_name: &Identifier,
     args: Vec<Value>,
     gas: &mut GasMeter,
 ) -> Result<RunResult> {
@@ -41,7 +43,7 @@ pub fn run_with_gas_meter(
     let natives = natives::build_natives(ctx.clone());
     let vm = Vm::new(module, natives, GasSchedule::default(), VmConfig::default());
 
-    let call_result = vm.call(fn_name, args, gas)?;
+    let call_result = vm.call(fn_name.as_ref(), args, gas)?;
 
     let ctx = ctx.borrow();
     Ok(RunResult {
@@ -54,5 +56,6 @@ pub fn run_with_gas_meter(
             .map(|(v, o)| (v.clone(), o.into()))
             .collect(),
         destroyed: ctx.destroyed().to_vec(),
+        gas_spent: gas.spent(),
     })
 }

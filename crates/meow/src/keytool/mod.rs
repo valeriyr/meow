@@ -32,7 +32,6 @@ pub enum KeyToolCommand {
     },
 }
 
-/// Runs the command.
 impl KeyToolCommand {
     /// Runs the command.
     pub fn run(self, keystore: &mut Keystore) -> Result<KeyToolCommandOutput, anyhow::Error> {

@@ -65,10 +65,12 @@ fn create_meow_framework_module() -> Result<Object> {
 
 /// Mints MEOW coins according to the provided minting instructions, using the given MEOW framework module.
 fn mint_meow_coins(meow_module: Object, allocations: &[(Address, u64)]) -> Result<Vec<Object>> {
+    let function =
+        Identifier::new(MEOW_COIN_MINT_FUNCTION_NAME).expect("mint function name is always valid");
+
     allocations
         .iter()
         .map(|(address, amount)| -> Result<Object> {
-            let function = Identifier::new(MEOW_COIN_MINT_FUNCTION_NAME)?;
             let inputs = vec![
                 Input::Raw(bcs::to_bytes(amount)?),
                 Input::Raw(bcs::to_bytes(address)?),
@@ -77,7 +79,11 @@ fn mint_meow_coins(meow_module: Object, allocations: &[(Address, u64)]) -> Resul
             let transaction = Transaction::new(
                 MEOW_SYSTEM_ADDRESS,
                 Address::ZERO,
-                TransactionType::MeowCall(Call::new(MEOW_COIN_MODULE_ADDRESS, function, inputs)),
+                TransactionType::MeowCall(Call::new(
+                    MEOW_COIN_MODULE_ADDRESS,
+                    function.clone(),
+                    inputs,
+                )),
             );
 
             let execution_result =
@@ -88,7 +94,7 @@ fn mint_meow_coins(meow_module: Object, allocations: &[(Address, u64)]) -> Resul
                     let created_objects_amount = execution_result.created_objects().len();
                     if created_objects_amount != 1 {
                         return Err(GenesisError::MeowCoinMintFailed(format!(
-                            "expected 1 created objects, but found {created_objects_amount}",
+                            "expected 1 created object, but found {created_objects_amount}",
                         )));
                     }
 

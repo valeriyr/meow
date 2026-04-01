@@ -244,7 +244,7 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
-        ExecutorError::ObjectVersionShouldBeLessThanMax
+        ExecutorError::ObjectAtMaxVersion(addr) if addr == Address::new(GAS_ADDR)
     ));
 }
 
@@ -588,14 +588,15 @@ fn make_module_object(address: Address, content: Vec<u8>) -> Object {
 }
 
 fn make_module(name: &str, src: &str) -> Vec<u8> {
-    let module = builder::build(name, src).expect("must compile");
+    let module_name = Identifier::new(name).expect("module name must be a valid identifier");
+    let module = builder::build(&module_name, src).expect("must compile");
     bcs::to_bytes(&module).expect("module must serialize")
 }
 
 fn make_meow_call_transaction(fn_name: &str, arguments: Vec<Input>) -> Transaction {
     let call = Call::new(
         MEOW_COIN_MODULE_ADDRESS,
-        Identifier::new(fn_name).unwrap(),
+        Identifier::new(fn_name).expect("function name must be a valid identifier"),
         arguments,
     );
     Transaction::new(

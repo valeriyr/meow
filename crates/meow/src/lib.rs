@@ -3,7 +3,7 @@ pub mod client;
 pub mod commands;
 pub mod genesis;
 pub mod keytool;
-pub mod object_brief_info;
+pub mod object_output;
 pub mod output_encoder;
 pub mod output_formatter;
 pub mod smart_contract;

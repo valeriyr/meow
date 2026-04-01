@@ -116,7 +116,7 @@ pub fn resolve_gas_coin_object<'a>(
         return Err(ExecutorError::InvalidGasCoinOwner);
     }
     if gas_coin.version() == &ObjectVersion::MAX {
-        return Err(ExecutorError::ObjectVersionShouldBeLessThanMax);
+        return Err(ExecutorError::ObjectAtMaxVersion(*gas_coin_address));
     }
 
     Ok(gas_coin)

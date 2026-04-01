@@ -29,7 +29,7 @@
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
 //! assert_eq!(result.return_value, Some(Value::U64(7)));
-//! println!("gas consumed: {}", gas.consumed());
+//! println!("gas spent: {}", gas.spent());
 //! ```
 
 pub mod error;

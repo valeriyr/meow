@@ -1,3 +1,4 @@
+use meow_types::address::Address;
 use meow_vm_adapter::{Module, runner::RunResult};
 use serde::Serialize;
 
@@ -25,6 +26,8 @@ pub struct RunResultOutput {
     pub transfers: Vec<(String, String)>,
     /// Objects destroyed during the call.
     pub destroyed: Vec<String>,
+    /// Gas spent during the call.
+    pub gas_spent: u64,
 }
 
 /// The smart contract command outputs.
@@ -60,7 +63,7 @@ impl From<RunResult> for RunResultOutput {
         let transfers = result
             .transfers
             .into_iter()
-            .map(|(obj, new_owner)| (obj.to_string(), format!("0x{}", hex::encode(new_owner))))
+            .map(|(obj, new_owner)| (obj.to_string(), Address::from(new_owner).to_string()))
             .collect();
         let destroyed = result
             .destroyed
@@ -73,6 +76,7 @@ impl From<RunResult> for RunResultOutput {
             final_args,
             transfers,
             destroyed,
+            gas_spent: result.gas_spent,
         }
     }
 }

@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use meow_node_client::NodeClient;
+use url::Url;
 
 use crate::{
     client::ClientCommand, genesis::GenesisCommand, keytool::KeyToolCommand,
@@ -14,7 +15,7 @@ use meow_types::{config::meow_keystore_path, keystore::Keystore};
 /// The default output formatter for commands that support formatting.
 const DEFAULT_OUTPUT_FORMATTER: OutputFormatter = OutputFormatter::Table;
 /// The default node RPC URL for client commands.
-const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8080";
+const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8600";
 
 /// The main command line commands.
 #[derive(Parser)]
@@ -40,7 +41,7 @@ pub enum Command {
     SmartContract {
         /// The MEOW Node RPC URL.
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
-        node: String,
+        node: Url,
         /// The command output is formatted using this formatter before printing.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
@@ -53,7 +54,7 @@ pub enum Command {
     Transaction {
         /// The MEOW Node RPC URL.
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
-        node: String,
+        node: Url,
         /// The path to the keystore file.
         #[arg(long, global = true)]
         keystore_path: Option<PathBuf>,
@@ -82,7 +83,7 @@ pub enum Command {
     Client {
         /// The MEOW Node RPC URL.
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
-        node: String,
+        node: Url,
         /// The command output is formatted using this formatter before printing.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,

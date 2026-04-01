@@ -1,5 +1,3 @@
-use std::fmt;
-
 use base64::{Engine, engine::general_purpose};
 use bip32::{ChildNumber, DerivationPath};
 use rand::{CryptoRng, RngCore};
@@ -147,8 +145,8 @@ impl From<&Ed25519PrivateKey> for Ed25519PublicKey {
 // ─── Implementation of [Ed25519PrivateKey] ───
 //
 
-impl fmt::Debug for Ed25519PrivateKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for Ed25519PrivateKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<elided secret for Ed25519PrivateKey>")
     }
 }
@@ -172,8 +170,8 @@ impl Ed25519Signature {
     }
 }
 
-impl fmt::Display for Ed25519Signature {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Ed25519Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut bytes = Vec::new();
 
         bytes.extend_from_slice(self.0.to_bytes().as_ref());

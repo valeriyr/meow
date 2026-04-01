@@ -7,6 +7,6 @@ pub enum ExecutorError {
     InvalidGasCoin,
     #[error("gas coin object is not owned by the transaction sender")]
     InvalidGasCoinOwner,
-    #[error("object version should be less than the maximum version")]
-    ObjectVersionShouldBeLessThanMax,
+    #[error("object {0} is at the maximum version")]
+    ObjectAtMaxVersion(meow_types::address::Address),
 }

@@ -40,7 +40,6 @@ impl CallArg {
     }
 
     /// Convert a [`CallArg`] to a VM [`Value`] for the offline smart-contract runner.
-    /// `Object` references are treated as raw addresses in this context (no node available).
     pub fn into_value(self, client: &NodeClient) -> anyhow::Result<Value> {
         Ok(match self {
             CallArg::Bool(b) => Value::Bool(b),

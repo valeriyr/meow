@@ -1,8 +1,8 @@
 /// Errors that can occur during VM execution.
 #[derive(Debug, thiserror::Error)]
 pub enum VmError {
-    #[error("out of gas: consumed {consumed}, limit {limit}")]
-    OutOfGas { consumed: u64, limit: u64 },
+    #[error("out of gas: spent {spent}, limit {limit}")]
+    OutOfGas { spent: u64, limit: u64 },
 
     #[error("stack underflow")]
     StackUnderflow,

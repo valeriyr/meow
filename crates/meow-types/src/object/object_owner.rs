@@ -30,3 +30,12 @@ impl ObjectOwner {
         matches!(self, ObjectOwner::Immutable)
     }
 }
+
+impl std::fmt::Display for ObjectOwner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ObjectOwner::Address(address) => write!(f, "{address}"),
+            ObjectOwner::Immutable => write!(f, "immutable"),
+        }
+    }
+}

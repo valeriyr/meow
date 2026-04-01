@@ -1,6 +1,6 @@
 pub mod error;
 
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
 
 use blake2::{Blake2b, digest::consts::U32};
 use error::DigestError;
@@ -37,14 +37,14 @@ impl Digest {
     }
 }
 
-impl fmt::Display for Digest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Digest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&bs58::encode(self.0).into_string())
     }
 }
 
-impl fmt::Debug for Digest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for Digest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(&bs58::encode(self.0).into_string())
     }
 }

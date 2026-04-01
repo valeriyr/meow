@@ -12,7 +12,7 @@ pub enum Command {
     /// Run the node.
     Run {
         /// Address to bind the RPC server on.
-        #[arg(long, default_value = "127.0.0.1:8080")]
+        #[arg(long, default_value = "127.0.0.1:8600")]
         rpc: SocketAddr,
 
         /// Address for the gossip network to listen on.

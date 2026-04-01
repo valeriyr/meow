@@ -21,10 +21,7 @@ impl OutputEncoder {
         output: &T,
     ) -> Result<String, anyhow::Error> {
         Ok(match self {
-            OutputEncoder::Base64 => {
-                let base64 = general_purpose::STANDARD.encode(&bcs::to_bytes(output)?);
-                base64.to_string()
-            }
+            OutputEncoder::Base64 => general_purpose::STANDARD.encode(bcs::to_bytes(output)?),
             OutputEncoder::Debug => {
                 format!("{output:?}")
             }

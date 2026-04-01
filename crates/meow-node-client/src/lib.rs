@@ -1,5 +1,7 @@
 pub mod error;
 
+use url::Url;
+
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -9,32 +11,28 @@ use meow_types::{
 
 use crate::error::NodeClientError;
 
-/// The result type related to addresses.
+/// The result type for the node client.
 pub type Result<T> = std::result::Result<T, NodeClientError>;
 
 /// Blocking HTTP client for the meow-node RPC API.
 pub struct NodeClient {
-    base_url: String,
+    base_url: Url,
     inner: reqwest::blocking::Client,
 }
 
 impl NodeClient {
-    pub fn new(base_url: impl Into<String>) -> Self {
+    pub fn new(base_url: Url) -> Self {
         Self {
-            base_url: base_url.into(),
+            base_url: normalize_url(base_url),
             inner: reqwest::blocking::Client::new(),
         }
     }
 
     /// POST /tx — submit a signed transaction.
-    ///
-    /// Returns `Ok(())` on 202 Accepted, or a descriptive error on failure.
     pub fn submit_transaction(&self, transaction: &SignedTransaction) -> Result<()> {
-        let response = self
-            .inner
-            .post(format!("{}/tx", self.base_url))
-            .json(transaction)
-            .send()?;
+        let url = self.base_url.join("tx")?;
+
+        let response = self.inner.post(url).json(transaction).send()?;
 
         if response.status().is_success() {
             return Ok(());
@@ -43,15 +41,14 @@ impl NodeClient {
         let status = response.status();
         let body = response.text().unwrap_or_default();
 
-        Err(NodeClientError::NodeRejectedTransaction { status, body })
+        Err(NodeClientError::NodeError { status, body })
     }
 
     /// GET /object/:addr — fetch a live object by address.
     pub fn get_object(&self, addr: &Address) -> Result<Option<Object>> {
-        let response = self
-            .inner
-            .get(format!("{}/object/{addr}", self.base_url))
-            .send()?;
+        let url = self.base_url.join(&format!("object/{addr}"))?;
+
+        let response = self.inner.get(url).send()?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
@@ -69,10 +66,9 @@ impl NodeClient {
 
     /// GET /tx/:digest — fetch the execution result for a committed transaction.
     pub fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
-        let response = self
-            .inner
-            .get(format!("{}/tx/{digest}", self.base_url))
-            .send()?;
+        let url = self.base_url.join(&format!("tx/{digest}"))?;
+
+        let response = self.inner.get(url).send()?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
@@ -87,4 +83,13 @@ impl NodeClient {
 
         Err(NodeClientError::NodeError { status, body })
     }
+}
+
+/// Ensure the base URL always ends with a slash, so that path joining works correctly.
+fn normalize_url(mut url: Url) -> Url {
+    if !url.path().ends_with('/') {
+        let path = format!("{}/", url.path());
+        url.set_path(&path);
+    }
+    url
 }

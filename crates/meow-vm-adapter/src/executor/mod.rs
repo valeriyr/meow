@@ -45,7 +45,7 @@ pub type Result<T> = std::result::Result<T, ExecutorError>;
 /// even when execution fails.
 pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> Result<ExecutionResult> {
     let sender = transaction.sender();
-    let tx_digest = &transaction.digest();
+    let tx_digest = transaction.digest();
 
     let gas_coin = resolvers::resolve_gas_coin_object(transaction.gas_coin(), sender, &inputs)?;
 
@@ -57,21 +57,21 @@ pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> Result<Executi
     let result = match gas.charge(BASE_TRANSACTION_GAS_COST) {
         Ok(_) => match transaction.type_() {
             TransactionType::MeowCall(call) => {
-                execute_meow_call(sender, tx_digest, call, &inputs, &mut gas)
+                execute_meow_call(sender, &tx_digest, call, &inputs, &mut gas)
             }
             TransactionType::MeowModulePublish(module) => {
-                execute_meow_module_publish(tx_digest, module, &mut gas)
+                execute_meow_module_publish(&tx_digest, module, &mut gas)
             }
         },
-        Err(e) => ExecutionResult::failure(e.to_string(), *tx_digest),
+        Err(e) => ExecutionResult::failure(e.to_string(), tx_digest),
     };
 
     // Gas is spent regardless of whether execution succeeded or failed.
     Ok(gas::apply_gas_spending(
         result,
         gas_coin,
-        gas.consumed(),
-        tx_digest,
+        gas.spent(),
+        &tx_digest,
     ))
 }
 
@@ -84,16 +84,16 @@ pub fn execute_genesis_transaction(
     inputs: Vec<Object>,
 ) -> Result<ExecutionResult> {
     let sender = transaction.sender();
-    let tx_digest = &transaction.digest();
+    let tx_digest = transaction.digest();
 
     let mut gas_meter = GasMeter::unlimited();
 
     Ok(match transaction.type_() {
         TransactionType::MeowCall(call) => {
-            execute_meow_call(sender, tx_digest, call, &inputs, &mut gas_meter)
+            execute_meow_call(sender, &tx_digest, call, &inputs, &mut gas_meter)
         }
         TransactionType::MeowModulePublish(module) => {
-            execute_meow_module_publish(tx_digest, module, &mut gas_meter)
+            execute_meow_module_publish(&tx_digest, module, &mut gas_meter)
         }
     })
 }

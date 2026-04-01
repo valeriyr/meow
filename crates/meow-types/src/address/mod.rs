@@ -1,6 +1,6 @@
 pub mod error;
 
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
 
 use blake2::{Blake2b, digest::consts::U32};
 use error::AddressError;
@@ -48,14 +48,14 @@ impl Address {
     }
 }
 
-impl fmt::Display for Address {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", prefix_hex::encode(self.0))
     }
 }
 
-impl fmt::Debug for Address {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Debug for Address {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", prefix_hex::encode(self.0))
     }
 }

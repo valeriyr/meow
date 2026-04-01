@@ -5,9 +5,7 @@ use clap::Parser;
 use meow_node_client::NodeClient;
 use meow_types::{address::Address, digest::Digest, transaction::SignedTransaction};
 
-use crate::client::output::{
-    ClientCommandOutput, ObjectOutput, SubmitTransactionOutput, TransactionResultOutput,
-};
+use crate::client::output::ClientCommandOutput;
 
 /// Commands for interacting with a running meow node.
 #[derive(Parser)]
@@ -34,20 +32,14 @@ impl ClientCommand {
     pub fn run(self, client: &NodeClient) -> anyhow::Result<ClientCommandOutput> {
         match self {
             ClientCommand::GetObject { address } => {
-                let output = match client.get_object(&address)? {
-                    Some(obj) => ObjectOutput::Found(obj.into()),
-                    None => ObjectOutput::NotFound { address },
-                };
+                let object = client.get_object(&address)?;
 
-                Ok(ClientCommandOutput::GetObject(output))
+                Ok(ClientCommandOutput::get_object(object))
             }
             ClientCommand::GetTransactionResult { digest } => {
-                let output = match client.get_transaction_result(&digest)? {
-                    Some(result) => TransactionResultOutput::Found(result.into()),
-                    None => TransactionResultOutput::NotFound { digest },
-                };
+                let result = client.get_transaction_result(&digest)?;
 
-                Ok(ClientCommandOutput::GetTransactionResult(output))
+                Ok(ClientCommandOutput::get_transaction_result(result))
             }
             ClientCommand::SubmitTransaction { transaction } => {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
@@ -59,9 +51,7 @@ impl ClientCommand {
 
                 client.submit_transaction(&signed_transaction)?;
 
-                Ok(ClientCommandOutput::SubmitTransaction(
-                    SubmitTransactionOutput { digest },
-                ))
+                Ok(ClientCommandOutput::submit_transaction(digest))
             }
         }
     }

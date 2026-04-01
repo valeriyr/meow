@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 use super::Result;
@@ -19,8 +17,8 @@ impl Signature {
     }
 }
 
-impl fmt::Display for Signature {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for Signature {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let string = match self {
             Signature::Ed25519(sig) => sig.to_string(),
         };

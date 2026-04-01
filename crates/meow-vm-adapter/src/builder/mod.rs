@@ -6,6 +6,7 @@ use std::{
     path::Path,
 };
 
+use meow_types::identifier::Identifier;
 use meow_vm_compiler::Compiler;
 use meow_vm_types::config::CompilerConfig;
 
@@ -18,7 +19,7 @@ pub type Result<T> = std::result::Result<T, BuilderError>;
 pub const MAX_SOURCE_SIZE: usize = 64 * 1024; // 64 KiB
 
 /// Build a module from source code.
-pub fn build(module_name: &str, source: &str) -> Result<Module> {
+pub fn build(module_name: &Identifier, source: &str) -> Result<Module> {
     if source.len() > MAX_SOURCE_SIZE {
         return Err(BuilderError::SourceTooLarge {
             size: source.len(),
@@ -36,7 +37,8 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
     let module_name = file_path
         .file_stem()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| BuilderError::InvalidFileName(file_path.display().to_string()))?;
+        .ok_or_else(|| BuilderError::MissingFileName(file_path.display().to_string()))?;
+    let module_name = Identifier::new(module_name)?;
 
     let file = File::open(file_path)?;
     let file_size = file.metadata()?.len();
@@ -53,12 +55,12 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
     let mut source = String::new();
     reader.read_to_string(&mut source)?;
 
-    compile(module_name, &source)
+    compile(&module_name, &source)
 }
 
-fn compile(module_name: &str, source: &str) -> Result<Module> {
+fn compile(module_name: &Identifier, source: &str) -> Result<Module> {
     Ok(Compiler::compile(
-        module_name,
+        module_name.as_ref(),
         source,
         CompilerConfig::default(),
     )?)

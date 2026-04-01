@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 /// The version of an object.
@@ -26,8 +24,8 @@ impl ObjectVersion {
     }
 }
 
-impl fmt::Display for ObjectVersion {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::fmt::Display for ObjectVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
 }

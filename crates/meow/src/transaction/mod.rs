@@ -1,6 +1,8 @@
 pub mod output;
 pub mod signer;
 
+use std::path::PathBuf;
+
 use base64::{Engine, engine::general_purpose};
 use clap::Parser;
 use meow_node_client::NodeClient;
@@ -22,7 +24,7 @@ pub enum TransactionCommand {
     /// Create a transaction to publish a compiled smart-contract module to the node.
     Publish {
         /// Path to the `.meow` source file.
-        path: String,
+        path: PathBuf,
         /// Sender address.
         #[arg(long)]
         sender: Address,
@@ -37,7 +39,7 @@ pub enum TransactionCommand {
         module: Address,
         /// Name of the function to call.
         #[arg(long)]
-        function: String,
+        function: Identifier,
         /// Sender address.
         #[arg(long)]
         sender: Address,
@@ -94,7 +96,6 @@ impl TransactionCommand {
                 gas_coin,
                 args,
             } => {
-                let function = Identifier::new(function)?;
                 let inputs = args
                     .into_iter()
                     .map(|arg| arg.into_input(client))

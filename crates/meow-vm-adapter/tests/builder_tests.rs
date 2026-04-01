@@ -1,5 +1,8 @@
-use meow_types::system_framework::meow_coin::MEOW_COIN_MODULE_PATH;
-use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
+use meow_types::{identifier::Identifier, system_framework::meow_coin::MEOW_COIN_MODULE_PATH};
+use meow_vm_adapter::{
+    Module,
+    builder::{self, MAX_SOURCE_SIZE, error::BuilderError},
+};
 
 #[test]
 fn build_module_successful() {
@@ -10,7 +13,7 @@ fn build_module_successful() {
         fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
     "#;
 
-    let module = builder::build("test", src).unwrap();
+    let module = build_module("test", src).unwrap();
 
     assert_eq!(module.name, "test");
 
@@ -40,7 +43,7 @@ fn build_module_from_file_successful() {
 #[test]
 fn build_invalid_source_returns_error() {
     let src = "this is not valid meow";
-    let err = builder::build("test", src).unwrap_err();
+    let err = build_module("test", src).unwrap_err();
     assert!(matches!(&err, BuilderError::CompileError(e) if e.to_string().contains("found 't'")));
 }
 
@@ -53,12 +56,19 @@ fn build_from_nonexistent_file_returns_io_error() {
 }
 
 #[test]
-fn build_from_file_without_extension_returns_invalid_file_name() {
+fn build_from_file_without_extension_returns_missing_file_name() {
     // A path with no file stem (e.g. "/") cannot produce a module name.
     assert!(matches!(
         builder::build_from_file("/").unwrap_err(),
-        BuilderError::InvalidFileName(_)
+        BuilderError::MissingFileName(p) if p == "/"
     ));
+}
+
+#[test]
+fn build_from_file_with_invalid_name() {
+    // A file name that is not a valid identifier cannot produce a module name.
+    let err = builder::build_from_file("invalid-name.meow").unwrap_err();
+    assert!(matches!(err, BuilderError::IdentifierError(_)));
 }
 
 #[test]
@@ -69,9 +79,18 @@ fn build_source_size_limit() {
 
     assert!(
         matches!(
-            builder::build("test", &oversized).unwrap_err(),
+            build_module("test", &oversized).unwrap_err(),
             BuilderError::SourceTooLarge { .. }
         ),
         "source exceeding MAX_SOURCE_SIZE must return SourceTooLarge"
     );
+}
+
+//
+// ─── Utility functions ───
+//
+
+fn build_module(name: &str, src: &str) -> builder::Result<Module> {
+    let module_name = Identifier::new(name).expect("module name must be a valid identifier");
+    builder::build(&module_name, src)
 }

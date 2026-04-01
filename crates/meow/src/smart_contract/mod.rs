@@ -1,7 +1,10 @@
 pub mod output;
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use meow_node_client::NodeClient;
+use meow_types::identifier::Identifier;
 use meow_vm_adapter::{builder, runner};
 
 use crate::{
@@ -15,7 +18,7 @@ pub enum SmartContractCommand {
     /// Build a smart contract module.
     Build {
         /// The path to the smart contract module.
-        path: String,
+        path: PathBuf,
         /// The module is encoded using this encoder before printing.
         #[arg(long, default_value_t = OutputEncoder::Base64)]
         encoder: OutputEncoder,
@@ -23,9 +26,9 @@ pub enum SmartContractCommand {
     /// Run a smart contract function.
     Run {
         /// The path to the smart contract module.
-        path: String,
+        path: PathBuf,
         /// The function name.
-        function: String,
+        function: Identifier,
         /// The arguments to pass to the function.
         ///
         /// Parsing rules (applied in order):

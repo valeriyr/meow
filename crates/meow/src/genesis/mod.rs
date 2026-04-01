@@ -1,21 +1,23 @@
 pub mod output;
 
+use std::path::PathBuf;
+
 use clap::Parser;
 use meow_genesis::Genesis;
 use meow_types::address::Address;
 
 use crate::genesis::output::GenesisOutput;
 
-/// Commands for interacting with a running meow node.
+/// Commands for building genesis state.
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum GenesisCommand {
     /// Build a genesis state.
     Build {
         /// The file containing the initial allocations of MEOW coins in the genesis state.
-        allocations: String,
+        allocations: PathBuf,
         /// The path to the output file.
-        to: String,
+        to: PathBuf,
     },
 }
 

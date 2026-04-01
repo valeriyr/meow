@@ -18,11 +18,9 @@ impl OutputFormatter {
     /// Formats the command output.
     pub fn format(&self, output: &impl Serialize) -> Result<String, anyhow::Error> {
         Ok(match self {
-            OutputFormatter::Json => {
-                serde_json::to_string_pretty(output)?.to_string()
-            }
+            OutputFormatter::Json => serde_json::to_string_pretty(output)?,
             OutputFormatter::Table => {
-                let json = json![output];
+                let json = json!(output);
 
                 let mut builder = json_to_table(&json);
                 builder.with(tabled::settings::Style::rounded().horizontals([]));

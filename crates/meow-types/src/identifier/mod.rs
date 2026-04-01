@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 use crate::identifier::error::IdentifierError;
@@ -40,8 +38,16 @@ impl TryFrom<&str> for Identifier {
     }
 }
 
-impl fmt::Display for Identifier {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl std::str::FromStr for Identifier {
+    type Err = IdentifierError;
+
+    fn from_str(value: &str) -> Result<Self> {
+        Identifier::new(value)
+    }
+}
+
+impl std::fmt::Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.as_ref())
     }
 }
