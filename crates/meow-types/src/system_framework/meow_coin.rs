@@ -13,6 +13,14 @@ pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x1);
 pub const MEOW_COIN_MODULE_NAME: &str = "meow_coin";
 /// The meow coin object name.
 pub const MEOW_COIN_OBJECT_NAME: &str = "MeowCoin";
+/// The meow coin mint function name.
+pub const MEOW_COIN_MINT_FUNCTION_NAME: &str = "mint";
+
+/// The MEOW coin module file path.
+pub const MEOW_COIN_MODULE_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../meow-framework/modules/meow_coin.meow"
+);
 
 /// The MeowCoin struct represents a coin in the Meow system, with an id and a balance.
 #[derive(Serialize, Deserialize)]

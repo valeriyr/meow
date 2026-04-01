@@ -75,6 +75,29 @@ pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> Result<Executi
     ))
 }
 
+/// Execute a genesis transaction.
+///
+/// This is a special code path that executes a transaction without charging any gas,
+/// and is used only for building the genesis state of the chain.
+pub fn execute_genesis_transaction(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+) -> Result<ExecutionResult> {
+    let sender = transaction.sender();
+    let tx_digest = &transaction.digest();
+
+    let mut gas_meter = GasMeter::unlimited();
+
+    Ok(match transaction.type_() {
+        TransactionType::MeowCall(call) => {
+            execute_meow_call(sender, tx_digest, call, &inputs, &mut gas_meter)
+        }
+        TransactionType::MeowModulePublish(module) => {
+            execute_meow_module_publish(tx_digest, module, &mut gas_meter)
+        }
+    })
+}
+
 /// Execute a `meow_call` transaction.
 fn execute_meow_call(
     sender: &Address,

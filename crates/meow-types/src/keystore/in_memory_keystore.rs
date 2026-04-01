@@ -19,7 +19,7 @@ impl InMemoryKeystore {
         let address = keypair.public().into();
 
         if self.keys.contains_key(&address) {
-            return Err(KeystoreError::KeyPairAlreadyExists { keypair });
+            return Err(KeystoreError::KeyPairAlreadyExists(address));
         }
 
         self.keys.insert(address, keypair);

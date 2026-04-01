@@ -1,4 +1,10 @@
+pub mod call_arg;
+pub mod client;
 pub mod commands;
+pub mod genesis;
 pub mod keytool;
+pub mod object_brief_info;
+pub mod output_encoder;
 pub mod output_formatter;
 pub mod smart_contract;
+pub mod transaction;

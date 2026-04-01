@@ -18,7 +18,7 @@ pub type Result<T> = std::result::Result<T, AddressError>;
 pub const ADDRESS_LENGTH: usize = 32;
 
 /// The meow account address type.
-#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Address([u8; ADDRESS_LENGTH]);
 
 impl Address {
@@ -49,6 +49,12 @@ impl Address {
 }
 
 impl fmt::Display for Address {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", prefix_hex::encode(self.0))
+    }
+}
+
+impl fmt::Debug for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", prefix_hex::encode(self.0))
     }

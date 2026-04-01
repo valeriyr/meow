@@ -3,7 +3,11 @@ resolver = "3"
 members = [
     "crates/meow",
     "crates/meow-framework",
+    "crates/meow-genesis",
+    "crates/meow-gossip-network",
+    "crates/meow-nakamoto",
     "crates/meow-node",
+    "crates/meow-node-client",
     "crates/meow-types",
     "crates/meow-vm",
     "crates/meow-vm-adapter",
@@ -14,13 +18,15 @@ members = [
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
 anyhow = "1.0"
+base64 = "0.22.1"
 bcs = "0.1"
 bs58 = "0.5"
-base64 = "0.22.1"
 bip32 = "0.5.3"
-clap = { version ="4.5", features = ["derive", "wrap_help"] }
+blake2 = "0.10.6"
+clap = { version ="4.6", features = ["derive", "wrap_help"] }
 dirs = "6.0.0"
 enum_dispatch = "0.3.13"
+futures = "0.3"
 hex = "0.4.3"
 json_to_table = "0.12"
 prefix-hex = { version = "0.7.1", features = ["std"] }
@@ -32,7 +38,12 @@ strum_macros = "0.28"
 tabled = "0.20"
 thiserror = "2.0"
 tokio = { version = "1.50", features = ["full"] }
+tracing = "0.1"
 
+meow-genesis = { path = "crates/meow-genesis" }
+meow-gossip-network = { path = "crates/meow-gossip-network" }
+meow-nakamoto = { path = "crates/meow-nakamoto" }
+meow-node-client = { path = "crates/meow-node-client" }
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }
 meow-vm-adapter = { path = "crates/meow-vm-adapter" }

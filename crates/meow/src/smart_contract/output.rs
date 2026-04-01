@@ -1,10 +1,10 @@
 use meow_vm_adapter::{Module, runner::RunResult};
 use serde::Serialize;
 
-use crate::smart_contract::module_encoder::ModuleEncoder;
+use crate::output_encoder::OutputEncoder;
 
 /// The module information.
-#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ModuleOutput {
     /// The name of the module.
@@ -14,7 +14,7 @@ pub struct ModuleOutput {
 }
 
 /// The run result.
-#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct RunResultOutput {
     /// The return value of the call, if any.
@@ -39,7 +39,7 @@ pub enum SmartContractCommandOutput {
 
 impl SmartContractCommandOutput {
     /// Builds the Build command output using the specified encoder.
-    pub fn build(module: Module, encoder: ModuleEncoder) -> Result<Self, anyhow::Error> {
+    pub fn build(module: Module, encoder: OutputEncoder) -> anyhow::Result<Self> {
         let encoded_module = encoder.encode(&module)?;
 
         Ok(SmartContractCommandOutput::Build(ModuleOutput {

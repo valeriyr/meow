@@ -1,0 +1,13 @@
+[package]
+name = "meow-node-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+
+[dependencies]
+reqwest = { version = "0.13", features = ["json", "blocking"] }
+
+thiserror.workspace = true
+
+meow-types.workspace = true

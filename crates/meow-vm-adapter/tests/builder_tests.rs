@@ -1,9 +1,5 @@
+use meow_types::system_framework::meow_coin::MEOW_COIN_MODULE_PATH;
 use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
-
-const MEOW_COIN_FILE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../meow-framework/modules/meow_coin.meow"
-);
 
 #[test]
 fn build_module_successful() {
@@ -32,7 +28,7 @@ fn build_module_successful() {
 
 #[test]
 fn build_module_from_file_successful() {
-    let module = builder::build_from_file(MEOW_COIN_FILE_PATH).unwrap();
+    let module = builder::build_from_file(MEOW_COIN_MODULE_PATH).unwrap();
 
     assert_eq!(module.name, "meow_coin");
 }

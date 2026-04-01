@@ -146,6 +146,20 @@ fn derive_different_digests_produce_different_addresses() {
 }
 
 //
+// ─── Address debug tests ───
+//
+
+#[test]
+fn debug_print_address() {
+    let address = Address::from(&test_keypair());
+
+    assert_eq!(
+        format!("{address:?}"),
+        "0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f"
+    );
+}
+
+//
 // ─── Utility functions ───
 //
 

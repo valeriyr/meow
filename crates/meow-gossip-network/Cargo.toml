@@ -1,0 +1,20 @@
+[package]
+name = "meow-gossip-network"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+
+[dependencies]
+libp2p = { version = "0.56", features = [
+    "gossipsub",
+    "tcp",
+    "noise",
+    "yamux",
+    "tokio",
+] }
+
+futures.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

@@ -1,0 +1,15 @@
+[package]
+name = "meow-nakamoto"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+
+[dependencies]
+bcs.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+meow-types.workspace = true
+meow-vm-adapter.workspace = true

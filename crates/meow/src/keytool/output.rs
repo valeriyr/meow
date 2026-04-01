@@ -2,7 +2,7 @@ use meow_types::{address::Address, keypair::KeyPair};
 use serde::Serialize;
 
 /// The key information.
-#[derive(Serialize, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyOutput {
     /// The MEOW address associated with the key.

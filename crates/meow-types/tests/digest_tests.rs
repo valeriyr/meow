@@ -87,3 +87,17 @@ fn digest_from_invalid_base58() {
         matches!(&err, DigestError::Base58Error(e) if e.to_string().contains("invalid character"))
     );
 }
+
+//
+// ─── Digest debug tests ───
+//
+
+#[test]
+fn debug_print_digest() {
+    let digest = Digest::compute(b"hello").unwrap();
+
+    assert_eq!(
+        format!("{digest:?}"),
+        "4PNCZERNLKAqwSYHhZpb7B4GE34eiYDPXGgeNKWNNaBp"
+    );
+}
