@@ -54,7 +54,7 @@ impl SmartContractCommand {
                 let module = builder::build_from_file(path)?;
                 let args = args
                     .into_iter()
-                    .map(|arg| arg.into_value(&client))
+                    .map(|arg| arg.into_value(client))
                     .collect::<Result<Vec<_>, _>>()?;
 
                 let result = runner::run(module, &function, args)?;

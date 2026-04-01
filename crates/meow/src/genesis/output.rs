@@ -15,7 +15,7 @@ impl From<Genesis> for GenesisOutput {
         GenesisOutput {
             objects: genesis
                 .objects()
-                .into_iter()
+                .iter()
                 .map(|o| ObjectBriefInfo::from(o.clone()))
                 .collect(),
         }

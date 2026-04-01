@@ -118,6 +118,6 @@ impl Object {
 
     /// Returns the object reference.
     pub fn object_ref(&self) -> ObjectRef {
-        ObjectRef::new(self.address.clone(), self.version.clone(), self.digest())
+        ObjectRef::new(self.address, self.version.clone(), self.digest())
     }
 }

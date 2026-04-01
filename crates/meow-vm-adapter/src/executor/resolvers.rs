@@ -11,12 +11,15 @@ use meow_vm_types::{
 
 use crate::executor::{Result, error::ExecutorError};
 
+/// `(vm_values, object_args)` where `object_args` is `(arg_index, input_object)` pairs.
+type ResolvedArgs<'a> = (Vec<Value>, Vec<(usize, &'a Object)>);
+
 /// Resolve call arguments to VM values, tracking which ones are object inputs for later analysis.
 pub fn resolve_args<'a>(
     call: &Call,
     func: &Function,
     inputs: &'a [Object],
-) -> std::result::Result<(Vec<Value>, Vec<(usize, &'a Object)>), String> {
+) -> std::result::Result<ResolvedArgs<'a>, String> {
     // Resolve call arguments to VM values.
     let call_args_inputs = call.arguments();
     if call_args_inputs.len() != func.params.len() {
@@ -36,10 +39,10 @@ pub fn resolve_args<'a>(
     {
         match resolve_arg(input, param_type, inputs) {
             Ok(v) => {
-                if let Input::Object(object_ref) = input {
-                    if let Some(obj) = inputs.iter().find(|o| o.address() == object_ref.address()) {
-                        object_args.push((i, obj));
-                    }
+                if let Input::Object(object_ref) = input
+                    && let Some(obj) = inputs.iter().find(|o| o.address() == object_ref.address())
+                {
+                    object_args.push((i, obj));
                 }
                 vm_args.push(v);
             }

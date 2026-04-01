@@ -80,7 +80,7 @@ impl TransactionCommand {
                 let module_bytes = bcs::to_bytes(&module)?;
 
                 let transaction = Transaction::new(
-                    sender.clone(),
+                    sender,
                     gas_coin,
                     TransactionType::MeowModulePublish(module_bytes),
                 );
@@ -97,12 +97,12 @@ impl TransactionCommand {
                 let function = Identifier::new(function)?;
                 let inputs = args
                     .into_iter()
-                    .map(|arg| arg.into_input(&client))
+                    .map(|arg| arg.into_input(client))
                     .collect::<anyhow::Result<Vec<_>>>()?;
 
                 let call = Call::new(module, function, inputs);
                 let transaction =
-                    Transaction::new(sender.clone(), gas_coin, TransactionType::MeowCall(call));
+                    Transaction::new(sender, gas_coin, TransactionType::MeowCall(call));
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }

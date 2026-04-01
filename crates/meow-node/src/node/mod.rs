@@ -53,7 +53,7 @@ impl Node {
         let router = rpc::router(state);
         let listener = tokio::net::TcpListener::bind(self.rpc_addr)
             .await
-            .map_err(|e| NodeError::BindError(self.rpc_addr, e))?;
+            .map_err(|e| NodeError::BindFailed(self.rpc_addr, e))?;
 
         tracing::info!(addr = %self.rpc_addr, "RPC listening");
 

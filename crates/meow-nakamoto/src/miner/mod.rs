@@ -183,11 +183,10 @@ fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
             inputs.push(module.clone());
         }
         for arg in call.arguments() {
-            if let Input::Object(obj_ref) = arg {
-                if let Some(obj) = store.get_object(obj_ref.address()) {
+            if let Input::Object(obj_ref) = arg
+                && let Some(obj) = store.get_object(obj_ref.address()) {
                     inputs.push(obj.clone());
                 }
-            }
         }
     }
 

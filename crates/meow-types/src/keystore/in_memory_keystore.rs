@@ -8,7 +8,7 @@ use crate::{address::Address, keypair::KeyPair};
 /// The in-memory keystore type.
 ///
 /// Stores keys in memory.
-#[derive(Debug)]
+#[derive(Default, Debug)]
 pub struct InMemoryKeystore {
     keys: BTreeMap<Address, KeyPair>,
 }
@@ -39,14 +39,6 @@ impl InMemoryKeystore {
     /// Gets an iterator over the keys, sorted by address.
     pub fn iter(&self) -> impl Iterator<Item = (&Address, &KeyPair)> {
         self.keys.iter()
-    }
-}
-
-impl Default for InMemoryKeystore {
-    fn default() -> Self {
-        Self {
-            keys: BTreeMap::new(),
-        }
     }
 }
 

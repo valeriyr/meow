@@ -9,6 +9,9 @@ use meow_vm::VmCallResult;
 
 use crate::{context::Context, executor::versioning};
 
+/// `(created, changed, destroyed)` object lists from a single execution.
+type ObjectEffects = (Vec<Object>, Vec<Object>, Vec<Object>);
+
 /// Build the created/changed/destroyed object lists from execution results.
 ///
 /// Each output object's version is bumped independently from its own input
@@ -19,7 +22,7 @@ pub fn collect_object_effects(
     object_args: &[(usize, &Object)], // (arg_index, input_object)
     module_address: &Address,
     tx_digest: &Digest,
-) -> std::result::Result<(Vec<Object>, Vec<Object>, Vec<Object>), String> {
+) -> std::result::Result<ObjectEffects, String> {
     let mut created_objects: Vec<Object> = Vec::new();
     let mut changed_objects: Vec<Object> = Vec::new();
     let mut destroyed_objects: Vec<Object> = Vec::new();
@@ -99,7 +102,7 @@ pub fn collect_object_effects(
             destroyed_objects.push(
                 object_conversion::vm_object_value_to_object(
                     obj_val,
-                    original.owner().clone(),
+                    *original.owner(),
                     *tx_digest,
                     version,
                     module_address,

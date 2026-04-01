@@ -19,7 +19,7 @@ impl OutputFormatter {
     pub fn format(&self, output: &impl Serialize) -> Result<String, anyhow::Error> {
         Ok(match self {
             OutputFormatter::Json => {
-                format!("{}", serde_json::to_string_pretty(output)?)
+                serde_json::to_string_pretty(output)?.to_string()
             }
             OutputFormatter::Table => {
                 let json = json![output];

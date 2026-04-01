@@ -244,12 +244,7 @@ impl Vm {
 
         let mut frame = Frame::new(func.code.clone(), args, func.local_count);
 
-        loop {
-            let instr = match frame.code.get(frame.pc) {
-                Some(i) => i.clone(),
-                None => break,
-            };
-
+        while let Some(instr) = frame.code.get(frame.pc).cloned() {
             gas.charge(self.gas_schedule.cost_of(&instr))?;
             frame.pc += 1;
 

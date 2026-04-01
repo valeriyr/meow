@@ -5,9 +5,6 @@ edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 
-[features]
-testing = []
-
 [dependencies]
 bcs.workspace = true
 thiserror.workspace = true

@@ -54,17 +54,17 @@ impl From<ExecutionResult> for TransactionResultDetails {
             status,
             created: r
                 .created_objects()
-                .into_iter()
+                .iter()
                 .map(|o| ObjectBriefInfo::from(o.clone()))
                 .collect(),
             changed: r
                 .changed_objects()
-                .into_iter()
+                .iter()
                 .map(|o| ObjectBriefInfo::from(o.clone()))
                 .collect(),
             destroyed: r
                 .destroyed_objects()
-                .into_iter()
+                .iter()
                 .map(|o| ObjectBriefInfo::from(o.clone()))
                 .collect(),
         }

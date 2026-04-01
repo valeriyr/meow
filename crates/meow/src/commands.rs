@@ -95,7 +95,7 @@ pub enum Command {
 impl Command {
     /// Runs the command.
     pub fn run(self) -> Result<(), anyhow::Error> {
-        Ok(match self {
+        match self {
             Command::SayMeow => {
                 println!("Meow!");
             }
@@ -154,6 +154,7 @@ impl Command {
 
                 println!("{}", formatter.format(&output)?);
             }
-        })
+        }
+        Ok(())
     }
 }

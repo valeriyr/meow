@@ -8,7 +8,7 @@ use meow_types::{
 ///
 /// Intentionally kept minimal: it tracks live objects only.
 /// Result indexing and chain history live in [`crate::chain::ChainState`].
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct Store {
     objects: BTreeMap<Address, Object>,
 }
@@ -18,7 +18,7 @@ impl Store {
     pub fn with_objects(objects: impl IntoIterator<Item = Object>) -> Self {
         let mut store = Self::default();
         for obj in objects {
-            store.objects.insert(obj.address().clone(), obj);
+            store.objects.insert(*obj.address(), obj);
         }
         store
     }
@@ -39,10 +39,10 @@ impl Store {
     /// - destroyed objects → removed
     pub fn apply_execution_result(&mut self, result: &ExecutionResult) {
         for obj in result.created_objects() {
-            self.objects.insert(obj.address().clone(), obj.clone());
+            self.objects.insert(*obj.address(), obj.clone());
         }
         for obj in result.changed_objects() {
-            self.objects.insert(obj.address().clone(), obj.clone());
+            self.objects.insert(*obj.address(), obj.clone());
         }
         for obj in result.destroyed_objects() {
             self.objects.remove(obj.address());
@@ -52,13 +52,5 @@ impl Store {
     /// Iterates over all live objects in deterministic (sorted) order.
     pub fn objects(&self) -> impl Iterator<Item = &Object> {
         self.objects.values()
-    }
-}
-
-impl Default for Store {
-    fn default() -> Self {
-        Self {
-            objects: BTreeMap::new(),
-        }
     }
 }

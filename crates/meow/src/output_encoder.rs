@@ -23,7 +23,7 @@ impl OutputEncoder {
         Ok(match self {
             OutputEncoder::Base64 => {
                 let base64 = general_purpose::STANDARD.encode(&bcs::to_bytes(output)?);
-                format!("{base64}")
+                base64.to_string()
             }
             OutputEncoder::Debug => {
                 format!("{output:?}")

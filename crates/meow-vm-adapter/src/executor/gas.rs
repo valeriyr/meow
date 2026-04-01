@@ -21,8 +21,8 @@ pub fn apply_gas_spending(
     let new_version = versioning::bump_version(gas_coin);
 
     let updated_gas_coin = Object::new(
-        gas_coin.address().clone(),
-        gas_coin.owner().clone(),
+        *gas_coin.address(),
+        *gas_coin.owner(),
         *tx_digest,
         new_version,
         gas_coin.type_().clone(),
@@ -34,7 +34,7 @@ pub fn apply_gas_spending(
 
     ExecutionResult::new(
         result.status().clone(),
-        result.transaction_digest().clone(),
+        *result.transaction_digest(),
         result.created_objects().to_vec(),
         changed,
         result.destroyed_objects().to_vec(),

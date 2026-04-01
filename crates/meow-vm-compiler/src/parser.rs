@@ -169,7 +169,9 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             });
 
         // Logical OR
-        let or = and
+        
+
+        and
             .clone()
             .then(
                 just("||")
@@ -185,15 +187,13 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                     op,
                     right: Box::new(r),
                 })
-            });
-
-        or
+            })
     });
 
     // ── Statements ────────────────────────────────────────────────────────────
     let stmt = recursive(|stmt| {
         let let_stmt = kw("let")
-            .ignore_then(ident.clone())
+            .ignore_then(ident)
             .then_ignore(just('=').padded())
             .then(expr.clone())
             .then_ignore(just(';').padded())
@@ -225,7 +225,6 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         // Must be tried before expr_stmt. Uses `just('=').padded()` without `.` prefix
         // to distinguish from field_assign.
         let reassign = ident
-            .clone()
             .then_ignore(just('=').padded())
             .then(expr.clone())
             .then_ignore(just(';').padded())
@@ -234,9 +233,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         // Field assignment: `ident.field = expr;`
         // Must be tried before expr_stmt to avoid `ident.field` being parsed as an expression.
         let field_assign = ident
-            .clone()
             .then_ignore(just('.').padded())
-            .then(ident.clone())
+            .then(ident)
             .then_ignore(just('=').padded())
             .then(expr.clone())
             .then_ignore(just(';').padded())
@@ -261,12 +259,10 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
     // ── Top-level items ───────────────────────────────────────────────────────
 
     let struct_field = ident
-        .clone()
         .then_ignore(just(':').padded())
-        .then(ty.clone());
+        .then(ty);
 
     let struct_body = struct_field
-        .clone()
         .separated_by(just(',').padded())
         .allow_trailing()
         .collect::<Vec<_>>()
@@ -274,8 +270,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     // struct Foo { x: u64, y: bool }
     let struct_item = kw("struct")
-        .ignore_then(ident.clone())
-        .then(struct_body.clone())
+        .ignore_then(ident)
+        .then(struct_body)
         .map(|(name, fields)| {
             AstItem::Struct(AstStruct {
                 name,
@@ -286,8 +282,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     // object Foo { id: address, x: u64 }
     let object_item = kw("object")
-        .ignore_then(ident.clone())
-        .then(struct_body.clone())
+        .ignore_then(ident)
+        .then(struct_body)
         .map(|(name, fields)| {
             AstItem::Struct(AstStruct {
                 name,
@@ -298,12 +294,11 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     // fn foo(a: u64, b: bool): RetType { ... }
     let param = ident
-        .clone()
         .then_ignore(just(':').padded())
-        .then(ty.clone());
+        .then(ty);
 
     let fn_item = kw("fn")
-        .ignore_then(ident.clone())
+        .ignore_then(ident)
         .then(
             param
                 .separated_by(just(',').padded())
@@ -311,7 +306,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 .collect::<Vec<_>>()
                 .delimited_by(just('(').padded(), just(')').padded()),
         )
-        .then(just(':').padded().ignore_then(ty.clone()).or_not())
+        .then(just(':').padded().ignore_then(ty).or_not())
         .then(
             stmt.repeated()
                 .collect::<Vec<_>>()

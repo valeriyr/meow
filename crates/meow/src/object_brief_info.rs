@@ -27,7 +27,7 @@ impl From<Object> for ObjectBriefInfo {
             ObjectType::Module => "module".into(),
         };
         Self {
-            address: obj.address().clone(),
+            address: *obj.address(),
             owner,
             type_,
             version: obj.version().to_string(),

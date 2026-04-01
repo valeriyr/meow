@@ -166,15 +166,11 @@ impl<'m> Codegen<'m> {
             Expr::FieldAccess { expr, field } => {
                 // Optimise: if the base is a local variable, use LoadField (no move).
                 // Otherwise, compile the expression (which may consume a value) then GetField.
-                match *expr {
-                    Expr::Ident(ref name) => {
-                        if let Some(&slot) = self.locals.get(name) {
-                            self.emit(Instruction::LoadField(slot, field));
-                            return Ok(());
-                        }
+                if let Expr::Ident(ref name) = *expr
+                    && let Some(&slot) = self.locals.get(name) {
+                        self.emit(Instruction::LoadField(slot, field));
+                        return Ok(());
                     }
-                    _ => {}
-                }
                 // Fallback: compile base expression (may be consuming), then GetField.
                 self.compile_expr(*expr)?;
                 self.emit(Instruction::GetField(field));
