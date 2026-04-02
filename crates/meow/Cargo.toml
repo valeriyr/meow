@@ -24,3 +24,7 @@ meow-genesis.workspace = true
 meow-node-client.workspace = true
 meow-types.workspace = true
 meow-vm-adapter.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+temp-dir.workspace = true

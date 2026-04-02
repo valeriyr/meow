@@ -11,7 +11,7 @@ use crate::client::output::ClientCommandOutput;
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum ClientCommand {
-    /// Fetch a live object by address.
+    /// Fetch a live object from the node by address.
     GetObject {
         /// On-chain object address (hex, e.g. `0xabcd...`).
         address: Address,
@@ -21,9 +21,9 @@ pub enum ClientCommand {
         /// Transaction digest (base58).
         digest: Digest,
     },
-    /// Call a function on a published module.
+    /// Submit a signed transaction to the node.
     SubmitTransaction {
-        /// SignedTransaction to submit, as a base64 string.
+        /// Base64-encoded signed transaction (produced by `meow transaction sign`).
         transaction: String,
     },
 }

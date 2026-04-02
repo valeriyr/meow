@@ -2245,11 +2245,13 @@ dependencies = [
  "meow-node-client",
  "meow-types",
  "meow-vm-adapter",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "strum",
  "strum_macros",
  "tabled",
+ "temp-dir",
  "url",
 ]
 

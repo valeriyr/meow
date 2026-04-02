@@ -15,7 +15,7 @@ use meow_types::{config::meow_keystore_path, keystore::Keystore};
 /// The default output formatter for commands that support formatting.
 const DEFAULT_OUTPUT_FORMATTER: OutputFormatter = OutputFormatter::Table;
 /// The default node RPC URL for client commands.
-const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8600";
+pub const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8600";
 
 /// The main command line commands.
 #[derive(Parser)]
@@ -55,9 +55,6 @@ pub enum Command {
         /// The MEOW Node RPC URL.
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
         node: Url,
-        /// The path to the keystore file.
-        #[arg(long, global = true)]
-        keystore_path: Option<PathBuf>,
         /// The command output is formatted using this formatter before printing.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
@@ -68,7 +65,7 @@ pub enum Command {
         #[command(subcommand)]
         cmd: TransactionCommand,
     },
-    /// Interact with a running MEOW node.
+    /// MEOW genesis tools.
     #[command(name = "genesis")]
     Genesis {
         /// The command output is formatted using this formatter before printing.
@@ -125,17 +122,13 @@ impl Command {
             }
             Command::Transaction {
                 node,
-                keystore_path,
                 formatter,
                 encoder,
                 cmd,
             } => {
                 let client = NodeClient::new(node);
 
-                let keystore_path = keystore_path.unwrap_or(meow_keystore_path()?);
-                let keystore = Keystore::file_based(&keystore_path)?;
-
-                let output = cmd.run(&client, &keystore, encoder)?;
+                let output = cmd.run(&client, encoder)?;
 
                 println!("{}", formatter.format(&output)?);
             }

@@ -15,28 +15,32 @@ use crate::{
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum SmartContractCommand {
-    /// Build a smart contract module.
+    /// Compile a `.meow` source file into a module (without creating a transaction).
     Build {
-        /// The path to the smart contract module.
+        /// Path to the `.meow` source file.
         path: PathBuf,
-        /// The module is encoded using this encoder before printing.
+        /// Encoding for the compiled module output.
         #[arg(long, default_value_t = OutputEncoder::Base64)]
         encoder: OutputEncoder,
     },
-    /// Run a smart contract function.
+    /// Run a smart contract function locally without submitting a transaction.
     Run {
-        /// The path to the smart contract module.
+        /// Path to the `.meow` source file.
         path: PathBuf,
-        /// The function name.
+        /// Name of the function to call.
         function: Identifier,
-        /// The arguments to pass to the function.
+        /// Argument to pass to the function (repeatable). Auto-detected by format:
         ///
-        /// Parsing rules (applied in order):
-        /// - `true` / `false`    → Raw bool
-        /// - all-digit string    → Raw u64
-        /// - `@0x<hex>`          → Raw address
-        /// - `0x<hex>`           → Address of an object on-chain
-        /// - anything else       → Raw string
+        /// - `true` / `false` → bool
+        ///
+        /// - digits only → u64
+        ///
+        /// - `@0x<hex>` → raw address value (not resolved against the node)
+        ///
+        /// - `0x<hex>` → on-chain object (resolved against the node)
+        ///
+        /// - anything else → string
+        #[arg(value_name = "VALUE")]
         args: Vec<CallArg>,
     },
 }

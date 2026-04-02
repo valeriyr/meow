@@ -14,17 +14,17 @@ use crate::genesis::output::GenesisOutput;
 pub enum GenesisCommand {
     /// Build a genesis state.
     Build {
-        /// The file containing the initial allocations of MEOW coins in the genesis state.
+        /// Path to a CSV file with initial coin allocations (one `<address>,<amount>` per line).
         allocations: PathBuf,
-        /// The path to the output file.
-        to: PathBuf,
+        /// Path to write the genesis output file.
+        output: PathBuf,
     },
 }
 
 impl GenesisCommand {
     pub fn run(self) -> anyhow::Result<GenesisOutput> {
         match self {
-            GenesisCommand::Build { allocations, to } => {
+            GenesisCommand::Build { allocations, output } => {
                 let allocations = std::fs::read_to_string(allocations)?
                     .lines()
                     .map(|line| match line.split_once(',') {
@@ -40,7 +40,7 @@ impl GenesisCommand {
                 let genesis = Genesis::build(&allocations)?;
                 let genesis_bytes = bcs::to_bytes(&genesis)?;
 
-                std::fs::write(to, genesis_bytes)?;
+                std::fs::write(output, genesis_bytes)?;
 
                 Ok(GenesisOutput::from(genesis))
             }

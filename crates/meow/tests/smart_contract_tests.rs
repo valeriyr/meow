@@ -1,0 +1,149 @@
+use std::path::PathBuf;
+
+use meow::{
+    call_arg::CallArg,
+    output_encoder::OutputEncoder,
+    smart_contract::{SmartContractCommand, output::SmartContractCommandOutput},
+};
+use meow_node_client::NodeClient;
+use meow_types::identifier::Identifier;
+use temp_dir::TempDir;
+
+const ADD_SRC: &str = "fn add(a: u64, b: u64): u64 { return a + b; }";
+const NOOP_SRC: &str = "fn noop() {}";
+
+//
+// ─── Build tests ───
+//
+
+#[test]
+fn build_valid_source_succeeds() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "example", ADD_SRC);
+
+    let output = SmartContractCommand::Build {
+        path,
+        encoder: OutputEncoder::Base64,
+    }
+    .run(&fake_client())
+    .unwrap();
+
+    assert!(matches!(output, SmartContractCommandOutput::Build(_)));
+}
+
+#[test]
+fn build_uses_file_stem_as_module_name() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "mymodule", ADD_SRC);
+
+    let output = SmartContractCommand::Build {
+        path,
+        encoder: OutputEncoder::Base64,
+    }
+    .run(&fake_client())
+    .unwrap();
+
+    let name = match output {
+        SmartContractCommandOutput::Build(m) => m.name,
+        _ => panic!("expected Build output"),
+    };
+    assert_eq!(name, "mymodule");
+}
+
+#[test]
+fn build_invalid_source_returns_compiler_error() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "bad", "this is not valid meow source !!!");
+
+    let err = SmartContractCommand::Build {
+        path,
+        encoder: OutputEncoder::Base64,
+    }
+    .run(&fake_client())
+    .unwrap_err();
+
+    // The compiler returns an error describing what went wrong.
+    assert!(
+        err.to_string().contains("compile error:"),
+        "unexpected error: {err}"
+    );
+}
+
+//
+// ─── Run tests ───
+//
+
+#[test]
+fn run_returns_computed_return_value() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "math", ADD_SRC);
+
+    let output = SmartContractCommand::Run {
+        path,
+        function: Identifier::new("add").unwrap(),
+        args: vec![CallArg::U64(3), CallArg::U64(5)],
+    }
+    .run(&fake_client())
+    .unwrap();
+
+    let result = match output {
+        SmartContractCommandOutput::Run(r) => r,
+        _ => panic!("expected Run output"),
+    };
+    assert_eq!(result.return_value, Some("8".to_string()));
+    assert_eq!(result.gas_spent, 6);
+}
+
+#[test]
+fn run_void_function_produces_no_return_value() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "util", NOOP_SRC);
+
+    let output = SmartContractCommand::Run {
+        path,
+        function: Identifier::new("noop").unwrap(),
+        args: vec![],
+    }
+    .run(&fake_client())
+    .unwrap();
+
+    let result = match output {
+        SmartContractCommandOutput::Run(r) => r,
+        _ => panic!("expected Run output"),
+    };
+    assert_eq!(result.return_value, None);
+    assert_eq!(result.gas_spent, 2);
+}
+
+#[test]
+fn run_unknown_function_returns_error() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, "math", ADD_SRC);
+
+    let err = SmartContractCommand::Run {
+        path,
+        function: Identifier::new("missing").unwrap(),
+        args: vec![],
+    }
+    .run(&fake_client())
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("undefined function: missing"),
+        "unexpected error: {err}"
+    );
+}
+
+//
+// ─── Utility functions ───
+//
+
+fn fake_client() -> NodeClient {
+    NodeClient::new("http://127.0.0.1:1".parse().unwrap())
+}
+
+fn write_source(tmp: &TempDir, name: &str, src: &str) -> PathBuf {
+    let path = tmp.path().join(format!("{name}.meow"));
+    std::fs::write(&path, src).expect("source write must succeed");
+    path
+}

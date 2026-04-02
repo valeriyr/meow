@@ -22,7 +22,7 @@ use crate::{
 #[derive(Parser)]
 #[command(rename_all = "kebab-case")]
 pub enum TransactionCommand {
-    /// Create a transaction to publish a compiled smart-contract module to the node.
+    /// Compile a `.meow` source file and create a module-publish transaction.
     Publish {
         /// Path to the `.meow` source file.
         path: PathBuf,
@@ -47,20 +47,26 @@ pub enum TransactionCommand {
         /// Address of the gas coin object to pay fees with.
         #[arg(long)]
         gas_coin: Address,
-        /// Arguments passed to the function.
+        /// Call argument (repeatable). Auto-detected by format:
         ///
-        /// Parsing rules (applied in order):
-        /// - `true` / `false`    → Raw bool
-        /// - all-digit string    → Raw u64
-        /// - `@0x<hex>`          → Raw address
-        /// - `0x<hex>`           → Address of an object on-chain
-        /// - anything else       → Raw string
-        #[arg(long = "arg")]
+        /// - `true` / `false` → bool
+        ///
+        /// - digits only → u64
+        ///
+        /// - `@0x<hex>` → raw address value (not resolved against the node)
+        ///
+        /// - `0x<hex>` → on-chain object (resolved against the node)
+        ///
+        /// - anything else → string
+        #[arg(value_name = "VALUE")]
         args: Vec<CallArg>,
     },
-    /// Sign a transaction.
+    /// Sign a transaction produced by `transaction publish` or `transaction meow-call`.
     Sign {
-        /// Transaction to sign, as a base64 string.
+        /// The path to the keystore file.
+        #[arg(long)]
+        keystore_path: Option<PathBuf>,
+        /// Base64-encoded transaction to sign.
         #[arg(long)]
         transaction: String,
     },
@@ -70,7 +76,6 @@ impl TransactionCommand {
     pub fn run(
         self,
         client: &NodeClient,
-        keystore: &Keystore,
         encoder: OutputEncoder,
     ) -> anyhow::Result<TransactionCommandOutput> {
         match self {
@@ -122,13 +127,19 @@ impl TransactionCommand {
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }
-            TransactionCommand::Sign { transaction } => {
+            TransactionCommand::Sign {
+                keystore_path,
+                transaction,
+            } => {
+                let keystore_path = keystore_path.unwrap_or(config::meow_keystore_path()?);
+                let keystore = Keystore::file_based(&keystore_path)?;
+
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
                 let transaction = bcs::from_bytes(&bytes)?;
 
                 validate_transaction(&transaction)?;
 
-                let signed_transaction = signer::sign_transaction(transaction, keystore)?;
+                let signed_transaction = signer::sign_transaction(transaction, &keystore)?;
 
                 Ok(TransactionCommandOutput::new(signed_transaction, encoder)?)
             }

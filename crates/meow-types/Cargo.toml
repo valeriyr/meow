@@ -29,5 +29,5 @@ thiserror.workspace = true
 meow-vm-types.workspace = true
 
 [dev-dependencies]
-temp-dir = "0.2"
+temp-dir.workspace = true
 temp-env = "0.3"

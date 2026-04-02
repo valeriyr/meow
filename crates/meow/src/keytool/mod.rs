@@ -15,19 +15,20 @@ use output::{KeyOutput, KeyToolCommandOutput};
 pub enum KeyToolCommand {
     /// Generate a new key.
     Generate {
-        /// The scheme to use for a generated key.
+        /// Key scheme to use (e.g. `ed25519`).
         scheme: SignatureScheme,
-        /// The derivation path to use for a generated key.
+        /// BIP-32 derivation path (e.g. `m/44'/784'/0'/0'/0'`).
+        #[arg(long)]
         derivation_path: Option<DerivationPath>,
-        /// The word length to use for a generated key.
+        /// Mnemonic word count (12, 15, 18, 21, or 24).
+        #[arg(long)]
         word_length: Option<MnemonicType>,
     },
-    /// List all the keys stored in the keystore.
-    /// Returns the associated MEOW address, Base64-encoded public key, and key scheme name for each key.
+    /// List all keys in the keystore (address, public key, and scheme).
     List,
-    /// Remove a key from the keystore.
+    /// Remove a key from the keystore by address.
     Remove {
-        /// The address of the key to remove.
+        /// Address of the key to remove.
         address: Address,
     },
 }
