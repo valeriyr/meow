@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 #[test]
 fn bool_to_rust() {
     let val = Value::Bool(true);
-    assert_eq!(value_to_rust::<bool>(&val).unwrap(), true);
+    assert!(value_to_rust::<bool>(&val).unwrap());
 }
 
 #[test]

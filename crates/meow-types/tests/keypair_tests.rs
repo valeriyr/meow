@@ -176,6 +176,21 @@ fn ed25519_keypair_deserialize_from_str() {
 //
 
 #[test]
+fn sign_happy_path() {
+    let keypair = test_ed25519_keypair();
+    let signature = keypair.sign(b"hello");
+
+    assert!(signature.verify(b"hello").is_ok());
+    assert!(matches!(
+        signature.verify(b"world"),
+        Err(KeyPairError::Ed25519ConsensusError(_))
+    ));
+
+    assert_eq!(signature.public_key(), keypair.public());
+    assert_eq!(signature.signer(), keypair.public().into());
+}
+
+#[test]
 fn sign_is_deterministic() {
     let keypair = test_ed25519_keypair();
     let s1 = keypair.sign(b"hello");
@@ -203,10 +218,6 @@ fn signature_clone_equality() {
     let sig = test_ed25519_keypair().sign(b"hello");
     assert_eq!(sig.clone(), sig);
 }
-
-//
-// ─── Signature display tests ───
-//
 
 #[test]
 fn signature_display_known_value() {

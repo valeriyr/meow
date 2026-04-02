@@ -3,7 +3,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use meow_types::{
     address::Address,
     digest::Digest,
-    object::{Object, object_conversion, object_owner::ObjectOwner, object_version::ObjectVersion},
+    object::{
+        Object, object_conversion, object_owner::ObjectOwner, object_type::ObjectType,
+        object_version::ObjectVersion,
+    },
 };
 use meow_vm::VmCallResult;
 
@@ -32,6 +35,23 @@ pub fn collect_object_effects(
         .iter()
         .map(|(_, obj)| (*obj.address(), *obj))
         .collect();
+
+    // Invariant: object_args must only contain address-owned non-module objects.
+    // Modules and immutable objects must be rejected earlier in resolve_arg.
+    object_args.iter().for_each(|(_, obj)| {
+        assert!(
+            obj.owner().is_address_owned(),
+            "only address-owned objects can be used as call arguments"
+        );
+        assert!(
+            obj.type_() != &ObjectType::Module,
+            "module objects cannot be used as call arguments"
+        );
+        assert!(
+            obj.version() != &ObjectVersion::MAX,
+            "objects at max version cannot be used as call arguments"
+        );
+    });
 
     let transferred_ids: BTreeSet<Address> = ctx
         .transfers()

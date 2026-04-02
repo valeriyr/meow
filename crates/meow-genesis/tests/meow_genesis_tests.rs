@@ -1,20 +1,17 @@
 use meow_genesis::Genesis;
 use meow_types::{
+    address::Address,
     object::{object_owner::ObjectOwner, object_type::ObjectType},
     system_framework::meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
 };
 
 #[test]
 fn create_genesis() {
-    const ADDRESS1: [u8; 32] = [0xAA; 32];
-    const ADDRESS2: [u8; 32] = [0xBB; 32];
-    const ADDRESS3: [u8; 32] = [0xCC; 32];
+    const ADDRESS1: Address = Address::fill(0xAA);
+    const ADDRESS2: Address = Address::fill(0xBB);
+    const ADDRESS3: Address = Address::fill(0xCC);
 
-    let mint = vec![
-        (ADDRESS1.into(), 100),
-        (ADDRESS2.into(), 200),
-        (ADDRESS3.into(), 300),
-    ];
+    let mint = vec![(ADDRESS1, 100), (ADDRESS2, 200), (ADDRESS3, 300)];
 
     let genesis = Genesis::build(&mint).unwrap();
 
@@ -33,9 +30,9 @@ fn create_genesis() {
     assert!(meow_coin::is_meow_coin_object(meow_coin2));
     assert!(meow_coin::is_meow_coin_object(meow_coin3));
 
-    assert_eq!(meow_coin1.owner(), &ObjectOwner::Address(ADDRESS1.into()));
-    assert_eq!(meow_coin2.owner(), &ObjectOwner::Address(ADDRESS2.into()));
-    assert_eq!(meow_coin3.owner(), &ObjectOwner::Address(ADDRESS3.into()));
+    assert_eq!(meow_coin1.owner(), &ObjectOwner::Address(ADDRESS1));
+    assert_eq!(meow_coin2.owner(), &ObjectOwner::Address(ADDRESS2));
+    assert_eq!(meow_coin3.owner(), &ObjectOwner::Address(ADDRESS3));
 
     assert_eq!(meow_coin::gas_meow_coin_balance(meow_coin1), Some(100));
     assert_eq!(meow_coin::gas_meow_coin_balance(meow_coin2), Some(200));

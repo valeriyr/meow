@@ -14,11 +14,11 @@ use meow_types::{
 use meow_vm_types::types::Value;
 
 /// Fixed module address used in all tests.
-const MODULE_ADDR: [u8; 32] = [0x01u8; 32];
+const MODULE_ADDR: Address = Address::fill(0x01);
 /// Fixed object owner address used in all tests.
-const OWNER: [u8; 32] = [0xAAu8; 32];
+const OWNER: Address = Address::fill(0xAA);
 /// Fixed object id used in all tests.
-const OBJECT_ID: [u8; 32] = [0xBBu8; 32];
+const OBJECT_ID: Address = Address::fill(0xBB);
 
 //
 // ─── object_to_vm_object_value ───
@@ -32,7 +32,7 @@ fn object_to_vm_injects_id_as_first_field() {
 
     let fields = vm_object_fields(&val);
     assert_eq!(fields[0].0, "id");
-    assert_eq!(fields[0].1, Value::Address(OBJECT_ID));
+    assert_eq!(fields[0].1, Value::Address(OBJECT_ID.into()));
 }
 
 #[test]
@@ -65,7 +65,7 @@ fn object_to_vm_carries_type_name() {
 #[test]
 fn object_to_vm_fails_for_module_type() {
     let obj = Object::new(
-        Address::new(OBJECT_ID),
+        OBJECT_ID,
         ObjectOwner::Immutable,
         Digest::ZERO,
         ObjectVersion::ZERO,
@@ -85,7 +85,7 @@ fn vm_to_object_strips_id_from_content() {
     let val = Value::Object {
         type_name: "Foo".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(OBJECT_ID)),
+            ("id".to_string(), Value::Address(OBJECT_ID.into())),
             ("balance".to_string(), Value::U64(99)),
         ],
     };
@@ -106,14 +106,14 @@ fn vm_to_object_sets_address_from_id_field() {
     let val = Value::Object {
         type_name: "Foo".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(OBJECT_ID)),
+            ("id".to_string(), Value::Address(OBJECT_ID.into())),
             ("balance".to_string(), Value::U64(1)),
         ],
     };
 
     let obj = make_vm_to_object(&val);
 
-    assert_eq!(obj.address(), &Address::new(OBJECT_ID));
+    assert_eq!(obj.address(), &Address::new(OBJECT_ID.into()));
 }
 
 #[test]
@@ -121,10 +121,10 @@ fn vm_to_object_fails_for_non_object_value() {
     assert!(
         vm_object_value_to_object(
             &Value::U64(42),
-            ObjectOwner::Address(Address::new(OWNER)),
+            ObjectOwner::Address(OWNER),
             Digest::ZERO,
             ObjectVersion::ZERO,
-            &Address::new(MODULE_ADDR),
+            &MODULE_ADDR,
         )
         .is_err()
     );
@@ -147,10 +147,10 @@ fn round_trip_object_to_vm_and_back() {
     let vm_val = object_to_vm_object_value(&original).unwrap();
     let restored = vm_object_value_to_object(
         &vm_val,
-        original.owner().clone(),
+        *original.owner(),
         original.digest(),
-        original.version().clone(),
-        &Address::new(MODULE_ADDR),
+        *original.version(),
+        &MODULE_ADDR,
     )
     .unwrap();
 
@@ -163,13 +163,13 @@ fn round_trip_object_to_vm_and_back() {
 // ─── Utility functions ───
 //
 
-fn make_object(id: [u8; 32], fields: Vec<(String, Value)>) -> Object {
+fn make_object(id: Address, fields: Vec<(String, Value)>) -> Object {
     let content = bcs::to_bytes(&fields).expect("fields must serialize");
     let ident = Identifier::new("Foo").unwrap();
-    let decl_ref = ObjectDeclRef::new(Address::new(MODULE_ADDR), ident);
+    let decl_ref = ObjectDeclRef::new(MODULE_ADDR, ident);
     Object::new(
-        Address::new(id),
-        ObjectOwner::Address(Address::new(OWNER)),
+        id,
+        ObjectOwner::Address(OWNER),
         Digest::ZERO,
         ObjectVersion::ZERO,
         ObjectType::Object(decl_ref),
@@ -180,10 +180,10 @@ fn make_object(id: [u8; 32], fields: Vec<(String, Value)>) -> Object {
 fn make_vm_to_object(val: &Value) -> Object {
     vm_object_value_to_object(
         val,
-        ObjectOwner::Address(Address::new(OWNER)),
+        ObjectOwner::Address(OWNER),
         Digest::ZERO,
         ObjectVersion::ZERO,
-        &Address::new(MODULE_ADDR),
+        &MODULE_ADDR,
     )
     .expect("conversion must succeed")
 }

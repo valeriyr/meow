@@ -174,7 +174,7 @@ impl MiningWork {
 fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
     let mut inputs = Vec::new();
 
-    if let Some(coin) = store.get_object(tx.gas_coin()) {
+    if let Some(coin) = store.get_object(tx.gas_coin().address()) {
         inputs.push(coin.clone());
     }
 
@@ -184,9 +184,10 @@ fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
         }
         for arg in call.arguments() {
             if let Input::Object(obj_ref) = arg
-                && let Some(obj) = store.get_object(obj_ref.address()) {
-                    inputs.push(obj.clone());
-                }
+                && let Some(obj) = store.get_object(obj_ref.address())
+            {
+                inputs.push(obj.clone());
+            }
         }
     }
 

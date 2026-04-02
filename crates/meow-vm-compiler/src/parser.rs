@@ -169,10 +169,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             });
 
         // Logical OR
-        
 
-        and
-            .clone()
+        and.clone()
             .then(
                 just("||")
                     .padded()
@@ -258,9 +256,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     // ── Top-level items ───────────────────────────────────────────────────────
 
-    let struct_field = ident
-        .then_ignore(just(':').padded())
-        .then(ty);
+    let struct_field = ident.then_ignore(just(':').padded()).then(ty);
 
     let struct_body = struct_field
         .separated_by(just(',').padded())
@@ -293,9 +289,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         });
 
     // fn foo(a: u64, b: bool): RetType { ... }
-    let param = ident
-        .then_ignore(just(':').padded())
-        .then(ty);
+    let param = ident.then_ignore(just(':').padded()).then(ty);
 
     let fn_item = kw("fn")
         .ignore_then(ident)

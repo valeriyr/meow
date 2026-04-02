@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use meow_types::identifier::{Identifier, error::IdentifierError};
+use meow_types::{
+    config,
+    identifier::{Identifier, error::IdentifierError},
+};
 
 //
 // ─── Identifier creation tests ───
@@ -106,7 +109,9 @@ fn invalid_identifier_from_str_non_ascii() {
 
 #[test]
 fn invalid_too_long_identifier() {
-    let long_identifier = "a".repeat(meow_vm_types::config::MAX_IDENTIFIER_LEN + 1);
+    let config = config::compiler_config();
+    let long_identifier = "a".repeat(config.max_identifier_len() + 1);
+
     assert!(matches!(
         Identifier::new(long_identifier.clone()).unwrap_err(),
         IdentifierError::InvalidIdentifier(s) if s == long_identifier

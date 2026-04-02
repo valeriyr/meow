@@ -1,6 +1,9 @@
 use meow_types::{
     address::Address,
-    object::{Object, object_conversion, object_type::ObjectType, object_version::ObjectVersion},
+    object::{
+        Object, object_conversion, object_ref::ObjectRef, object_type::ObjectType,
+        object_version::ObjectVersion,
+    },
     system_framework::meow_coin,
     transaction::call::{Call, Input},
 };
@@ -67,6 +70,35 @@ pub fn resolve_arg(
                 .iter()
                 .find(|o| o.address() == object_ref.address())
                 .ok_or_else(|| format!("input object {} not found", object_ref.address()))?;
+            let obj_address = obj.address();
+            if obj.type_() == &ObjectType::Module {
+                return Err(format!(
+                    "object {} is a module and cannot be used as a call argument",
+                    obj_address
+                ));
+            }
+            let obj_version = obj.version();
+            if obj_version == &ObjectVersion::MAX {
+                return Err(format!(
+                    "object {} is at the maximum version and cannot be used as a call argument",
+                    obj_address
+                ));
+            }
+            let object_ref_version = object_ref.version();
+            if obj_version != object_ref_version {
+                return Err(format!(
+                    "object {} has invalid version: expected {}, found {}",
+                    obj_address, object_ref_version, obj_version
+                ));
+            }
+            let obj_digest = obj.digest();
+            let object_ref_digest = object_ref.digest();
+            if &obj_digest != object_ref_digest {
+                return Err(format!(
+                    "object {} has invalid digest: expected {}, found {}",
+                    obj_address, object_ref_digest, obj_digest
+                ));
+            }
             Ok(object_conversion::object_to_vm_object_value(obj).map_err(|e| e.to_string())?)
         }
         Input::Raw(bytes) => match expected_type {
@@ -100,10 +132,11 @@ pub fn resolve_arg(
 
 /// Resolve the gas coin object from inputs and validate it.
 pub fn resolve_gas_coin_object<'a>(
-    gas_coin_address: &Address,
+    gas_coin_ref: &ObjectRef,
     sender: &Address,
     inputs: &'a [Object],
 ) -> Result<&'a Object> {
+    let gas_coin_address = gas_coin_ref.address();
     // Locate and validate the gas coin.
     let gas_coin = match inputs.iter().find(|o| o.address() == gas_coin_address) {
         Some(o) => Ok(o),
@@ -115,8 +148,25 @@ pub fn resolve_gas_coin_object<'a>(
     if gas_coin.owner().address() != Some(sender) {
         return Err(ExecutorError::InvalidGasCoinOwner);
     }
-    if gas_coin.version() == &ObjectVersion::MAX {
+    let gas_coin_version = gas_coin.version();
+    if gas_coin_version == &ObjectVersion::MAX {
         return Err(ExecutorError::ObjectAtMaxVersion(*gas_coin_address));
+    }
+    let gas_coin_ref_version = gas_coin_ref.version();
+    if gas_coin_version != gas_coin_ref_version {
+        return Err(ExecutorError::InvalidObjectVersion {
+            address: *gas_coin_address,
+            expected: *gas_coin_ref_version,
+            found: *gas_coin_version,
+        });
+    }
+    let gas_coin_digest = gas_coin.digest();
+    if &gas_coin_digest != gas_coin_ref.digest() {
+        return Err(ExecutorError::InvalidObjectDigest {
+            address: *gas_coin_address,
+            expected: *gas_coin_ref.digest(),
+            found: gas_coin_digest,
+        });
     }
 
     Ok(gas_coin)

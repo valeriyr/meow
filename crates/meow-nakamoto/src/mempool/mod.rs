@@ -42,8 +42,8 @@ impl Mempool {
         }
 
         let gas_coin = tx.transaction().gas_coin();
-        if !store.contains(gas_coin) {
-            return Err(MempoolError::GasCoinNotFound(*gas_coin));
+        if !store.contains(gas_coin.address()) {
+            return Err(MempoolError::GasCoinNotFound(*gas_coin.address()));
         }
 
         self.seen.insert(digest);

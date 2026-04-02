@@ -3,6 +3,7 @@ use meow_types::{
     digest::Digest,
     identifier::Identifier,
     keypair::{KeyPair, error::KeyPairError, signature_scheme::SignatureScheme},
+    object::{object_ref::ObjectRef, object_version::ObjectVersion},
     transaction::{
         SignedTransaction, Transaction, call::Call, error::TransactionError,
         transaction_type::TransactionType,
@@ -29,7 +30,7 @@ fn transaction_digest_is_not_zero() {
 fn known_transaction_digest() {
     assert_eq!(
         test_tx().digest().to_string(),
-        "AR9nyEJL4xuJnNkH8DsEQidfpAK21CiuUgsYNwR2ubEo"
+        "Efw9yuB4Z8JGXwLmBGYwrvtZBsW7wruQrNqdnCVNKEpP"
     );
 }
 
@@ -63,15 +64,15 @@ fn signed_transaction_verify_wrong_digest() {
 //
 
 fn sender() -> Address {
-    Address::new([1; 32])
+    Address::fill(1)
 }
 
-fn gas() -> Address {
-    Address::new([2; 32])
+fn gas() -> ObjectRef {
+    ObjectRef::new(Address::fill(2), ObjectVersion::ONE, Digest::ZERO)
 }
 
 fn module() -> Address {
-    Address::new([3; 32])
+    Address::fill(3)
 }
 
 fn function() -> Identifier {

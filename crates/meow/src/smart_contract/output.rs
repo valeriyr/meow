@@ -1,4 +1,3 @@
-use meow_types::address::Address;
 use meow_vm_adapter::{Module, runner::RunResult};
 use serde::Serialize;
 
@@ -63,7 +62,7 @@ impl From<RunResult> for RunResultOutput {
         let transfers = result
             .transfers
             .into_iter()
-            .map(|(obj, new_owner)| (obj.to_string(), Address::from(new_owner).to_string()))
+            .map(|(obj, new_owner)| (obj.to_string(), new_owner.to_string()))
             .collect();
         let destroyed = result
             .destroyed

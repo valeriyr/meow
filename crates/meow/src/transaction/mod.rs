@@ -8,9 +8,10 @@ use clap::Parser;
 use meow_node_client::NodeClient;
 use meow_types::{
     address::Address,
+    config,
     identifier::Identifier,
     keystore::Keystore,
-    transaction::{Transaction, call::Call, transaction_type::TransactionType},
+    transaction::{Transaction, call::Call, transaction_type::TransactionType, validator},
 };
 
 use crate::{
@@ -78,14 +79,21 @@ impl TransactionCommand {
                 sender,
                 gas_coin,
             } => {
+                let gas_coin_ref = client
+                    .get_object(&gas_coin)?
+                    .ok_or_else(|| anyhow::anyhow!("gas coin {gas_coin} not found"))?
+                    .object_ref();
+
                 let module = meow_vm_adapter::builder::build_from_file(path)?;
                 let module_bytes = bcs::to_bytes(&module)?;
 
                 let transaction = Transaction::new(
                     sender,
-                    gas_coin,
+                    gas_coin_ref,
                     TransactionType::MeowModulePublish(module_bytes),
                 );
+
+                validate_transaction(&transaction)?;
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }
@@ -96,6 +104,11 @@ impl TransactionCommand {
                 gas_coin,
                 args,
             } => {
+                let gas_coin_ref = client
+                    .get_object(&gas_coin)?
+                    .ok_or_else(|| anyhow::anyhow!("gas coin {gas_coin} not found"))?
+                    .object_ref();
+
                 let inputs = args
                     .into_iter()
                     .map(|arg| arg.into_input(client))
@@ -103,7 +116,9 @@ impl TransactionCommand {
 
                 let call = Call::new(module, function, inputs);
                 let transaction =
-                    Transaction::new(sender, gas_coin, TransactionType::MeowCall(call));
+                    Transaction::new(sender, gas_coin_ref, TransactionType::MeowCall(call));
+
+                validate_transaction(&transaction)?;
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }
@@ -111,10 +126,19 @@ impl TransactionCommand {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
                 let transaction = bcs::from_bytes(&bytes)?;
 
+                validate_transaction(&transaction)?;
+
                 let signed_transaction = signer::sign_transaction(transaction, keystore)?;
 
                 Ok(TransactionCommandOutput::new(signed_transaction, encoder)?)
             }
         }
     }
+}
+
+/// Validates the transaction.
+fn validate_transaction(transaction: &Transaction) -> anyhow::Result<()> {
+    let config = config::compiler_config();
+    validator::validate_transaction(transaction, &config)?;
+    Ok(())
 }

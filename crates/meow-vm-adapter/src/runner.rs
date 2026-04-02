@@ -1,8 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
-use meow_types::{address::Address, digest::Digest, identifier::Identifier};
+use meow_types::{address::Address, config, digest::Digest, identifier::Identifier};
 use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::config::VmConfig;
 
 use crate::{Module, Value, context::Context, natives};
 
@@ -19,7 +18,7 @@ pub struct RunResult {
     /// Post-call slot state: `None` means the object was consumed (moved out).
     pub final_args: Vec<Option<Value>>,
     /// Objects transferred out during the call: `(object, new_owner)`.
-    pub transfers: Vec<(Value, [u8; 32])>,
+    pub transfers: Vec<(Value, Address)>,
     /// Objects destroyed during the call.
     pub destroyed: Vec<Value>,
     /// Gas spent during the call.
@@ -41,7 +40,7 @@ pub fn run_with_gas_meter(
 ) -> Result<RunResult> {
     let ctx = Rc::new(RefCell::new(Context::new(Address::ZERO, Digest::ZERO)));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default(), VmConfig::default());
+    let vm = Vm::new(module, natives, GasSchedule::default(), config::vm_config());
 
     let call_result = vm.call(fn_name.as_ref(), args, gas)?;
 
@@ -49,12 +48,7 @@ pub fn run_with_gas_meter(
     Ok(RunResult {
         return_value: call_result.return_value,
         final_args: call_result.final_args,
-        transfers: ctx
-            .transfers()
-            .to_owned()
-            .into_iter()
-            .map(|(v, o)| (v.clone(), o.into()))
-            .collect(),
+        transfers: ctx.transfers().to_vec(),
         destroyed: ctx.destroyed().to_vec(),
         gas_spent: gas.spent(),
     })

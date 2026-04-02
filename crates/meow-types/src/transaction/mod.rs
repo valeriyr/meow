@@ -2,6 +2,7 @@ pub mod call;
 pub mod error;
 pub mod execution_result;
 pub mod transaction_type;
+pub mod validator;
 
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +10,7 @@ use crate::{
     address::Address,
     digest::Digest,
     keypair::signature::Signature,
+    object::object_ref::ObjectRef,
     transaction::{error::TransactionError, transaction_type::TransactionType},
 };
 
@@ -22,7 +24,7 @@ pub struct Transaction {
     sender: Address,
     /// The MEOW coin to be used for paying the transaction fee.
     /// Acts as a nonce of the transaction.
-    gas_coin: Address,
+    gas_coin: ObjectRef,
     /// The transaction type.
     type_: TransactionType,
 }
@@ -37,7 +39,7 @@ pub struct SignedTransaction(Transaction, Signature);
 
 impl Transaction {
     /// Creates a new transaction.
-    pub fn new(sender: Address, gas_coin: Address, type_: TransactionType) -> Self {
+    pub fn new(sender: Address, gas_coin: ObjectRef, type_: TransactionType) -> Self {
         Self {
             sender,
             gas_coin,
@@ -51,7 +53,7 @@ impl Transaction {
     }
 
     /// Returns the gas coin used for the transaction.
-    pub fn gas_coin(&self) -> &Address {
+    pub fn gas_coin(&self) -> &ObjectRef {
         &self.gas_coin
     }
 

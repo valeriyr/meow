@@ -11,9 +11,8 @@ mod validator;
 pub mod error;
 
 use chumsky::Parser;
-use meow_vm_types::{config::CompilerConfig, module::Module, types::StructDef};
-
 use error::CompilerError;
+use meow_vm_types::{config::CompilerConfig, module::Module, types::StructDef};
 
 use crate::{ast::AstItem, codegen::Codegen, parser::parser};
 
@@ -59,7 +58,7 @@ pub struct Compiler;
 impl Compiler {
     /// Compile `source` into a module named `module_name` using the given `config`.
     pub fn compile(module_name: &str, source: &str, config: CompilerConfig) -> Result<Module> {
-        validator::validate_identifier(module_name, "module name")?;
+        validator::validate_identifier(module_name, "module name", &config)?;
 
         let items = parser().parse(source).into_result().map_err(|errs| {
             let msg = errs

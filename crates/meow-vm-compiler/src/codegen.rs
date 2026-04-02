@@ -28,7 +28,7 @@ impl<'m> Codegen<'m> {
         ast_fn: AstFunction,
         config: &'m CompilerConfig,
     ) -> Result<Function> {
-        validator::validate_identifier(&ast_fn.name, "function name")?;
+        validator::validate_identifier(&ast_fn.name, "function name", config)?;
 
         let max_params = config.max_params();
         if ast_fn.params.len() > max_params {
@@ -66,6 +66,7 @@ impl<'m> Codegen<'m> {
             validator::validate_identifier(
                 &name,
                 &format!("parameter in function '{}'", ast_fn.name),
+                config,
             )?;
             cg.alloc_local(name.clone())?;
             params.push((name, ty));
@@ -112,7 +113,7 @@ impl<'m> Codegen<'m> {
     }
 
     fn alloc_local(&mut self, name: String) -> Result<u8> {
-        validator::validate_identifier(&name, "variable")?;
+        validator::validate_identifier(&name, "variable", self.config)?;
         let max_locals = self.config.max_locals();
         if self.next_slot as usize >= max_locals {
             return Err(CompilerError::Message(format!(
@@ -167,10 +168,11 @@ impl<'m> Codegen<'m> {
                 // Optimise: if the base is a local variable, use LoadField (no move).
                 // Otherwise, compile the expression (which may consume a value) then GetField.
                 if let Expr::Ident(ref name) = *expr
-                    && let Some(&slot) = self.locals.get(name) {
-                        self.emit(Instruction::LoadField(slot, field));
-                        return Ok(());
-                    }
+                    && let Some(&slot) = self.locals.get(name)
+                {
+                    self.emit(Instruction::LoadField(slot, field));
+                    return Ok(());
+                }
                 // Fallback: compile base expression (may be consuming), then GetField.
                 self.compile_expr(*expr)?;
                 self.emit(Instruction::GetField(field));

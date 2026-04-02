@@ -1,17 +1,12 @@
 //
-// ─── Constants ───
-//
-
-/// Maximum character length of any identifier (module, function, struct, field, or variable name).
-pub const MAX_IDENTIFIER_LEN: usize = 128;
-
-//
 // ─── Compiler configuration ───
 //
 
 /// The compiler configuration.
 #[derive(Debug, Clone)]
 pub struct CompilerConfig {
+    /// Maximum character length of any identifier (module, function, struct, field, or variable name).
+    max_identifier_len: usize,
     /// Maximum number of struct/object definitions in a module.
     max_structs: usize,
     /// Maximum number of functions in a module.
@@ -27,6 +22,11 @@ pub struct CompilerConfig {
 }
 
 impl CompilerConfig {
+    /// Returns the maximum character length of any identifier (module, function, struct, field, or variable name).
+    pub fn max_identifier_len(&self) -> usize {
+        self.max_identifier_len
+    }
+
     /// Returns the maximum number of struct/object definitions allowed in a module.
     pub fn max_structs(&self) -> usize {
         self.max_structs
@@ -61,6 +61,7 @@ impl CompilerConfig {
 impl Default for CompilerConfig {
     fn default() -> Self {
         Self {
+            max_identifier_len: 128,
             max_structs: 128,
             max_functions: 256,
             max_fields: 32,

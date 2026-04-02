@@ -6,9 +6,11 @@ use std::{
     path::Path,
 };
 
-use meow_types::identifier::Identifier;
+use meow_types::{
+    config::{self, MAX_BCS_SERIALIZED_MODULE_SIZE},
+    identifier::Identifier,
+};
 use meow_vm_compiler::Compiler;
-use meow_vm_types::config::CompilerConfig;
 
 use crate::{Module, builder::error::BuilderError};
 
@@ -58,10 +60,18 @@ pub fn build_from_file<P: AsRef<Path>>(file_path: P) -> Result<Module> {
     compile(&module_name, &source)
 }
 
+/// Compiles the source code into a module.
 fn compile(module_name: &Identifier, source: &str) -> Result<Module> {
-    Ok(Compiler::compile(
-        module_name.as_ref(),
-        source,
-        CompilerConfig::default(),
-    )?)
+    let module = Compiler::compile(module_name.as_ref(), source, config::compiler_config())?;
+
+    let module_size = bcs::serialized_size(&module).expect("module serialization is infallible");
+    let max_module_size = MAX_BCS_SERIALIZED_MODULE_SIZE;
+    if module_size > max_module_size {
+        return Err(BuilderError::ModuleTooLarge {
+            size: module_size,
+            limit: max_module_size,
+        });
+    }
+
+    Ok(module)
 }

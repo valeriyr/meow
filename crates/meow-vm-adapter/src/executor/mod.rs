@@ -9,6 +9,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use meow_types::{
     address::Address,
+    config::{self, MAX_BCS_SERIALIZED_MODULE_SIZE},
     digest::Digest,
     object::Object,
     system_framework::meow_coin,
@@ -20,12 +21,8 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::config::VmConfig;
 
 use crate::{context::Context, executor::error::ExecutorError, natives};
-
-/// Maximum serialized byte size of a compiled [`crate::module::Module`].
-const MAX_MODULE_SIZE_BYTES: usize = 512 * 1024; // 512 KiB
 
 /// Gas cost per byte of module bytecode when publishing.
 const GAS_PER_MODULE_BYTE: u64 = 10;
@@ -138,7 +135,7 @@ fn execute_meow_call(
     // Build executor context and native functions.
     let ctx = Rc::new(RefCell::new(Context::new(*sender, *tx_digest)));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default(), VmConfig::default());
+    let vm = Vm::new(module, natives, GasSchedule::default(), config::vm_config());
 
     // Execute the function.
     let call_result = match vm.call(fn_name, vm_args, gas) {
@@ -184,11 +181,12 @@ fn execute_meow_module_publish(
 ) -> ExecutionResult {
     let module_size = module.len();
 
-    if module_size > MAX_MODULE_SIZE_BYTES {
+    let max_module_size = MAX_BCS_SERIALIZED_MODULE_SIZE;
+    if module_size > max_module_size {
         return ExecutionResult::failure(
             format!(
                 "module size {} bytes exceeds maximum of {} bytes",
-                module_size, MAX_MODULE_SIZE_BYTES
+                module_size, max_module_size
             ),
             *tx_digest,
         );

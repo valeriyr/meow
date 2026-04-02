@@ -9,6 +9,8 @@ pub enum BuilderError {
     IoError(#[from] std::io::Error),
     #[error("missing file name: {0}")]
     MissingFileName(String),
+    #[error("module too large: {size} bytes exceeds limit of {limit} bytes")]
+    ModuleTooLarge { size: usize, limit: usize },
     #[error("source too large: {size} bytes exceeds limit of {limit} bytes")]
     SourceTooLarge { size: usize, limit: usize },
 }

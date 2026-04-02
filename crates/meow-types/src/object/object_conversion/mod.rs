@@ -27,8 +27,10 @@ pub fn object_to_vm_object_value(obj: &Object) -> Result<Value> {
     }?;
     let mut fields: Vec<(String, Value)> =
         bcs::from_bytes(obj.content()).expect("object content must be valid BCS");
-    let id_bytes: [u8; 32] = (*obj.address()).into();
-    fields.insert(0, ("id".to_string(), Value::Address(id_bytes)));
+    fields.insert(
+        0,
+        ("id".to_string(), Value::Address((*obj.address()).into())),
+    );
     Ok(Value::Object { type_name, fields })
 }
 

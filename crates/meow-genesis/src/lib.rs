@@ -4,7 +4,7 @@ use meow_types::{
     address::Address,
     digest::Digest,
     identifier::Identifier,
-    object::Object,
+    object::{Object, object_ref::ObjectRef, object_version::ObjectVersion},
     system_framework::{
         MEOW_SYSTEM_ADDRESS,
         meow_coin::{
@@ -78,7 +78,7 @@ fn mint_meow_coins(meow_module: Object, allocations: &[(Address, u64)]) -> Resul
 
             let transaction = Transaction::new(
                 MEOW_SYSTEM_ADDRESS,
-                Address::ZERO,
+                ObjectRef::new(Address::ZERO, ObjectVersion::ZERO, Digest::ZERO),
                 TransactionType::MeowCall(Call::new(
                     MEOW_COIN_MODULE_ADDRESS,
                     function.clone(),

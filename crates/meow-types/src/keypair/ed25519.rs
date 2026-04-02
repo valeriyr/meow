@@ -168,6 +168,11 @@ impl Ed25519Signature {
     pub fn verify<T: AsRef<[u8]>>(&self, msg: T) -> Result<()> {
         Ok(self.1.verify(&self.0, msg.as_ref())?)
     }
+
+    /// Returns the public key of the signature.
+    pub fn public_key(&self) -> Ed25519PublicKey {
+        Ed25519PublicKey(self.1)
+    }
 }
 
 impl std::fmt::Display for Ed25519Signature {

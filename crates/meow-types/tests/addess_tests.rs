@@ -29,6 +29,18 @@ fn custom_address() {
     );
 }
 
+#[test]
+fn fill_address() {
+    assert_eq!(
+        Address::fill(1).to_string(),
+        "0x0101010101010101010101010101010101010101010101010101010101010101"
+    );
+    assert_eq!(
+        Address::fill(0xAA).to_string(),
+        "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    );
+}
+
 //
 // ─── Address derive tests ───
 //
@@ -36,7 +48,7 @@ fn custom_address() {
 #[test]
 fn derive_is_deterministic() {
     let digest = test_digest();
-    let a1 = Address::derive(digest.clone(), 0, 0);
+    let a1 = Address::derive(digest, 0, 0);
     let a2 = Address::derive(digest, 0, 0);
     assert_eq!(a1, a2);
 }
@@ -50,7 +62,7 @@ fn derive_not_zero() {
 #[test]
 fn derive_differs_by_tag() {
     let digest = test_digest();
-    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a0 = Address::derive(digest, 0, 0);
     let a1 = Address::derive(digest, 1, 0);
     assert_ne!(a0, a1);
 }
@@ -58,7 +70,7 @@ fn derive_differs_by_tag() {
 #[test]
 fn derive_differs_by_number() {
     let digest = test_digest();
-    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a0 = Address::derive(digest, 0, 0);
     let a1 = Address::derive(digest, 0, 1);
     assert_ne!(a0, a1);
 }
@@ -133,7 +145,7 @@ fn derive_known_value() {
 #[test]
 fn derive_different_counters_produce_different_addresses() {
     let digest = test_digest();
-    let a0 = Address::derive(digest.clone(), 0, 0);
+    let a0 = Address::derive(digest, 0, 0);
     let a1 = Address::derive(digest, 0, 1);
     assert_ne!(a0, a1);
 }

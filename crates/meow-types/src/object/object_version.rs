@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// The version of an object.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
 pub struct ObjectVersion(u64);
 
 impl ObjectVersion {

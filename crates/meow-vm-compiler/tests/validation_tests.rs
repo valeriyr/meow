@@ -1,8 +1,5 @@
 use meow_vm_compiler::{Compiler, Result, error::CompilerError};
-use meow_vm_types::{
-    config::{self, CompilerConfig},
-    module::Module,
-};
+use meow_vm_types::{config::CompilerConfig, module::Module};
 
 //
 // ─── Object rules ───
@@ -88,7 +85,8 @@ fn module_name_with_dash_rejected() {
 
 #[test]
 fn module_name_too_long_rejected() {
-    let long = "a".repeat(config::MAX_IDENTIFIER_LEN + 1);
+    let config = CompilerConfig::default();
+    let long = "a".repeat(config.max_identifier_len() + 1);
     assert!(matches!(
         compile(&long, "fn f() {}").unwrap_err(),
         CompilerError::Message(msg) if msg.contains("module name")

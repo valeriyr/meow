@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::identifier::error::IdentifierError;
+use crate::{config, identifier::error::IdentifierError};
 
 pub mod error;
 
@@ -26,7 +26,8 @@ impl Identifier {
     /// A valid identifier starts with an ASCII letter or underscore, followed by
     /// zero or more ASCII letters, digits, or underscores.
     fn is_valid(name: &str) -> bool {
-        meow_vm_types::identifier::is_valid_identifier(name)
+        let config = config::compiler_config();
+        meow_vm_types::identifier::is_valid_identifier(name, &config)
     }
 }
 

@@ -86,10 +86,10 @@ mod tests {
 
     use super::Context;
 
-    const SENDER: [u8; 32] = [0xAAu8; 32];
+    const SENDER: Address = Address::fill(0xAA);
 
     fn make_ctx() -> Context {
-        Context::new(Address::new(SENDER), Digest::ZERO)
+        Context::new(SENDER, Digest::ZERO)
     }
 
     #[test]
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn sender_returns_correct_address() {
         let ctx = make_ctx();
-        assert_eq!(ctx.sender(), Address::new(SENDER));
+        assert_eq!(ctx.sender(), SENDER);
     }
 
     #[test]
@@ -124,8 +124,8 @@ mod tests {
 
     #[test]
     fn fresh_ids_are_deterministic() {
-        let mut ctx1 = Context::new(Address::new(SENDER), Digest::ZERO);
-        let mut ctx2 = Context::new(Address::new(SENDER), Digest::ZERO);
+        let mut ctx1 = Context::new(SENDER, Digest::ZERO);
+        let mut ctx2 = Context::new(SENDER, Digest::ZERO);
         assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
         assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
     }
@@ -133,7 +133,7 @@ mod tests {
     #[test]
     fn transfer_is_recorded() {
         let mut ctx = make_ctx();
-        let owner = Address::new([0x02u8; 32]);
+        let owner = Address::fill(2);
         ctx.transfer(test_object(), owner);
         assert_eq!(ctx.transfers().len(), 1);
         assert_eq!(ctx.transfers()[0].1, owner);

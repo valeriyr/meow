@@ -1,4 +1,4 @@
-use meow_vm_types::{identifier::is_valid_identifier, config};
+use meow_vm_types::{config::CompilerConfig, identifier};
 
 //
 // ─── Identifier validity tests ───
@@ -58,6 +58,17 @@ fn invalid_identifier_with_non_ascii() {
 
 #[test]
 fn invalid_too_long_identifier() {
-    let long_identifier = "a".repeat(config::MAX_IDENTIFIER_LEN + 1);
-    assert!(!is_valid_identifier(&long_identifier));
+    let config = CompilerConfig::default();
+    let long_identifier = "a".repeat(config.max_identifier_len() + 1);
+
+    assert!(!identifier::is_valid_identifier(&long_identifier, &config));
+}
+
+//
+// ─── Utility functions ───
+//
+
+fn is_valid_identifier(name: &str) -> bool {
+    let config = CompilerConfig::default();
+    identifier::is_valid_identifier(name, &config)
 }

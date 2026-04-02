@@ -18,7 +18,7 @@ pub type Result<T> = std::result::Result<T, AddressError>;
 pub const ADDRESS_LENGTH: usize = 32;
 
 /// The meow account address type.
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Ord, PartialOrd)]
+#[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Address([u8; ADDRESS_LENGTH]);
 
 impl Address {
@@ -28,6 +28,11 @@ impl Address {
     /// Creates a new address.
     pub const fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
         Self(bytes)
+    }
+
+    /// Creates an address filled with the given byte.
+    pub const fn fill(byte: u8) -> Self {
+        Self([byte; ADDRESS_LENGTH])
     }
 
     /// Derives a new address from the given digest, tag, and counter.

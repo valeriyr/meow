@@ -1,5 +1,6 @@
 use meow_nakamoto::store::Store;
 use meow_types::{
+    address::Address,
     digest::Digest,
     object::Object,
     transaction::execution_result::{ExecutionResult, ExecutionStatus},
@@ -40,7 +41,7 @@ fn apply_changed_objects_overwrites() {
 
     let mut store = Store::with_objects([obj_v1.clone()]);
 
-    let obj_v2 = Object::fresh_module(obj_v1.address().clone(), Digest::ZERO, vec![]);
+    let obj_v2 = Object::fresh_module(*obj_v1.address(), Digest::ZERO, vec![]);
 
     store.apply_execution_result(&make_execution_result(vec![], vec![obj_v2.clone()], vec![]));
 
@@ -82,11 +83,11 @@ fn apply_does_not_touch_unrelated_objects() {
 // ─── Utility functions ───
 //
 
-const ADDRESS1: [u8; 32] = [0xAA; 32];
-const ADDRESS2: [u8; 32] = [0xBB; 32];
+const ADDRESS1: Address = Address::fill(0xAA);
+const ADDRESS2: Address = Address::fill(0xBB);
 
-fn make_object(addr: [u8; 32]) -> Object {
-    Object::fresh_module(addr.into(), Digest::ZERO, vec![])
+fn make_object(addr: Address) -> Object {
+    Object::fresh_module(addr, Digest::ZERO, vec![])
 }
 
 fn make_execution_result(

@@ -1,16 +1,17 @@
 use meow_types::{
     address::Address,
+    config::MAX_BCS_SERIALIZED_MODULE_SIZE,
     digest::Digest,
     identifier::Identifier,
     object::{
-        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_type::ObjectType,
-        object_version::ObjectVersion,
+        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
+        object_type::ObjectType, object_version::ObjectVersion,
     },
     system_framework::meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
     transaction::{
         Transaction,
         call::{Call, Input},
-        execution_result::ExecutionStatus,
+        execution_result::{ExecutionResult, ExecutionStatus},
         transaction_type::TransactionType,
     },
 };
@@ -47,14 +48,7 @@ fn mint_succeeds_and_creates_object() {
     assert_eq!(result.destroyed_objects().len(), 0);
     let created = &result.created_objects()[0];
     assert_eq!(meow_coin::gas_meow_coin_balance(created).unwrap(), 100);
-    let owner: [u8; 32] = created
-        .owner()
-        .address()
-        .unwrap()
-        .as_ref()
-        .try_into()
-        .unwrap();
-    assert_eq!(owner, SENDER);
+    assert_eq!(created.owner().address(), Some(&SENDER));
     assert!(
         meow_coin::gas_meow_coin_balance(find_gas_coin(&result)).unwrap() == 998909,
         "gas must have been deducted from gas coin"
@@ -63,9 +57,8 @@ fn mint_succeeds_and_creates_object() {
 
 #[test]
 fn burn_succeeds_and_destroys_object() {
-    let coin_id: [u8; 32] = [0xCCu8; 32];
     let module_obj = make_default_module_object();
-    let coin_obj = make_coin_object(coin_id, SENDER, 50);
+    let coin_obj = make_coin_object(Address::fill(0xCC), SENDER, 50);
     let gas_obj = make_gas_coin_object();
 
     let tx = make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
@@ -79,16 +72,13 @@ fn burn_succeeds_and_destroys_object() {
     );
     assert_eq!(result.created_objects().len(), 0);
     assert_eq!(result.changed_objects().len(), 1);
-    assert_eq!(
-        result.changed_objects()[0].address(),
-        &Address::new(GAS_ADDR)
-    );
+    assert_eq!(result.changed_objects()[0].address(), &GAS_ADDR);
 }
 
 #[test]
 fn transfer_changes_owner() {
-    let coin_id: [u8; 32] = [0xDDu8; 32];
-    let new_owner: [u8; 32] = [0x02u8; 32];
+    let coin_id = Address::fill(0xDD);
+    let new_owner = Address::fill(0x02);
     let module_obj = make_default_module_object();
     let coin_obj = make_coin_object(coin_id, SENDER, 75);
     let gas_obj = make_gas_coin_object();
@@ -109,22 +99,15 @@ fn transfer_changes_owner() {
     let transferred = result
         .changed_objects()
         .iter()
-        .find(|o| o.address() == &Address::new(coin_id))
+        .find(|o| o.address() == &coin_id)
         .unwrap();
-    let owner: [u8; 32] = transferred
-        .owner()
-        .address()
-        .unwrap()
-        .as_ref()
-        .try_into()
-        .unwrap();
-    assert_eq!(owner, new_owner);
+    assert_eq!(transferred.owner().address(), Some(&new_owner));
     assert_eq!(meow_coin::gas_meow_coin_balance(transferred).unwrap(), 75);
 }
 
 #[test]
 fn split_with_sufficient_balance() {
-    let coin_id: [u8; 32] = [0xEEu8; 32];
+    let coin_id = Address::fill(0xEE);
     let module_obj = make_default_module_object();
     let coin_obj = make_coin_object(coin_id, SENDER, 100);
     let gas_obj = make_gas_coin_object();
@@ -146,26 +129,19 @@ fn split_with_sufficient_balance() {
     );
     let new_coin = &result.created_objects()[0];
     assert_eq!(meow_coin::gas_meow_coin_balance(new_coin).unwrap(), 40);
-    let new_owner: [u8; 32] = new_coin
-        .owner()
-        .address()
-        .unwrap()
-        .as_ref()
-        .try_into()
-        .unwrap();
-    assert_eq!(new_owner, SENDER);
+    assert_eq!(new_coin.owner().address(), Some(&SENDER));
 
     let original = result
         .changed_objects()
         .iter()
-        .find(|o| o.address() == &Address::new(coin_id))
+        .find(|o| o.address() == &coin_id)
         .expect("original coin must appear as changed");
     assert_eq!(meow_coin::gas_meow_coin_balance(original).unwrap(), 60);
     assert!(
         result
             .changed_objects()
             .iter()
-            .any(|o| o.address() == &Address::new(GAS_ADDR)),
+            .any(|o| o.address() == &GAS_ADDR),
         "gas coin must appear as changed"
     );
 }
@@ -177,7 +153,6 @@ fn split_with_sufficient_balance() {
 #[test]
 fn execute_with_gas_coin_not_found_returns_error() {
     let module_obj = make_default_module_object();
-    let missing_gas_addr: [u8; 32] = [0xFEu8; 32];
     let call = Call::new(
         MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("mint").unwrap(),
@@ -187,8 +162,8 @@ fn execute_with_gas_coin_not_found_returns_error() {
         ],
     );
     let tx = Transaction::new(
-        Address::new(SENDER),
-        Address::new(missing_gas_addr),
+        SENDER,
+        ObjectRef::new(Address::fill(0xFE), ObjectVersion::ONE, Digest::ZERO),
         TransactionType::MeowCall(call),
     );
 
@@ -215,8 +190,7 @@ fn execute_with_invalid_gas_coin_returns_error() {
 #[test]
 fn execute_with_invalid_gas_coin_owner_returns_error() {
     let module_obj = make_default_module_object();
-    let wrong_owner: [u8; 32] = [0xFFu8; 32];
-    let gas_obj = make_valid_gas_coin_object(wrong_owner);
+    let gas_obj = make_valid_gas_coin_object(Address::fill(0xFF));
     let tx = make_meow_call_transaction(
         "mint",
         vec![
@@ -242,9 +216,58 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
     );
 
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    assert!(matches!(err, ExecutorError::ObjectAtMaxVersion(address) if address == GAS_ADDR));
+}
+
+#[test]
+fn execute_with_gas_coin_wrong_version_returns_error() {
+    // Gas coin is at version ZERO but the transaction references version ONE.
+    let module_obj = make_default_module_object();
+    let gas_obj = make_gas_coin_object_at_version(ObjectVersion::ZERO);
+    let tx = make_meow_call_transaction(
+        "mint",
+        vec![
+            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
+            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
+        ],
+    );
+
+    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
-        ExecutorError::ObjectAtMaxVersion(addr) if addr == Address::new(GAS_ADDR)
+        ExecutorError::InvalidObjectVersion { address, expected, found }
+            if address == GAS_ADDR
+            && expected == ObjectVersion::ONE
+            && found == ObjectVersion::ZERO
+    ));
+}
+
+#[test]
+fn execute_with_gas_coin_wrong_digest_returns_error() {
+    // Gas coin with correct address and version, but the ObjectRef in the
+    // transaction carries a stale / wrong digest.
+    let module_obj = make_default_module_object();
+    let gas_obj = make_gas_coin_object();
+    let expected_digest = gas_obj.digest();
+
+    let wrong_ref = ObjectRef::new(GAS_ADDR, ObjectVersion::ONE, Digest::ZERO);
+    let call = Call::new(
+        MEOW_COIN_MODULE_ADDRESS,
+        Identifier::new("mint").unwrap(),
+        vec![
+            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
+            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
+        ],
+    );
+    let tx = Transaction::new(SENDER, wrong_ref, TransactionType::MeowCall(call));
+
+    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    assert!(matches!(
+        err,
+        ExecutorError::InvalidObjectDigest { address, expected, found }
+            if address == GAS_ADDR
+            && expected == Digest::ZERO
+            && found == expected_digest
     ));
 }
 
@@ -282,7 +305,7 @@ fn execute_meow_call_without_module_returns_failure() {
 fn execute_meow_call_with_multiple_modules_returns_failure() {
     let module1 = make_default_module_object();
     // Second module object at a different address.
-    let module2 = make_module_object(Address::new([0x02u8; 32]), module1.content().to_vec());
+    let module2 = make_module_object(Address::fill(0x02), module1.content().to_vec());
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
@@ -321,6 +344,94 @@ fn execute_with_function_not_found_returns_failure() {
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("function 'nonexistent_function' not found in module")),
         "missing function must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_with_input_object_at_max_version_returns_failure() {
+    let module_obj = make_default_module_object();
+    let coin_obj = make_coin_object_at_version(Address::fill(0xCC), SENDER, 50, ObjectVersion::MAX);
+    let gas_obj = make_gas_coin_object();
+    let tx = make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+
+    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is at the maximum version")),
+        "object at max version must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_with_input_object_wrong_version_returns_failure() {
+    // Coin is at version ONE but the ObjectRef in the call says ZERO.
+    let module_obj = make_default_module_object();
+    let coin_obj = make_coin_object(Address::fill(0xCC), SENDER, 50);
+    let gas_obj = make_gas_coin_object();
+    let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ZERO, coin_obj.digest());
+    let tx = make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
+
+    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid version")),
+        "wrong version argument must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_with_input_object_wrong_digest_returns_failure() {
+    // Coin has correct address and version in the ObjectRef but the digest is wrong.
+    let module_obj = make_default_module_object();
+    let coin_obj = make_coin_object(Address::fill(0xCC), SENDER, 50);
+    let gas_obj = make_gas_coin_object();
+    let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ONE, Digest::ZERO);
+    let tx = make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
+
+    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid digest")),
+        "wrong digest argument must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_with_module_as_argument_returns_failure() {
+    let module_obj = make_default_module_object();
+    let gas_obj = make_gas_coin_object();
+    // Pass the module object itself as a call argument.
+    let tx = make_meow_call_transaction("burn", vec![Input::Object(module_obj.object_ref())]);
+
+    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is a module and cannot be used as a call argument")),
+        "module as argument must produce Failure, got: {:?}",
         result.status()
     );
     assert_eq!(
@@ -375,9 +486,8 @@ fn execute_vm_abort_returns_failure() {
 
 #[test]
 fn split_with_insufficient_balance_returns_failure() {
-    let coin_id: [u8; 32] = [0xFFu8; 32];
     let module_obj = make_default_module_object();
-    let coin_obj = make_coin_object(coin_id, SENDER, 10);
+    let coin_obj = make_coin_object(Address::fill(0xFF), SENDER, 10);
     let gas_obj = make_gas_coin_object();
 
     let tx = make_meow_call_transaction(
@@ -401,10 +511,7 @@ fn split_with_insufficient_balance_returns_failure() {
         1,
         "gas coin must still be returned"
     );
-    assert_eq!(
-        result.changed_objects()[0].address(),
-        &Address::new(GAS_ADDR)
-    );
+    assert_eq!(result.changed_objects()[0].address(), &GAS_ADDR);
 }
 
 //
@@ -444,13 +551,16 @@ fn exhausted_gas_coin_goes_to_changed() {
     // the gas coin survives with balance 0 in changed_objects.
     let module_obj = make_default_module_object();
     let gas_obj = make_gas_coin_object_at_version_and_balance(ObjectVersion::ZERO, 0);
-    let tx = make_meow_call_transaction(
-        "mint",
+    let gas_coin_ref = gas_obj.object_ref();
+    let call = Call::new(
+        MEOW_COIN_MODULE_ADDRESS,
+        Identifier::new("mint").unwrap(),
         vec![
             Input::Raw(bcs::to_bytes(&10u64).unwrap()),
             Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
         ],
     );
+    let tx = Transaction::new(SENDER, gas_coin_ref, TransactionType::MeowCall(call));
 
     let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
@@ -458,14 +568,14 @@ fn exhausted_gas_coin_goes_to_changed() {
         result
             .changed_objects()
             .iter()
-            .any(|o| o.address() == &Address::new(GAS_ADDR)),
+            .any(|o| o.address() == &GAS_ADDR),
         "exhausted gas coin must appear in changed_objects"
     );
     assert!(
         !result
             .destroyed_objects()
             .iter()
-            .any(|o| o.address() == &Address::new(GAS_ADDR)),
+            .any(|o| o.address() == &GAS_ADDR),
         "exhausted gas coin must not appear in destroyed_objects"
     );
     // Balance should be floored at 0, not underflowing.
@@ -502,7 +612,7 @@ fn execute_module_publish_succeeds() {
         result
             .changed_objects()
             .iter()
-            .any(|o| o.address() == &Address::new(GAS_ADDR)),
+            .any(|o| o.address() == &GAS_ADDR),
         "gas coin must appear in changed_objects"
     );
 }
@@ -527,8 +637,8 @@ fn execute_module_publish_charges_gas_per_byte() {
 
 #[test]
 fn execute_module_publish_fails_when_module_too_large() {
-    // MAX_MODULE_SIZE_BYTES = 512 * 1024 = 524_288.
-    let oversized = vec![0u8; 512 * 1024 + 1];
+    let module_size = MAX_BCS_SERIALIZED_MODULE_SIZE + 1;
+    let oversized = vec![0u8; module_size];
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(oversized);
 
@@ -568,9 +678,9 @@ fn execute_module_publish_derives_address_from_tx_digest() {
 const MEOW_COIN_SRC: &str = include_str!("../../meow-framework/modules/meow_coin.meow");
 
 /// Fixed sender address used in all tests.
-const SENDER: [u8; 32] = [0xAAu8; 32];
+const SENDER: Address = Address::fill(0xAA);
 /// Fixed gas coin address.
-const GAS_ADDR: [u8; 32] = [0xBBu8; 32];
+const GAS_ADDR: Address = Address::fill(0xBB);
 /// Initial gas coin balance (more than enough for any test).
 const GAS_BALANCE: u64 = 1_000_000;
 
@@ -600,16 +710,16 @@ fn make_meow_call_transaction(fn_name: &str, arguments: Vec<Input>) -> Transacti
         arguments,
     );
     Transaction::new(
-        Address::new(SENDER),
-        Address::new(GAS_ADDR),
+        SENDER,
+        make_gas_coin_object().object_ref(),
         TransactionType::MeowCall(call),
     )
 }
 
 fn make_meow_module_publish_transaction(module: Vec<u8>) -> Transaction {
     Transaction::new(
-        Address::new(SENDER),
-        Address::new(GAS_ADDR),
+        SENDER,
+        make_gas_coin_object().object_ref(),
         TransactionType::MeowModulePublish(module),
     )
 }
@@ -618,22 +728,8 @@ fn make_gas_coin_object() -> Object {
     make_valid_gas_coin_object(SENDER)
 }
 
-fn make_valid_gas_coin_object(owner: [u8; 32]) -> Object {
+fn make_valid_gas_coin_object(owner: Address) -> Object {
     make_coin_object(GAS_ADDR, owner, GAS_BALANCE)
-}
-
-fn make_coin_object(id: [u8; 32], owner: [u8; 32], balance: u64) -> Object {
-    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(balance))];
-    let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let ident = Identifier::new("MeowCoin").unwrap();
-    let decl_ref = ObjectDeclRef::new(MEOW_COIN_MODULE_ADDRESS, ident);
-    Object::fresh_object(
-        Address::new(id),
-        Address::new(owner),
-        Digest::ZERO,
-        decl_ref,
-        content,
-    )
 }
 
 fn make_gas_coin_object_at_version(version: ObjectVersion) -> Object {
@@ -641,24 +737,13 @@ fn make_gas_coin_object_at_version(version: ObjectVersion) -> Object {
 }
 
 fn make_gas_coin_object_at_version_and_balance(version: ObjectVersion, balance: u64) -> Object {
-    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(balance))];
-    let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let ident = Identifier::new("MeowCoin").unwrap();
-    let decl_ref = ObjectDeclRef::new(MEOW_COIN_MODULE_ADDRESS, ident);
-    Object::new(
-        Address::new(GAS_ADDR),
-        ObjectOwner::Address(Address::new(SENDER)),
-        Digest::ZERO,
-        version,
-        ObjectType::Object(decl_ref),
-        content,
-    )
+    make_coin_object_at_version(GAS_ADDR, SENDER, balance, version)
 }
 
 fn make_invalid_gas_coin_object() -> Object {
     Object::new(
-        Address::new(GAS_ADDR),
-        ObjectOwner::Address(Address::new(SENDER)),
+        GAS_ADDR,
+        ObjectOwner::Address(SENDER),
         Digest::ZERO,
         ObjectVersion::ONE,
         ObjectType::Module,
@@ -666,12 +751,34 @@ fn make_invalid_gas_coin_object() -> Object {
     )
 }
 
-fn find_gas_coin<'a>(
-    result: &'a meow_types::transaction::execution_result::ExecutionResult,
-) -> &'a Object {
+fn make_coin_object(id: Address, owner: Address, balance: u64) -> Object {
+    make_coin_object_at_version(id, owner, balance, ObjectVersion::ONE)
+}
+
+fn make_coin_object_at_version(
+    id: Address,
+    owner: Address,
+    balance: u64,
+    version: ObjectVersion,
+) -> Object {
+    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(balance))];
+    let content = bcs::to_bytes(&fields).expect("fields must serialize");
+    let ident = Identifier::new("MeowCoin").unwrap();
+    let decl_ref = ObjectDeclRef::new(MEOW_COIN_MODULE_ADDRESS, ident);
+    Object::new(
+        id,
+        ObjectOwner::Address(owner),
+        Digest::ZERO,
+        version,
+        ObjectType::Object(decl_ref),
+        content,
+    )
+}
+
+fn find_gas_coin(result: &ExecutionResult) -> &Object {
     result
         .changed_objects()
         .iter()
-        .find(|o| o.address() == &Address::new(GAS_ADDR))
+        .find(|o| o.address() == &GAS_ADDR)
         .expect("gas coin must be in changed_objects")
 }

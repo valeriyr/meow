@@ -1,19 +1,15 @@
-use meow_vm_types::{
-    config::{self, CompilerConfig},
-    identifier,
-    types::Type,
-};
+use meow_vm_types::{config::CompilerConfig, identifier, types::Type};
 
 use crate::{Result, ast::AstStruct, error::CompilerError};
 
-pub fn validate_identifier(name: &str, context: &str) -> Result<()> {
-    if !identifier::is_valid_identifier(name) {
+pub fn validate_identifier(name: &str, context: &str, config: &CompilerConfig) -> Result<()> {
+    if !identifier::is_valid_identifier(name, config) {
         Err(CompilerError::Message(format!(
             "{context}: '{}' is not a valid identifier \
              (must start with a letter or underscore, followed by letters, digits, or underscores; \
              max {} characters)",
             name,
-            config::MAX_IDENTIFIER_LEN,
+            config.max_identifier_len(),
         )))
     } else {
         Ok(())
@@ -23,7 +19,7 @@ pub fn validate_identifier(name: &str, context: &str) -> Result<()> {
 pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<()> {
     let kind = if def.is_object { "object" } else { "struct" };
 
-    validate_identifier(&def.name, &format!("{kind} name"))?;
+    validate_identifier(&def.name, &format!("{kind} name"), config)?;
 
     let max_fields = config.max_fields();
     if def.fields.len() > max_fields {
@@ -37,7 +33,11 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
 
     // Validate field types: only primitives allowed.
     for (field_name, ty) in &def.fields {
-        validate_identifier(field_name, &format!("field in {kind} '{}'", def.name))?;
+        validate_identifier(
+            field_name,
+            &format!("field in {kind} '{}'", def.name),
+            config,
+        )?;
         if !ty.is_valid_field_type() {
             return Err(CompilerError::Message(format!(
                 "{kind} '{}': field '{field_name}' has non-primitive type '{}' — only bool, u64, address are allowed",

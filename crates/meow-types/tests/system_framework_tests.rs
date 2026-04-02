@@ -60,20 +60,20 @@ fn is_meow_coin_negative() {
 
 #[test]
 fn round_trip_meow_coin() {
-    let id: [u8; 32] = [0xFFu8; 32];
+    let id = Address::fill(0xFFu8);
     let balance = 50;
 
     let coin = Value::Object {
         type_name: "MeowCoin".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(id)),
+            ("id".to_string(), Value::Address(id.into())),
             ("balance".to_string(), Value::U64(balance)),
         ],
     };
 
     let rust_coin = convert::value_to_rust::<MeowCoin>(&coin).expect("must convert to Rust");
 
-    assert_eq!(rust_coin.id(), &Address::from(id));
+    assert_eq!(rust_coin.id(), &id);
     assert_eq!(rust_coin.balance(), balance);
 
     assert_eq!(
