@@ -71,6 +71,13 @@ impl FromStr for Address {
     fn from_str(s: &str) -> Result<Self> {
         let bytes: Vec<u8> = prefix_hex::decode(s)?;
 
+        if bytes.len() < ADDRESS_LENGTH {
+            // Accept shortened even-length hex forms like `0x42` by left-padding with zeros.
+            let mut padded = vec![0u8; ADDRESS_LENGTH - bytes.len()];
+            padded.extend_from_slice(&bytes);
+            return Address::try_from(padded.as_slice());
+        }
+
         Address::try_from(bytes.as_slice())
     }
 }

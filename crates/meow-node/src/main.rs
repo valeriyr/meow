@@ -24,8 +24,6 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let args = Args::parse();
 
-    tracing::info!(version = env!("CARGO_PKG_VERSION"), "starting meow-node");
-
     args.command.run().await
 }
 

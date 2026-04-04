@@ -55,6 +55,8 @@ impl Command {
                 genesis,
                 difficulty,
             } => {
+                print_startup_banner();
+
                 let gossip_network_config = GossipNetworkConfig {
                     listen_address,
                     bootstrap_peers,
@@ -74,4 +76,20 @@ impl Command {
         }
         Ok(())
     }
+}
+
+/// Prints the ASCII art banner on node startup.
+fn print_startup_banner() {
+    println!(
+        r#"
+ __  __ _____ _____ _       __   _   _  ___  ____  _____
+|  \/  | ____| ____| |     / /  | \ | |/ _ \|  _ \| ____|
+| |\/| |  _| |  _| | | /| / /   |  \| | | | | | | |  _|
+| |  | | |___| |___| |/ |/ /    | |\  | |_| | |_| | |___
+|_|  |_|_____|_____|__/|__/     |_| \_|\___/|____/|_____|
+
+version {}
+"#,
+        env!("CARGO_PKG_VERSION")
+    );
 }

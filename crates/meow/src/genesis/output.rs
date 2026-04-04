@@ -1,7 +1,7 @@
 use meow_genesis::Genesis;
 use serde::Serialize;
 
-use crate::object_output::ObjectOutput;
+use crate::outputs::object_output::ObjectOutput;
 
 /// The genesis information.
 #[derive(Debug, Serialize)]

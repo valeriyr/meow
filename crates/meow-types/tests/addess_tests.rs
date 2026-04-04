@@ -117,6 +117,16 @@ fn address_from_string() {
 }
 
 #[test]
+fn address_from_short_string() {
+    let parsed = Address::from_str("0x42").unwrap();
+
+    assert_eq!(
+        parsed.to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000042"
+    );
+}
+
+#[test]
 fn address_from_bytes() {
     let bytes: Vec<u8> =
         prefix_hex::decode("0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f")

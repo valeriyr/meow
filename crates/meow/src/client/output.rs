@@ -1,15 +1,14 @@
 use meow_types::{
     digest::Digest,
     object::Object,
-    transaction::{
-        SignedTransaction,
-        execution_result::{ExecutionResult, ExecutionStatus},
-    },
+    transaction::{SignedTransaction, execution_result::ExecutionResult},
 };
 use serde::Serialize;
 
-use crate::object_output::ObjectOutput;
-use crate::transaction_output::TransactionOutput;
+use crate::outputs::{
+    object_output::ObjectOutput, transaction_output::TransactionOutput,
+    transaction_result_output::TransactionResultOutput,
+};
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
@@ -19,16 +18,6 @@ pub enum ClientCommandOutput {
     GetTransaction(Option<TransactionOutput>),
     GetTransactionResult(Option<TransactionResultOutput>),
     SubmitTransaction(SubmitTransactionOutput),
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransactionResultOutput {
-    pub digest: String,
-    pub status: String,
-    pub created: Vec<ObjectOutput>,
-    pub changed: Vec<ObjectOutput>,
-    pub destroyed: Vec<ObjectOutput>,
 }
 
 #[derive(Debug, Serialize)]
@@ -58,33 +47,5 @@ impl ClientCommandOutput {
         ClientCommandOutput::SubmitTransaction(SubmitTransactionOutput {
             digest: digest.to_string(),
         })
-    }
-}
-
-impl From<ExecutionResult> for TransactionResultOutput {
-    fn from(r: ExecutionResult) -> Self {
-        let status = match r.status() {
-            ExecutionStatus::Success => "success".into(),
-            ExecutionStatus::Failure(msg) => format!("failure: {msg}"),
-        };
-        Self {
-            digest: r.transaction_digest().to_string(),
-            status,
-            created: r
-                .created_objects()
-                .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
-                .collect(),
-            changed: r
-                .changed_objects()
-                .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
-                .collect(),
-            destroyed: r
-                .destroyed_objects()
-                .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
-                .collect(),
-        }
     }
 }
