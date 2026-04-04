@@ -20,6 +20,16 @@ pub enum ClientCommand {
         /// On-chain object address (hex, e.g. `0xabcd...`).
         address: Address,
     },
+    /// Fetch all the live objects from the node by owner address.
+    GetObjects {
+        /// Owner address (hex, e.g. `0xabcd...`).
+        owner: Address,
+    },
+    /// Fetch a committed transaction from the node by digest.
+    GetTransaction {
+        /// Transaction digest (base58).
+        digest: Digest,
+    },
     /// Fetch the execution result for a committed transaction.
     GetTransactionResult {
         /// Transaction digest (base58).
@@ -39,6 +49,16 @@ impl ClientCommand {
                 let object = client.get_object(&address).await?;
 
                 Ok(ClientCommandOutput::get_object(object))
+            }
+            ClientCommand::GetObjects { owner } => {
+                let objects = client.get_objects(&owner).await?;
+
+                Ok(ClientCommandOutput::get_objects(objects))
+            }
+            ClientCommand::GetTransaction { digest } => {
+                let transaction = client.get_transaction(&digest).await?;
+
+                Ok(ClientCommandOutput::get_transaction(transaction))
             }
             ClientCommand::GetTransactionResult { digest } => {
                 let result = client.get_transaction_result(&digest).await?;

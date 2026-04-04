@@ -1,16 +1,22 @@
 use meow_types::{
     digest::Digest,
     object::Object,
-    transaction::execution_result::{ExecutionResult, ExecutionStatus},
+    transaction::{
+        SignedTransaction,
+        execution_result::{ExecutionResult, ExecutionStatus},
+    },
 };
 use serde::Serialize;
 
 use crate::object_output::ObjectOutput;
+use crate::transaction_output::TransactionOutput;
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ClientCommandOutput {
     GetObject(Option<ObjectOutput>),
+    GetObjects(Vec<ObjectOutput>),
+    GetTransaction(Option<TransactionOutput>),
     GetTransactionResult(Option<TransactionResultOutput>),
     SubmitTransaction(SubmitTransactionOutput),
 }
@@ -34,6 +40,14 @@ pub struct SubmitTransactionOutput {
 impl ClientCommandOutput {
     pub fn get_object(object: Option<Object>) -> Self {
         ClientCommandOutput::GetObject(object.map(|o| o.into()))
+    }
+
+    pub fn get_objects(objects: Vec<Object>) -> Self {
+        ClientCommandOutput::GetObjects(objects.into_iter().map(|o| o.into()).collect())
+    }
+
+    pub fn get_transaction(transaction: Option<SignedTransaction>) -> Self {
+        ClientCommandOutput::GetTransaction(transaction.map(|t| t.into()))
     }
 
     pub fn get_transaction_result(result: Option<ExecutionResult>) -> Self {

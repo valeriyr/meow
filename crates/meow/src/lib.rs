@@ -8,3 +8,4 @@ pub mod output_encoder;
 pub mod output_formatter;
 pub mod smart_contract;
 pub mod transaction;
+pub mod transaction_output;

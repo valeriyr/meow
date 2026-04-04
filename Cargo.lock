@@ -2374,6 +2374,7 @@ version = "0.1.0"
 dependencies = [
  "meow-types",
  "reqwest",
+ "serde",
  "thiserror 2.0.18",
  "url",
 ]

@@ -86,3 +86,107 @@ async fn meow_call_transaction_is_mined_and_succeeds() {
     let call_result = test_utils::sign_and_execute(client, &keypair, call_tx).await;
     assert_eq!(*call_result.status(), ExecutionStatus::Success);
 }
+
+#[tokio::test]
+#[serial]
+async fn get_objects_returns_empty_for_unknown_owner() {
+    let node = TestNode::start_empty().await;
+
+    let objects = node
+        .client()
+        .get_objects(&Address::fill(0xCD))
+        .await
+        .unwrap();
+
+    assert!(objects.is_empty());
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_returns_genesis_coin_for_sender() {
+    let (_, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+
+    let objects = node.client().get_objects(&sender).await.unwrap();
+
+    assert_eq!(
+        objects.len(),
+        1,
+        "sender should own exactly their genesis coin"
+    );
+    assert_eq!(objects[0].address(), &coin_addr);
+    assert_eq!(objects[0].owner().address(), Some(&sender));
+}
+
+#[tokio::test]
+#[serial]
+async fn published_module_is_immutable_and_not_owned_by_sender() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    // Publish a module
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let publish_tx = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_math()),
+    );
+    let publish_result = test_utils::sign_and_execute(client, &keypair, publish_tx).await;
+    assert_eq!(*publish_result.status(), ExecutionStatus::Success);
+
+    // Modules are immutable objects and are not owned by the sender,
+    // so even though the sender published it, it won't appear in get_objects.
+    // The sender still owns their genesis coin.
+    let objects = client.get_objects(&sender).await.unwrap();
+
+    assert_eq!(
+        objects.len(),
+        1,
+        "sender should own only their genesis coin"
+    );
+    assert_eq!(objects[0].address(), &coin_addr);
+}
+
+#[tokio::test]
+#[serial]
+async fn get_unknown_transaction_returns_none() {
+    let node = TestNode::start_empty().await;
+
+    let result = node
+        .client()
+        .get_transaction(&meow_types::digest::Digest::ZERO)
+        .await
+        .unwrap();
+
+    assert!(result.is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn committed_transaction_is_queryable_by_digest() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let transaction = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_math()),
+    );
+    let digest = transaction.digest();
+
+    let result = test_utils::sign_and_execute(client, &keypair, transaction).await;
+    assert_eq!(*result.status(), ExecutionStatus::Success);
+
+    let fetched = client.get_transaction(&digest).await.unwrap();
+    let fetched = fetched.expect("transaction should be queryable by digest once committed");
+
+    assert_eq!(fetched.transaction().digest(), digest);
+    assert_eq!(fetched.transaction().sender(), &sender);
+    assert!(matches!(
+        fetched.transaction().type_(),
+        TransactionType::MeowModulePublish(_)
+    ));
+}

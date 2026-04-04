@@ -84,8 +84,16 @@ impl ChainState {
     }
 
     /// Look up an execution result by transaction digest.
-    pub fn get_result(&self, digest: &Digest) -> Option<&ExecutionResult> {
+    pub fn get_transaction_result(&self, digest: &Digest) -> Option<&ExecutionResult> {
         self.results.get(digest)
+    }
+
+    /// Look up a committed transaction by digest, searching across all known blocks.
+    pub fn get_transaction(&self, digest: &Digest) -> Option<&SignedTransaction> {
+        self.blocks
+            .values()
+            .flat_map(|block| block.transactions.iter())
+            .find(|tx| tx.transaction().digest() == *digest)
     }
 
     /// Commit a locally-mined block and its resulting store state.

@@ -66,13 +66,30 @@ impl RpcHandler {
         Ok(miner.head_store().get_object(addr).cloned())
     }
 
+    /// Returns the latest live objects owned by the given address.
+    pub async fn get_objects(&self, owner: &Address) -> Result<Vec<Object>> {
+        let miner = self.miner.lock().await;
+
+        Ok(miner.head_store().get_objects(owner).cloned().collect())
+    }
+
+    /// Returns a committed transaction by digest.
+    pub async fn get_transaction(
+        &self,
+        digest: &meow_types::digest::Digest,
+    ) -> Result<Option<SignedTransaction>> {
+        let miner = self.miner.lock().await;
+
+        Ok(miner.get_transaction(digest).cloned())
+    }
+
     /// Returns the execution result for a transaction digest if committed.
-    pub async fn get_tx_result(
+    pub async fn get_transaction_result(
         &self,
         digest: &meow_types::digest::Digest,
     ) -> Result<Option<ExecutionResult>> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.get_result(digest).cloned())
+        Ok(miner.get_transaction_result(digest).cloned())
     }
 }

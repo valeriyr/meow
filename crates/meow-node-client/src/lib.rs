@@ -2,6 +2,7 @@ pub mod error;
 
 use std::net::SocketAddr;
 
+use serde::de::DeserializeOwned;
 use url::Url;
 
 use meow_types::{
@@ -37,9 +38,9 @@ impl NodeClient {
         Self::with_url(base_url)
     }
 
-    /// POST /tx — submit a signed transaction.
+    /// POST /submit-transaction — submit a signed transaction.
     pub async fn submit_transaction(&self, transaction: &SignedTransaction) -> Result<()> {
-        let url = self.base_url.join("tx")?;
+        let url = self.base_url.join("submit-transaction")?;
 
         let response = self.inner.post(url).json(transaction).send().await?;
 
@@ -47,36 +48,38 @@ impl NodeClient {
             return Ok(());
         }
 
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-
-        Err(NodeClientError::NodeError { status, body })
+        Err(Self::node_error(response).await)
     }
 
     /// GET /object/:addr — fetch a live object by address.
     pub async fn get_object(&self, addr: &Address) -> Result<Option<Object>> {
         let url = self.base_url.join(&format!("object/{addr}"))?;
-
-        let response = self.inner.get(url).send().await?;
-
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-
-        if response.status().is_success() {
-            return Ok(Some(response.json().await?));
-        }
-
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-
-        Err(NodeClientError::NodeError { status, body })
+        self.get_optional(url).await
     }
 
-    /// GET /tx/:digest — fetch the execution result for a committed transaction.
-    pub async fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
-        let url = self.base_url.join(&format!("tx/{digest}"))?;
+    /// GET /objects/:owner — fetch all the alive objects by owner address.
+    pub async fn get_objects(&self, owner: &Address) -> Result<Vec<Object>> {
+        let url = self.base_url.join(&format!("objects/{owner}"))?;
+        self.get_list(url).await
+    }
 
+    /// GET /transaction/:digest — fetch a committed transaction by digest.
+    pub async fn get_transaction(&self, digest: &Digest) -> Result<Option<SignedTransaction>> {
+        let url = self.base_url.join(&format!("transaction/{digest}"))?;
+        self.get_optional(url).await
+    }
+
+    /// GET /transaction-result/:digest — fetch the execution result for a committed transaction.
+    pub async fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
+        let url = self
+            .base_url
+            .join(&format!("transaction-result/{digest}"))?;
+        self.get_optional(url).await
+    }
+
+    /// Sends a GET request and deserializes the JSON body on success.
+    /// Returns `Ok(None)` on 404 and `Err` on all other non-success status codes.
+    async fn get_optional<T: DeserializeOwned>(&self, url: Url) -> Result<Option<T>> {
         let response = self.inner.get(url).send().await?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
@@ -87,10 +90,30 @@ impl NodeClient {
             return Ok(Some(response.json().await?));
         }
 
+        Err(Self::node_error(response).await)
+    }
+
+    /// Sends a GET request and deserializes the JSON body on success.
+    /// Returns an empty `Vec` on 404 and `Err` on all other non-success status codes.
+    async fn get_list<T: DeserializeOwned>(&self, url: Url) -> Result<Vec<T>> {
+        let response = self.inner.get(url).send().await?;
+
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(Vec::new());
+        }
+
+        if response.status().is_success() {
+            return Ok(response.json().await?);
+        }
+
+        Err(Self::node_error(response).await)
+    }
+
+    /// Extracts a [`NodeClientError::NodeError`] from a non-success response.
+    async fn node_error(response: reqwest::Response) -> NodeClientError {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-
-        Err(NodeClientError::NodeError { status, body })
+        NodeClientError::NodeError { status, body }
     }
 }
 

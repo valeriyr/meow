@@ -28,6 +28,13 @@ impl Store {
         self.objects.get(addr)
     }
 
+    /// Gets all objects owned by the given address.
+    pub fn get_objects(&self, owner: &Address) -> impl Iterator<Item = &Object> {
+        self.objects
+            .values()
+            .filter(move |obj| obj.owner().address() == Some(owner))
+    }
+
     /// Checks if the store contains an object with the given address.
     pub fn contains(&self, addr: &Address) -> bool {
         self.objects.contains_key(addr)

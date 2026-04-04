@@ -16,7 +16,7 @@ use crate::rpc::rpc_handler::{RpcHandler, error::RpcHandlerError};
 /// Contains the RPC business-logic handler.
 #[derive(Clone)]
 pub struct RpcState {
-    /// Service handling transaction submission, object lookup, and result lookup.
+    /// Service handling transaction submission and transaction/object lookups.
     handler: RpcHandler,
 }
 
@@ -39,18 +39,22 @@ impl RpcState {
 /// Builds the Axum router for node RPC endpoints.
 ///
 /// Registered routes:
-/// - `POST /tx` to submit a signed transaction.
+/// - `POST /submit-transaction` to submit a signed transaction.
 /// - `GET /object/{addr}` to fetch the latest live object by address.
-/// - `GET /tx/{digest}` to fetch an execution result by transaction digest.
+/// - `GET /objects/{owner}` to fetch all the live objects owned by an address.
+/// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
+/// - `GET /transaction-result/{digest}` to fetch an execution result by transaction digest.
 pub fn router(state: RpcState) -> Router {
     Router::new()
-        .route("/tx", post(submit_tx))
+        .route("/submit-transaction", post(submit_tx))
         .route("/object/{addr}", get(get_object))
-        .route("/tx/{digest}", get(get_tx_result))
+        .route("/objects/{owner}", get(get_objects))
+        .route("/transaction/{digest}", get(get_transaction))
+        .route("/transaction-result/{digest}", get(get_transaction_result))
         .with_state(state)
 }
 
-/// POST /tx — submit a `SignedTransaction` (JSON-encoded).
+/// POST /submit-transaction — submit a `SignedTransaction` (JSON-encoded).
 ///
 /// Returns `202 Accepted` on success. Validation and mempool errors are mapped to
 /// structured `4xx` responses.
@@ -136,10 +140,33 @@ async fn get_object(State(state): State<RpcState>, Path(addr): Path<String>) -> 
     }
 }
 
-/// GET /tx/:digest — returns the `ExecutionResult` for a committed transaction.
+/// GET /objects/:owner — returns all the live `Object`s owned by the given address.
+///
+/// Returns `400` for invalid address format.
+async fn get_objects(
+    State(state): State<RpcState>,
+    Path(owner): Path<String>,
+) -> impl IntoResponse {
+    let owner: Address = match owner.parse() {
+        Ok(a) => a,
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_address",
+                format!("invalid address: {owner} (expected 0x-prefixed hex address)"),
+            );
+        }
+    };
+    match state.handler.get_objects(&owner).await {
+        Ok(objects) => Json(objects).into_response(),
+        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
+    }
+}
+
+/// GET /transaction/:digest — returns the committed `SignedTransaction` by digest.
 ///
 /// Returns `400` for invalid digest format and `404` when not found.
-async fn get_tx_result(
+async fn get_transaction(
     State(state): State<RpcState>,
     Path(digest): Path<String>,
 ) -> impl IntoResponse {
@@ -153,7 +180,35 @@ async fn get_tx_result(
             );
         }
     };
-    match state.handler.get_tx_result(&digest).await {
+    match state.handler.get_transaction(&digest).await {
+        Ok(Some(tx)) => Json(tx).into_response(),
+        Ok(None) => error_response(
+            StatusCode::NOT_FOUND,
+            "transaction_not_found",
+            format!("transaction not found: {digest}"),
+        ),
+        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
+    }
+}
+
+/// GET /transaction-result/:digest — returns the `ExecutionResult` for a committed transaction.
+///
+/// Returns `400` for invalid digest format and `404` when not found.
+async fn get_transaction_result(
+    State(state): State<RpcState>,
+    Path(digest): Path<String>,
+) -> impl IntoResponse {
+    let digest: Digest = match digest.parse() {
+        Ok(digest) => digest,
+        Err(_) => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_digest",
+                format!("invalid digest: {digest} (expected base58 digest)"),
+            );
+        }
+    };
+    match state.handler.get_transaction_result(&digest).await {
         Ok(Some(result)) => Json(result).into_response(),
         Ok(None) => error_response(
             StatusCode::NOT_FOUND,

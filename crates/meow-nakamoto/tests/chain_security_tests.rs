@@ -25,5 +25,5 @@ fn block_with_forged_results_is_rejected() {
 
     assert!(!chain.on_block_received(block));
     assert_eq!(chain.head_height(), 0);
-    assert!(chain.get_result(&Digest::ZERO).is_none());
+    assert!(chain.get_transaction_result(&Digest::ZERO).is_none());
 }

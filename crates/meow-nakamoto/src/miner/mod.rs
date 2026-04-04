@@ -60,8 +60,13 @@ impl Miner {
     }
 
     /// Look up an execution result by transaction digest.
-    pub fn get_result(&self, digest: &Digest) -> Option<&ExecutionResult> {
-        self.chain.get_result(digest)
+    pub fn get_transaction_result(&self, digest: &Digest) -> Option<&ExecutionResult> {
+        self.chain.get_transaction_result(digest)
+    }
+
+    /// Look up a committed transaction by digest.
+    pub fn get_transaction(&self, digest: &Digest) -> Option<&SignedTransaction> {
+        self.chain.get_transaction(digest)
     }
 
     /// Validate and enqueue a transaction. Internally clones the head store
