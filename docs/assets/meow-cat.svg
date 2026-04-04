@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="220" viewBox="0 0 360 220" role="img" aria-labelledby="title desc">
+  <title id="title">MEOW Cat Cyber</title>
+  <desc id="desc">A cyber-style cat mascot with neon accents on transparent background.</desc>
+
+  <defs>
+    <linearGradient id="fur" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="100%" stop-color="#030712"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feDropShadow dx="0" dy="0" stdDeviation="2.5" flood-color="#22d3ee" flood-opacity="0.75"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#glow)">
+    <path d="M106 98 L143 48 L160 104 Z" fill="url(#fur)" stroke="#22d3ee" stroke-width="2"/>
+    <path d="M254 98 L217 48 L200 104 Z" fill="url(#fur)" stroke="#22d3ee" stroke-width="2"/>
+    <ellipse cx="180" cy="122" rx="86" ry="70" fill="url(#fur)" stroke="#22d3ee" stroke-width="2"/>
+    <ellipse cx="180" cy="142" rx="52" ry="34" fill="#0b1220" stroke="#38bdf8" stroke-width="1.5"/>
+
+    <ellipse cx="148" cy="114" rx="9" ry="10" fill="#22d3ee"/>
+    <ellipse cx="212" cy="114" rx="9" ry="10" fill="#22d3ee"/>
+    <path d="M180 124 L171 136 L189 136 Z" fill="#a78bfa"/>
+
+    <path d="M180 138 Q168 148 157 140" stroke="#22d3ee" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M180 138 Q192 148 203 140" stroke="#22d3ee" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+    <path d="M124 136 L84 130" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M124 144 L80 144" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M124 152 L84 158" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+
+    <path d="M236 136 L276 130" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M236 144 L280 144" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+    <path d="M236 152 L276 158" stroke="#22d3ee" stroke-width="2.5" stroke-linecap="round"/>
+  </g>
+
+</svg>
