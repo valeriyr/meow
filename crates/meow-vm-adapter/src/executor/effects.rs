@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeSet, HashMap};
 
 use meow_types::{
     address::Address,
@@ -31,7 +31,7 @@ pub fn collect_object_effects(
     let mut destroyed_objects: Vec<Object> = Vec::new();
 
     // Build a lookup from address → input object for version resolution.
-    let input_by_addr: BTreeMap<Address, &Object> = object_args
+    let input_by_addr: HashMap<Address, &Object> = object_args
         .iter()
         .map(|(_, obj)| (*obj.address(), *obj))
         .collect();

@@ -1,8 +1,4 @@
-pub mod config;
 pub mod error;
-pub mod event;
-pub mod message_id;
-pub mod peer_id;
 
 use std::time::Duration;
 
@@ -10,26 +6,53 @@ use futures::StreamExt;
 use libp2p::{
     Multiaddr, SwarmBuilder,
     gossipsub::{self, IdentTopic, MessageAuthenticity},
-    swarm::SwarmEvent,
+    mdns,
+    swarm::{NetworkBehaviour, SwarmEvent},
 };
-use tracing::warn;
+use meow_gossip_types::{
+    config::GossipNetworkConfig, event::NetworkEvent, message_id::MessageId, peer_id::PeerId,
+};
+use tracing::debug;
 
-use crate::{
-    config::NetworkConfig, error::NetworkError, event::NetworkEvent, message_id::MessageId,
-    peer_id::PeerId,
-};
+use crate::error::NetworkError;
 
 /// The result type related to gossip network operations.
 pub type Result<T> = std::result::Result<T, NetworkError>;
 
+#[derive(NetworkBehaviour)]
+#[behaviour(to_swarm = "BehaviourEvent")]
+struct Behaviour {
+    gossipsub: gossipsub::Behaviour,
+    mdns: mdns::tokio::Behaviour,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug)]
+enum BehaviourEvent {
+    Gossipsub(gossipsub::Event),
+    Mdns(mdns::Event),
+}
+
+impl From<gossipsub::Event> for BehaviourEvent {
+    fn from(value: gossipsub::Event) -> Self {
+        Self::Gossipsub(value)
+    }
+}
+
+impl From<mdns::Event> for BehaviourEvent {
+    fn from(value: mdns::Event) -> Self {
+        Self::Mdns(value)
+    }
+}
+
 /// The gossip network handle.
 pub struct GossipNetwork {
-    swarm: libp2p::Swarm<gossipsub::Behaviour>,
+    swarm: libp2p::Swarm<Behaviour>,
 }
 
 impl GossipNetwork {
     /// Creates a new node with a freshly generated identity keypair.
-    pub async fn new(config: NetworkConfig) -> Result<Self> {
+    pub async fn new(config: GossipNetworkConfig) -> Result<Self> {
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .heartbeat_interval(Duration::from_secs(1))
             .validation_mode(gossipsub::ValidationMode::Strict)
@@ -42,20 +65,25 @@ impl GossipNetwork {
                 libp2p::noise::Config::new,
                 libp2p::yamux::Config::default,
             )?
-            .with_behaviour(|key| {
-                gossipsub::Behaviour::new(
+            .with_behaviour(|key| Behaviour {
+                gossipsub: gossipsub::Behaviour::new(
                     MessageAuthenticity::Signed(key.clone()),
                     gossipsub_config,
                 )
-                .expect("gossipsub config must be valid")
+                .expect("gossipsub config must be valid"),
+                mdns: mdns::tokio::Behaviour::new(
+                    mdns::Config::default(),
+                    key.public().to_peer_id(),
+                )
+                .expect("mDNS config must be valid"),
             })
             .expect("infallible error")
             .build();
 
-        swarm.listen_on(config.listen_addr)?;
+        swarm.listen_on(config.listen_address.into())?;
 
         for addr in config.bootstrap_peers {
-            swarm.dial(addr)?;
+            swarm.dial(Into::<libp2p::Multiaddr>::into(addr))?;
         }
 
         Ok(Self { swarm })
@@ -66,6 +94,7 @@ impl GossipNetwork {
         Ok(self
             .swarm
             .behaviour_mut()
+            .gossipsub
             .subscribe(&IdentTopic::new(topic))?)
     }
 
@@ -74,6 +103,7 @@ impl GossipNetwork {
         Ok(self
             .swarm
             .behaviour_mut()
+            .gossipsub
             .publish(IdentTopic::new(topic), data)?
             .into())
     }
@@ -94,17 +124,33 @@ impl GossipNetwork {
     pub async fn next_event(&mut self) -> Option<NetworkEvent> {
         loop {
             match self.swarm.next().await? {
-                SwarmEvent::Behaviour(gossipsub::Event::Message {
+                SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(gossipsub::Event::Message {
                     message,
                     message_id,
                     ..
-                }) => {
+                })) => {
                     return Some(NetworkEvent::Message {
                         id: message_id.into(),
                         topic: message.topic.to_string(),
                         data: message.data,
                         from: message.source.map(PeerId::from),
                     });
+                }
+                SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
+                    for (peer_id, _addr) in peers {
+                        self.swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .add_explicit_peer(&peer_id);
+                    }
+                }
+                SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Expired(peers))) => {
+                    for (peer_id, _addr) in peers {
+                        self.swarm
+                            .behaviour_mut()
+                            .gossipsub
+                            .remove_explicit_peer(&peer_id);
+                    }
                 }
                 SwarmEvent::ConnectionEstablished { peer_id, .. } => {
                     return Some(NetworkEvent::PeerConnected(PeerId::from(peer_id)));
@@ -113,7 +159,7 @@ impl GossipNetwork {
                     return Some(NetworkEvent::PeerDisconnected(PeerId::from(peer_id)));
                 }
                 other => {
-                    warn!("unhandled swarm event: {:?}", other);
+                    debug!("unhandled swarm event: {:?}", other);
                 }
             }
         }

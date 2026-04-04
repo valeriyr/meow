@@ -53,7 +53,9 @@ fn debug_output_is_single_line() {
 
 #[test]
 fn pretty_output_contains_value() {
-    let output = OutputEncoder::Pretty.encode(&Wrapper { value: 42 }).unwrap();
+    let output = OutputEncoder::Pretty
+        .encode(&Wrapper { value: 42 })
+        .unwrap();
 
     assert_eq!(output, "Wrapper {\n    value: 42,\n}");
 }

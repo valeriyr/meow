@@ -109,6 +109,7 @@ fn invalid_identifier_from_str_non_ascii() {
 
 #[test]
 fn invalid_too_long_identifier() {
+    // Default config is used for validation so we can use it here.
     let config = config::compiler_config();
     let long_identifier = "a".repeat(config.max_identifier_len() + 1);
 

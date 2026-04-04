@@ -2,11 +2,12 @@ pub mod error;
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use meow_genesis::Genesis;
 use meow_types::{
     digest::Digest,
     object::Object,
     transaction::{
-        SignedTransaction, Transaction, call::Input, execution_result::ExecutionResult,
+        SignedTransaction, Transaction, execution_result::ExecutionResult, input::Input,
         transaction_type::TransactionType,
     },
 };
@@ -37,10 +38,19 @@ pub struct Miner {
 
 impl Miner {
     /// Creates a new `Miner` with the given initial store state and PoW difficulty.
-    pub fn new(initial_store: Store, mempool: Mempool, difficulty: u32) -> Self {
+    pub fn empty(difficulty: u32) -> Self {
         Self {
-            chain: ChainState::new(initial_store, difficulty),
-            mempool,
+            chain: ChainState::new(Store::default(), difficulty),
+            mempool: Mempool::empty(),
+        }
+    }
+
+    /// Creates a new `Miner` pre-seeded with the given genesis state.
+    pub fn with_genesis(genesis: &Genesis, difficulty: u32) -> Self {
+        let store = Store::with_objects(genesis.objects().iter().cloned());
+        Self {
+            chain: ChainState::new(store, difficulty),
+            mempool: Mempool::empty(),
         }
     }
 

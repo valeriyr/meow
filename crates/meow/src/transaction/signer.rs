@@ -14,7 +14,7 @@ pub fn sign_transaction(
         .get_key(signer)
         .ok_or_else(|| anyhow::anyhow!("A key has not been found in the keystore for {signer}"))?;
 
-    let signature = keypair.sign(transaction.digest());
+    let (signed, _) = transaction.sign(keypair);
 
-    Ok(SignedTransaction::new(transaction, signature))
+    Ok(signed)
 }

@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "Compiler from .meow source code to MEOW VM bytecode"
 
 [dependencies]
 chumsky = "0.12"

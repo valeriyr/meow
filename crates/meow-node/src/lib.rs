@@ -1,4 +1,6 @@
 pub mod commands;
-mod gossip;
-mod node;
+pub mod node;
+
+mod gossip_service;
+mod miner_service;
 mod rpc;

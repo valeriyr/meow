@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "Nakamoto-consensus chain — block mining and chain management"
 
 [dependencies]
 bcs.workspace = true
@@ -11,5 +12,6 @@ serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 
+meow-genesis.workspace = true
 meow-types.workspace = true
 meow-vm-adapter.workspace = true

@@ -11,7 +11,7 @@ use output::{KeyOutput, KeyToolCommandOutput};
 
 /// The keytool commands.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum KeyToolCommand {
     /// Generate a new key.
     Generate {

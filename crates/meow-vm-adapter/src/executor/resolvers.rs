@@ -5,7 +5,7 @@ use meow_types::{
         object_version::ObjectVersion,
     },
     system_framework::meow_coin,
-    transaction::call::{Call, Input},
+    transaction::{call::Call, input::Input},
 };
 use meow_vm_types::{
     module::{Function, Module},

@@ -19,17 +19,18 @@ pub const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8600";
 
 /// The main command line commands.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum Command {
     /// Say meow!
     SayMeow,
     /// MEOW keytool.
     #[command(name = "keytool")]
     KeyTool {
-        /// The path to the keystore file.
+        /// Path to the keystore file.
+        /// If omitted, the default keystore path is used.
         #[arg(long, global = true)]
         keystore_path: Option<PathBuf>,
-        /// The command output is formatted using this formatter before printing.
+        /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
         /// Subcommands.
@@ -37,12 +38,12 @@ pub enum Command {
         cmd: KeyToolCommand,
     },
     /// MEOW smart contract tools.
-    #[command(name = "smart-contract")]
     SmartContract {
-        /// The MEOW Node RPC URL.
+        /// MEOW node RPC URL.
+        /// Example: http://127.0.0.1:8600
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
         node: Url,
-        /// The command output is formatted using this formatter before printing.
+        /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
         /// Subcommands.
@@ -50,15 +51,15 @@ pub enum Command {
         cmd: SmartContractCommand,
     },
     /// MEOW transaction tools.
-    #[command(name = "transaction")]
     Transaction {
-        /// The MEOW Node RPC URL.
+        /// MEOW node RPC URL.
+        /// Example: http://127.0.0.1:8600
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
         node: Url,
-        /// The command output is formatted using this formatter before printing.
+        /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
-        /// The transaction is encoded using this encoder before printing.
+        /// Encoding used when printing transaction payloads.
         #[arg(long, global = true, default_value_t = OutputEncoder::Base64)]
         encoder: OutputEncoder,
         /// Subcommands.
@@ -66,9 +67,8 @@ pub enum Command {
         cmd: TransactionCommand,
     },
     /// MEOW genesis tools.
-    #[command(name = "genesis")]
     Genesis {
-        /// The command output is formatted using this formatter before printing.
+        /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
         /// Subcommands.
@@ -76,12 +76,12 @@ pub enum Command {
         cmd: GenesisCommand,
     },
     /// Interact with a running MEOW node.
-    #[command(name = "client")]
     Client {
-        /// The MEOW Node RPC URL.
+        /// MEOW node RPC URL.
+        /// Example: http://127.0.0.1:8600
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
         node: Url,
-        /// The command output is formatted using this formatter before printing.
+        /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
         /// Subcommands.
@@ -92,7 +92,7 @@ pub enum Command {
 
 impl Command {
     /// Runs the command.
-    pub fn run(self) -> Result<(), anyhow::Error> {
+    pub async fn run(self) -> Result<(), anyhow::Error> {
         match self {
             Command::SayMeow => {
                 println!("Meow!");
@@ -114,9 +114,9 @@ impl Command {
                 formatter,
                 cmd,
             } => {
-                let client = NodeClient::new(node);
+                let client = NodeClient::with_url(node);
 
-                let output = cmd.run(&client)?;
+                let output = cmd.run(&client).await?;
 
                 println!("{}", formatter.format(&output)?);
             }
@@ -126,9 +126,9 @@ impl Command {
                 encoder,
                 cmd,
             } => {
-                let client = NodeClient::new(node);
+                let client = NodeClient::with_url(node);
 
-                let output = cmd.run(&client, encoder)?;
+                let output = cmd.run(&client, encoder).await?;
 
                 println!("{}", formatter.format(&output)?);
             }
@@ -142,9 +142,9 @@ impl Command {
                 formatter,
                 cmd,
             } => {
-                let client = NodeClient::new(node);
+                let client = NodeClient::with_url(node);
 
-                let output = cmd.run(&client)?;
+                let output = cmd.run(&client).await?;
 
                 println!("{}", formatter.format(&output)?);
             }

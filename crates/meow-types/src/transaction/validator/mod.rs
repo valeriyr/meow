@@ -7,13 +7,11 @@ use meow_vm_types::config::CompilerConfig;
 use crate::{
     address::Address,
     config::{
-        MAX_BCS_SERIALIZED_MODULE_SIZE, MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE,
+        self, MAX_BCS_SERIALIZED_MODULE_SIZE, MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE,
         MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE,
     },
     transaction::{
-        Transaction,
-        call::{Call, Input},
-        transaction_type::TransactionType,
+        SignedTransaction, Transaction, call::Call, input::Input, transaction_type::TransactionType,
     },
 };
 
@@ -23,11 +21,13 @@ pub use error::ValidationError;
 pub type Result<T> = std::result::Result<T, ValidationError>;
 
 /// Validates a [`Transaction`] for structural correctness.
-pub fn validate_transaction(transaction: &Transaction, config: &CompilerConfig) -> Result<()> {
+pub fn validate_transaction(transaction: &Transaction) -> Result<()> {
+    let config = config::compiler_config();
+
     match transaction.type_() {
         TransactionType::MeowCall(call) => {
             validate_transaction_size(transaction, MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE)?;
-            validate_call_args_count(call, config)?;
+            validate_call_args_count(call, &config)?;
             validate_gas_coin_not_in_args(call, transaction.gas_coin().address())?;
             validate_no_aliased_args(call)?;
         }
@@ -39,6 +39,19 @@ pub fn validate_transaction(transaction: &Transaction, config: &CompilerConfig) 
             validate_module_size(module)?;
         }
     }
+
+    Ok(())
+}
+
+/// Validates a [`SignedTransaction`] for structural correctness and signature validity.
+pub fn validate_signed_transaction(signed: &SignedTransaction) -> Result<()> {
+    validate_transaction(signed.transaction())?;
+
+    let sender = signed.transaction().sender();
+    let signer = signed.signature().signer();
+
+    validate_signed_transaction_sender(sender, &signer)?;
+    verify_signed_transaction_signature(signed)?;
 
     Ok(())
 }
@@ -95,5 +108,25 @@ fn validate_module_size(module: &[u8]) -> Result<()> {
     if size > limit {
         return Err(ValidationError::ModuleTooLarge { size, limit });
     }
+    Ok(())
+}
+
+/// Validates that the signer of a signed transaction matches the transaction sender.
+fn validate_signed_transaction_sender(sender: &Address, signer: &Address) -> Result<()> {
+    if signer != sender {
+        return Err(ValidationError::SignerMismatch {
+            sender: *sender,
+            signer: *signer,
+        });
+    }
+    Ok(())
+}
+
+/// Validates the signature of a signed transaction.
+/// Use the transaction digest as the message for signature verification.
+fn verify_signed_transaction_signature(signed: &SignedTransaction) -> Result<()> {
+    signed
+        .signature()
+        .verify(signed.transaction().digest().as_ref())?;
     Ok(())
 }

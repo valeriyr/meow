@@ -84,39 +84,49 @@ fn from_str_object_prefix_with_invalid_address_returns_error() {
 // ─── into_value tests (non-network variants) ───
 //
 
-#[test]
-fn into_value_bool_true() {
-    let v = CallArg::Bool(true).into_value(&fake_client()).unwrap();
+#[tokio::test]
+async fn into_value_bool_true() {
+    let v = CallArg::Bool(true)
+        .into_value(&fake_client())
+        .await
+        .unwrap();
 
     assert!(matches!(v, Value::Bool(true)));
 }
 
-#[test]
-fn into_value_bool_false() {
-    let v = CallArg::Bool(false).into_value(&fake_client()).unwrap();
+#[tokio::test]
+async fn into_value_bool_false() {
+    let v = CallArg::Bool(false)
+        .into_value(&fake_client())
+        .await
+        .unwrap();
 
     assert!(matches!(v, Value::Bool(false)));
 }
 
-#[test]
-fn into_value_u64() {
-    let v = CallArg::U64(99).into_value(&fake_client()).unwrap();
+#[tokio::test]
+async fn into_value_u64() {
+    let v = CallArg::U64(99).into_value(&fake_client()).await.unwrap();
 
     assert!(matches!(v, Value::U64(99)));
 }
 
-#[test]
-fn into_value_address_preserves_bytes() {
+#[tokio::test]
+async fn into_value_address_preserves_bytes() {
     let addr = Address::fill(0xCC);
-    let v = CallArg::Address(addr).into_value(&fake_client()).unwrap();
+    let v = CallArg::Address(addr)
+        .into_value(&fake_client())
+        .await
+        .unwrap();
 
     assert!(matches!(v, Value::Address(bytes) if bytes == addr.as_ref()));
 }
 
-#[test]
-fn into_value_str() {
+#[tokio::test]
+async fn into_value_str() {
     let v = CallArg::Str("world".to_string())
         .into_value(&fake_client())
+        .await
         .unwrap();
 
     assert!(matches!(v, Value::Str(ref s) if s == "world"));
@@ -127,5 +137,5 @@ fn into_value_str() {
 //
 
 fn fake_client() -> NodeClient {
-    NodeClient::new(DEFAULT_NODE_URL.parse().unwrap())
+    NodeClient::with_url(DEFAULT_NODE_URL.parse().unwrap())
 }

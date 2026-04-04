@@ -1,15 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{address::Address, identifier::Identifier, object::object_ref::ObjectRef};
-
-/// The input of a transaction call.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub enum Input {
-    /// Wraps an `ObjectRef` referring to an existing on-chain object passed by reference.
-    Object(ObjectRef),
-    /// Contains BCS-serialized bytes representing a plain value argument (not an object).
-    Raw(Vec<u8>),
-}
+use crate::{address::Address, identifier::Identifier, transaction::input::Input};
 
 /// The Meow VM call which can be done within a transaction.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]

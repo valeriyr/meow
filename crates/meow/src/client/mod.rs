@@ -3,13 +3,17 @@ pub mod output;
 use base64::{Engine, engine::general_purpose};
 use clap::Parser;
 use meow_node_client::NodeClient;
-use meow_types::{address::Address, digest::Digest, transaction::SignedTransaction};
+use meow_types::{
+    address::Address,
+    digest::Digest,
+    transaction::{self, SignedTransaction},
+};
 
 use crate::client::output::ClientCommandOutput;
 
 /// Commands for interacting with a running meow node.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum ClientCommand {
     /// Fetch a live object from the node by address.
     GetObject {
@@ -29,15 +33,15 @@ pub enum ClientCommand {
 }
 
 impl ClientCommand {
-    pub fn run(self, client: &NodeClient) -> anyhow::Result<ClientCommandOutput> {
+    pub async fn run(self, client: &NodeClient) -> anyhow::Result<ClientCommandOutput> {
         match self {
             ClientCommand::GetObject { address } => {
-                let object = client.get_object(&address)?;
+                let object = client.get_object(&address).await?;
 
                 Ok(ClientCommandOutput::get_object(object))
             }
             ClientCommand::GetTransactionResult { digest } => {
-                let result = client.get_transaction_result(&digest)?;
+                let result = client.get_transaction_result(&digest).await?;
 
                 Ok(ClientCommandOutput::get_transaction_result(result))
             }
@@ -45,11 +49,11 @@ impl ClientCommand {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
                 let signed_transaction: SignedTransaction = bcs::from_bytes(&bytes)?;
 
-                signed_transaction.verify()?;
+                transaction::validator::validate_signed_transaction(&signed_transaction)?;
 
                 let digest = signed_transaction.transaction().digest();
 
-                client.submit_transaction(&signed_transaction)?;
+                client.submit_transaction(&signed_transaction).await?;
 
                 Ok(ClientCommandOutput::submit_transaction(digest))
             }

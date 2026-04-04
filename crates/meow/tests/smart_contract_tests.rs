@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use meow::{
     call_arg::CallArg,
+    commands::DEFAULT_NODE_URL,
     output_encoder::OutputEncoder,
     smart_contract::{SmartContractCommand, output::SmartContractCommandOutput},
 };
@@ -16,8 +17,8 @@ const NOOP_SRC: &str = "fn noop() {}";
 // ─── Build tests ───
 //
 
-#[test]
-fn build_valid_source_succeeds() {
+#[tokio::test]
+async fn build_valid_source_succeeds() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "example", ADD_SRC);
 
@@ -26,13 +27,14 @@ fn build_valid_source_succeeds() {
         encoder: OutputEncoder::Base64,
     }
     .run(&fake_client())
+    .await
     .unwrap();
 
     assert!(matches!(output, SmartContractCommandOutput::Build(_)));
 }
 
-#[test]
-fn build_uses_file_stem_as_module_name() {
+#[tokio::test]
+async fn build_uses_file_stem_as_module_name() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "mymodule", ADD_SRC);
 
@@ -41,6 +43,7 @@ fn build_uses_file_stem_as_module_name() {
         encoder: OutputEncoder::Base64,
     }
     .run(&fake_client())
+    .await
     .unwrap();
 
     let name = match output {
@@ -50,8 +53,8 @@ fn build_uses_file_stem_as_module_name() {
     assert_eq!(name, "mymodule");
 }
 
-#[test]
-fn build_invalid_source_returns_compiler_error() {
+#[tokio::test]
+async fn build_invalid_source_returns_compiler_error() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "bad", "this is not valid meow source !!!");
 
@@ -60,6 +63,7 @@ fn build_invalid_source_returns_compiler_error() {
         encoder: OutputEncoder::Base64,
     }
     .run(&fake_client())
+    .await
     .unwrap_err();
 
     // The compiler returns an error describing what went wrong.
@@ -73,8 +77,8 @@ fn build_invalid_source_returns_compiler_error() {
 // ─── Run tests ───
 //
 
-#[test]
-fn run_returns_computed_return_value() {
+#[tokio::test]
+async fn run_returns_computed_return_value() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "math", ADD_SRC);
 
@@ -84,6 +88,7 @@ fn run_returns_computed_return_value() {
         args: vec![CallArg::U64(3), CallArg::U64(5)],
     }
     .run(&fake_client())
+    .await
     .unwrap();
 
     let result = match output {
@@ -94,8 +99,8 @@ fn run_returns_computed_return_value() {
     assert_eq!(result.gas_spent, 6);
 }
 
-#[test]
-fn run_void_function_produces_no_return_value() {
+#[tokio::test]
+async fn run_void_function_produces_no_return_value() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "util", NOOP_SRC);
 
@@ -105,6 +110,7 @@ fn run_void_function_produces_no_return_value() {
         args: vec![],
     }
     .run(&fake_client())
+    .await
     .unwrap();
 
     let result = match output {
@@ -115,8 +121,8 @@ fn run_void_function_produces_no_return_value() {
     assert_eq!(result.gas_spent, 2);
 }
 
-#[test]
-fn run_unknown_function_returns_error() {
+#[tokio::test]
+async fn run_unknown_function_returns_error() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "math", ADD_SRC);
 
@@ -126,6 +132,7 @@ fn run_unknown_function_returns_error() {
         args: vec![],
     }
     .run(&fake_client())
+    .await
     .unwrap_err();
 
     assert!(
@@ -139,7 +146,7 @@ fn run_unknown_function_returns_error() {
 //
 
 fn fake_client() -> NodeClient {
-    NodeClient::new("http://127.0.0.1:1".parse().unwrap())
+    NodeClient::with_url(DEFAULT_NODE_URL.parse().unwrap())
 }
 
 fn write_source(tmp: &TempDir, name: &str, src: &str) -> PathBuf {

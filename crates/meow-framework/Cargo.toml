@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "Built-in standard library modules for the MEOW VM"
 
 [dev-dependencies]
 meow-types.workspace = true

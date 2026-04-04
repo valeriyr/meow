@@ -1,6 +1,6 @@
 pub mod call;
-pub mod error;
 pub mod execution_result;
+pub mod input;
 pub mod transaction_type;
 pub mod validator;
 
@@ -9,13 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
     address::Address,
     digest::Digest,
-    keypair::signature::Signature,
+    keypair::{KeyPair, signature::Signature},
     object::object_ref::ObjectRef,
-    transaction::{error::TransactionError, transaction_type::TransactionType},
+    transaction::transaction_type::TransactionType,
 };
-
-/// The result type related to transactions.
-pub type Result<T> = std::result::Result<T, TransactionError>;
 
 /// The meow transaction.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
@@ -66,6 +63,14 @@ impl Transaction {
     pub fn digest(&self) -> Digest {
         Digest::compute(self).expect("Failed to compute a transaction digest")
     }
+
+    /// Sign a transaction with the given keypair, returning a signed transaction and the message which was signed.
+    pub fn sign(self, keypair: &KeyPair) -> (SignedTransaction, Digest) {
+        let digest = self.digest();
+        let signature = keypair.sign(digest);
+
+        (SignedTransaction(self, signature), digest)
+    }
 }
 
 //
@@ -73,7 +78,9 @@ impl Transaction {
 //
 
 impl SignedTransaction {
-    /// Creates a new signed transaction.
+    /// Creates a new signed transaction with a precomputed signature.
+    /// The signature is expected to be valid for the transaction, but this is not verified by this constructor.
+    /// It is preferred to use the `sign` method of [Transaction] to create a signed transaction, which guarantees the validity of the signature.
     pub fn new(transaction: Transaction, signature: Signature) -> Self {
         Self(transaction, signature)
     }
@@ -86,12 +93,5 @@ impl SignedTransaction {
     /// Returns the transaction signature.
     pub fn signature(&self) -> &Signature {
         &self.1
-    }
-
-    /// Verifies the signed transaction.
-    pub fn verify(&self) -> Result<()> {
-        Ok(self
-            .signature()
-            .verify(self.transaction().digest().as_ref())?)
     }
 }

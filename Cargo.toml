@@ -2,9 +2,11 @@
 resolver = "3"
 members = [
     "crates/meow",
+    "crates/meow-e2e-tests",
     "crates/meow-framework",
     "crates/meow-genesis",
     "crates/meow-gossip-network",
+    "crates/meow-gossip-types",
     "crates/meow-nakamoto",
     "crates/meow-node",
     "crates/meow-node-client",
@@ -29,6 +31,15 @@ enum_dispatch = "0.3"
 futures = "0.3"
 hex = "0.4"
 json_to_table = "0.12"
+libp2p = { version = "0.56", features = [
+    "gossipsub",
+    "macros",
+    "mdns",
+    "tcp",
+    "noise",
+    "yamux",
+    "tokio",
+] }
 prefix-hex = { version = "0.7", features = ["std"] }
 rand = "0.8"
 serde = { version = "1.0", features = ["derive"] }
@@ -38,13 +49,16 @@ strum_macros = "0.28"
 tabled = "0.20"
 temp-dir = "0.2"
 thiserror = "2.0"
-tokio = { version = "1.50", features = ["full"] }
+tokio = { version = "1.51", features = ["full"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5"
 
 meow-genesis = { path = "crates/meow-genesis" }
 meow-gossip-network = { path = "crates/meow-gossip-network" }
+meow-gossip-types = { path = "crates/meow-gossip-types" }
 meow-nakamoto = { path = "crates/meow-nakamoto" }
+meow-node = { path = "crates/meow-node" }
 meow-node-client = { path = "crates/meow-node-client" }
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }

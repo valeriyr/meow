@@ -3,8 +3,12 @@ use std::collections::BTreeMap;
 use meow_types::{
     digest::Digest,
     object::Object,
-    transaction::{SignedTransaction, execution_result::ExecutionResult},
+    transaction::{
+        self, SignedTransaction, Transaction, execution_result::ExecutionResult, input::Input,
+        transaction_type::TransactionType,
+    },
 };
+use meow_vm_adapter::executor;
 
 use crate::{block::Block, store::Store};
 
@@ -125,6 +129,10 @@ impl ChainState {
     /// - parent block is known (we have it)
     /// - PoW hash meets difficulty
     /// - height is exactly parent height + 1
+    /// - transactions root matches block transactions
+    /// - all transaction signatures are valid
+    /// - local deterministic execution results match block results
+    /// - resulting state root matches block header
     ///
     /// If the block extends a chain longer than the current head, the head
     /// is updated (chain reorganization). Returns `true` when the head changed.
@@ -162,11 +170,51 @@ impl ChainState {
             return false;
         }
 
-        // Build the store snapshot for this block by applying its results to the parent snapshot.
-        // We trust the peer's execution results; full re-execution can be added later.
+        // Transactions root must match the transaction list in the block.
+        let transactions_root = compute_transactions_root(&block.transactions);
+        if transactions_root != block.header.transactions_root {
+            tracing::warn!(height, "block has invalid transactions root — ignoring");
+            return false;
+        }
+
+        for tx in &block.transactions {
+            if let Err(e) = transaction::validator::validate_signed_transaction(tx) {
+                tracing::warn!(height, "block has invalid transaction signature: {e}");
+                return false;
+            }
+        }
+
+        // Build the store snapshot for this block by deterministically re-executing all transactions.
         let mut new_store = self.snapshots[&parent_hash].clone();
-        for result in &block.results {
-            new_store.apply_execution_result(result);
+        let mut expected_results = Vec::with_capacity(block.transactions.len());
+
+        for signed_tx in &block.transactions {
+            let tx = signed_tx.transaction();
+            let inputs = resolve_inputs(tx, &new_store);
+            let result = match executor::execute(tx, inputs) {
+                Ok(result) => result,
+                Err(e) => {
+                    tracing::warn!(height, "block execution failed during verification: {e}");
+                    return false;
+                }
+            };
+
+            new_store.apply_execution_result(&result);
+            expected_results.push(result);
+        }
+
+        if expected_results != block.results {
+            tracing::warn!(height, "block results mismatch local execution — ignoring");
+            return false;
+        }
+
+        let expected_state_root = compute_state_root(&new_store);
+        if expected_state_root != block.header.state_root {
+            tracing::warn!(height, "block has invalid state root — ignoring");
+            return false;
+        }
+
+        for result in &expected_results {
             self.results
                 .insert(*result.transaction_digest(), result.clone());
         }
@@ -184,6 +232,30 @@ impl ChainState {
 
         false
     }
+}
+
+/// Collect all objects the transaction needs from the store.
+fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
+    let mut inputs = Vec::new();
+
+    if let Some(coin) = store.get_object(tx.gas_coin().address()) {
+        inputs.push(coin.clone());
+    }
+
+    if let TransactionType::MeowCall(call) = tx.type_() {
+        if let Some(module) = store.get_object(call.module()) {
+            inputs.push(module.clone());
+        }
+        for arg in call.arguments() {
+            if let Input::Object(obj_ref) = arg
+                && let Some(obj) = store.get_object(obj_ref.address())
+            {
+                inputs.push(obj.clone());
+            }
+        }
+    }
+
+    inputs
 }
 
 /// Deterministic hash of the object store's current state.

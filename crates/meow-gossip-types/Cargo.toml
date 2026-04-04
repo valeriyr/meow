@@ -1,0 +1,11 @@
+[package]
+name = "meow-gossip-types"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "libp2p gossip-based peer-to-peer network types"
+
+[dependencies]
+libp2p.workspace = true
+thiserror.workspace = true

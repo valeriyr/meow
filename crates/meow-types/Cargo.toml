@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "Core MEOW blockchain types — transactions, objects, addresses, and keys"
 
 [dependencies]
 ed25519-consensus = "2.1.0"

@@ -11,7 +11,7 @@ use meow_types::{
     config,
     identifier::Identifier,
     keystore::Keystore,
-    transaction::{Transaction, call::Call, transaction_type::TransactionType, validator},
+    transaction::{self, Transaction, call::Call, transaction_type::TransactionType},
 };
 
 use crate::{
@@ -20,7 +20,7 @@ use crate::{
 
 /// Commands for MEOW transactions creation and signing.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum TransactionCommand {
     /// Compile a `.meow` source file and create a module-publish transaction.
     Publish {
@@ -48,17 +48,12 @@ pub enum TransactionCommand {
         #[arg(long)]
         gas_coin: Address,
         /// Call argument (repeatable). Auto-detected by format:
-        ///
         /// - `true` / `false` → bool
-        ///
         /// - digits only → u64
-        ///
         /// - `@0x<hex>` → raw address value (not resolved against the node)
-        ///
         /// - `0x<hex>` → on-chain object (resolved against the node)
-        ///
         /// - anything else → string
-        #[arg(value_name = "VALUE")]
+        #[arg(value_name = "VALUE", verbatim_doc_comment)]
         args: Vec<CallArg>,
     },
     /// Sign a transaction produced by `transaction publish` or `transaction meow-call`.
@@ -73,7 +68,7 @@ pub enum TransactionCommand {
 }
 
 impl TransactionCommand {
-    pub fn run(
+    pub async fn run(
         self,
         client: &NodeClient,
         encoder: OutputEncoder,
@@ -85,7 +80,8 @@ impl TransactionCommand {
                 gas_coin,
             } => {
                 let gas_coin_ref = client
-                    .get_object(&gas_coin)?
+                    .get_object(&gas_coin)
+                    .await?
                     .ok_or_else(|| anyhow::anyhow!("gas coin {gas_coin} not found"))?
                     .object_ref();
 
@@ -98,7 +94,7 @@ impl TransactionCommand {
                     TransactionType::MeowModulePublish(module_bytes),
                 );
 
-                validate_transaction(&transaction)?;
+                transaction::validator::validate_transaction(&transaction)?;
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }
@@ -110,20 +106,21 @@ impl TransactionCommand {
                 args,
             } => {
                 let gas_coin_ref = client
-                    .get_object(&gas_coin)?
+                    .get_object(&gas_coin)
+                    .await?
                     .ok_or_else(|| anyhow::anyhow!("gas coin {gas_coin} not found"))?
                     .object_ref();
 
-                let inputs = args
-                    .into_iter()
-                    .map(|arg| arg.into_input(client))
-                    .collect::<anyhow::Result<Vec<_>>>()?;
+                let mut inputs = Vec::new();
+                for arg in args {
+                    inputs.push(arg.into_input(client).await?);
+                }
 
                 let call = Call::new(module, function, inputs);
                 let transaction =
                     Transaction::new(sender, gas_coin_ref, TransactionType::MeowCall(call));
 
-                validate_transaction(&transaction)?;
+                transaction::validator::validate_transaction(&transaction)?;
 
                 Ok(TransactionCommandOutput::new(transaction, encoder)?)
             }
@@ -137,7 +134,7 @@ impl TransactionCommand {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
                 let transaction = bcs::from_bytes(&bytes)?;
 
-                validate_transaction(&transaction)?;
+                transaction::validator::validate_transaction(&transaction)?;
 
                 let signed_transaction = signer::sign_transaction(transaction, &keystore)?;
 
@@ -145,11 +142,4 @@ impl TransactionCommand {
             }
         }
     }
-}
-
-/// Validates the transaction.
-fn validate_transaction(transaction: &Transaction) -> anyhow::Result<()> {
-    let config = config::compiler_config();
-    validator::validate_transaction(transaction, &config)?;
-    Ok(())
 }

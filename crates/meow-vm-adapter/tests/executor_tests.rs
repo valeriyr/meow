@@ -10,8 +10,9 @@ use meow_types::{
     system_framework::meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
     transaction::{
         Transaction,
-        call::{Call, Input},
+        call::Call,
         execution_result::{ExecutionResult, ExecutionStatus},
+        input::Input,
         transaction_type::TransactionType,
     },
 };
@@ -31,8 +32,8 @@ fn mint_succeeds_and_creates_object() {
     let tx = make_meow_call_transaction(
         "mint",
         vec![
-            Input::Raw(bcs::to_bytes(&100u64).unwrap()), // balance
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()), // owner
+            Input::raw(&100u64).unwrap(), // balance
+            Input::raw(&SENDER).unwrap(), // owner
         ],
     );
 
@@ -87,7 +88,7 @@ fn transfer_changes_owner() {
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::Raw(bcs::to_bytes(&new_owner).unwrap()),
+            Input::raw(&new_owner).unwrap(),
         ],
     );
     let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
@@ -116,7 +117,7 @@ fn split_with_sufficient_balance() {
         "split",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::Raw(bcs::to_bytes(&40u64).unwrap()),
+            Input::raw(&40u64).unwrap(),
         ],
     );
     let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
@@ -156,10 +157,7 @@ fn execute_with_gas_coin_not_found_returns_error() {
     let call = Call::new(
         MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("mint").unwrap(),
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
     let tx = Transaction::new(
         SENDER,
@@ -177,10 +175,7 @@ fn execute_with_invalid_gas_coin_returns_error() {
     let gas_obj = make_invalid_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
@@ -193,10 +188,7 @@ fn execute_with_invalid_gas_coin_owner_returns_error() {
     let gas_obj = make_valid_gas_coin_object(Address::fill(0xFF));
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
@@ -209,10 +201,7 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
     let gas_obj = make_gas_coin_object_at_version(ObjectVersion::MAX);
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
@@ -226,10 +215,7 @@ fn execute_with_gas_coin_wrong_version_returns_error() {
     let gas_obj = make_gas_coin_object_at_version(ObjectVersion::ZERO);
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
@@ -254,10 +240,7 @@ fn execute_with_gas_coin_wrong_digest_returns_error() {
     let call = Call::new(
         MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("mint").unwrap(),
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
     let tx = Transaction::new(SENDER, wrong_ref, TransactionType::MeowCall(call));
 
@@ -281,10 +264,7 @@ fn execute_meow_call_without_module_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let result = executor::execute(&tx, vec![gas_obj]).unwrap();
@@ -309,10 +289,7 @@ fn execute_meow_call_with_multiple_modules_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
     let result = executor::execute(&tx, vec![module1, module2, gas_obj]).unwrap();
@@ -446,7 +423,7 @@ fn execute_with_argument_count_mismatch_returns_failure() {
     let module_obj = make_default_module_object();
     let gas_obj = make_gas_coin_object();
     // mint expects 2 args; pass only 1.
-    let tx = make_meow_call_transaction("mint", vec![Input::Raw(bcs::to_bytes(&10u64).unwrap())]);
+    let tx = make_meow_call_transaction("mint", vec![Input::raw(&10u64).unwrap()]);
 
     let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
@@ -494,7 +471,7 @@ fn split_with_insufficient_balance_returns_failure() {
         "split",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::Raw(bcs::to_bytes(&20u64).unwrap()), // amount > balance
+            Input::raw(&20u64).unwrap(), // amount > balance
         ],
     );
     let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
@@ -555,10 +532,7 @@ fn exhausted_gas_coin_goes_to_changed() {
     let call = Call::new(
         MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("mint").unwrap(),
-        vec![
-            Input::Raw(bcs::to_bytes(&10u64).unwrap()),
-            Input::Raw(bcs::to_bytes(&SENDER).unwrap()),
-        ],
+        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
     let tx = Transaction::new(SENDER, gas_coin_ref, TransactionType::MeowCall(call));
 
@@ -647,6 +621,24 @@ fn execute_module_publish_fails_when_module_too_large() {
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("exceeds maximum")),
         "oversized module must produce Failure, got: {:?}",
+        result.status()
+    );
+    let spent = GAS_BALANCE - meow_coin::gas_meow_coin_balance(find_gas_coin(&result)).unwrap();
+    // BASE_TRANSACTION_GAS_COST = 1000.
+    assert!(spent == 1000, "gas charged ({spent}) must cover base cost");
+}
+
+#[test]
+fn execute_module_publish_fails_when_module_not_deserializable() {
+    let not_a_module = vec![1u8, 2, 3, 4, 5];
+    let gas_obj = make_gas_coin_object();
+    let tx = make_meow_module_publish_transaction(not_a_module);
+
+    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("failed to deserialize module")),
+        "invalid module bytes must produce Failure, got: {:?}",
         result.status()
     );
     let spent = GAS_BALANCE - meow_coin::gas_meow_coin_balance(find_gas_coin(&result)).unwrap();

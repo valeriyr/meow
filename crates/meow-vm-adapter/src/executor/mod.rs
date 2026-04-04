@@ -21,6 +21,7 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::module::Module;
 
 use crate::{context::Context, executor::error::ExecutorError, natives};
 
@@ -190,6 +191,10 @@ fn execute_meow_module_publish(
             ),
             *tx_digest,
         );
+    }
+
+    if let Err(e) = bcs::from_bytes::<Module>(module) {
+        return ExecutionResult::failure(format!("failed to deserialize module: {e}"), *tx_digest);
     }
 
     let cost = module_size as u64 * GAS_PER_MODULE_BYTE;

@@ -2,7 +2,11 @@ pub mod error;
 
 use std::collections::{BTreeSet, VecDeque};
 
-use meow_types::{digest::Digest, transaction::SignedTransaction};
+use meow_types::{
+    digest::Digest,
+    object::object_ref::ObjectRef,
+    transaction::{self, SignedTransaction, input::Input, transaction_type::TransactionType},
+};
 
 use crate::{mempool::error::MempoolError, store::Store};
 
@@ -32,9 +36,9 @@ impl Mempool {
     /// Submits a transaction after validating:
     /// 1. Signature is valid
     /// 2. Not already in the queue
-    /// 3. Gas coin exists in the provided store snapshot
+    /// 3. Referenced objects match the provided store snapshot
     pub fn submit(&mut self, tx: SignedTransaction, store: &Store) -> Result<()> {
-        tx.verify().map_err(|_| MempoolError::InvalidSignature)?;
+        transaction::validator::validate_signed_transaction(&tx)?;
 
         let digest = tx.transaction().digest();
         if self.seen.contains(&digest) {
@@ -44,6 +48,16 @@ impl Mempool {
         let gas_coin = tx.transaction().gas_coin();
         if !store.contains(gas_coin.address()) {
             return Err(MempoolError::GasCoinNotFound(*gas_coin.address()));
+        }
+
+        validate_object_ref(gas_coin, store)?;
+
+        if let TransactionType::MeowCall(call) = tx.transaction().type_() {
+            for argument in call.arguments() {
+                if let Input::Object(object_ref) = argument {
+                    validate_object_ref(object_ref, store)?;
+                }
+            }
         }
 
         self.seen.insert(digest);
@@ -60,4 +74,29 @@ impl Mempool {
         }
         batch
     }
+}
+
+fn validate_object_ref(object_ref: &ObjectRef, store: &Store) -> Result<()> {
+    let object = store
+        .get_object(object_ref.address())
+        .ok_or(MempoolError::ObjectNotFound(*object_ref.address()))?;
+
+    if object.version() != object_ref.version() {
+        return Err(MempoolError::InvalidObjectVersion {
+            address: *object_ref.address(),
+            expected: *object_ref.version(),
+            found: *object.version(),
+        });
+    }
+
+    let found_digest = object.digest();
+    if &found_digest != object_ref.digest() {
+        return Err(MempoolError::InvalidObjectDigest {
+            address: *object_ref.address(),
+            expected: *object_ref.digest(),
+            found: found_digest,
+        });
+    }
+
+    Ok(())
 }

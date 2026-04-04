@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use base64::{Engine, engine::general_purpose};
 use meow::{
+    commands::DEFAULT_NODE_URL,
     output_encoder::OutputEncoder,
     transaction::{TransactionCommand, output::TransactionCommandOutput},
 };
@@ -13,7 +14,9 @@ use meow_types::{
     keypair::{KeyPair, signature_scheme::SignatureScheme},
     keystore::Keystore,
     object::{object_ref::ObjectRef, object_version::ObjectVersion},
-    transaction::{SignedTransaction, Transaction, call::Call, transaction_type::TransactionType},
+    transaction::{
+        self, SignedTransaction, Transaction, call::Call, transaction_type::TransactionType,
+    },
 };
 use rand::{SeedableRng, rngs::StdRng};
 use temp_dir::TempDir;
@@ -22,27 +25,29 @@ use temp_dir::TempDir;
 // ─── Sign tests ───
 //
 
-#[test]
-fn sign_produces_a_valid_signed_transaction() {
+#[tokio::test]
+async fn sign_produces_a_valid_signed_transaction() {
     let tmp = TempDir::new().unwrap();
     let keypair = test_keypair();
     let sender = Address::from(&keypair);
     write_keystore(&tmp, keypair);
 
-    let output = sign(&tmp, make_call_transaction(sender)).unwrap();
+    let output = sign(&tmp, make_call_transaction(sender)).await.unwrap();
 
     let bytes = general_purpose::STANDARD
         .decode(&output.transaction)
         .unwrap();
     let signed: SignedTransaction = bcs::from_bytes(&bytes).unwrap();
-    assert!(signed.verify().is_ok());
+    assert!(transaction::validator::validate_signed_transaction(&signed).is_ok());
 }
 
-#[test]
-fn sign_with_missing_sender_key_returns_error() {
+#[tokio::test]
+async fn sign_with_missing_sender_key_returns_error() {
     let tmp = TempDir::new().unwrap();
     // No keystore file written — file_based returns an empty keystore for non-existent paths.
-    let err = sign(&tmp, make_call_transaction(Address::fill(0xAA))).unwrap_err();
+    let err = sign(&tmp, make_call_transaction(Address::fill(0xAA)))
+        .await
+        .unwrap_err();
 
     assert!(
         err.to_string()
@@ -51,8 +56,8 @@ fn sign_with_missing_sender_key_returns_error() {
     );
 }
 
-#[test]
-fn sign_invalid_base64_returns_error() {
+#[tokio::test]
+async fn sign_invalid_base64_returns_error() {
     let tmp = TempDir::new().unwrap();
 
     let err = TransactionCommand::Sign {
@@ -60,6 +65,7 @@ fn sign_invalid_base64_returns_error() {
         transaction: "not valid base64 !!!".to_string(),
     }
     .run(&fake_client(), OutputEncoder::Base64)
+    .await
     .unwrap_err();
 
     assert!(
@@ -68,8 +74,8 @@ fn sign_invalid_base64_returns_error() {
     );
 }
 
-#[test]
-fn sign_valid_base64_but_invalid_bcs_returns_error() {
+#[tokio::test]
+async fn sign_valid_base64_but_invalid_bcs_returns_error() {
     let tmp = TempDir::new().unwrap();
 
     let junk = general_purpose::STANDARD.encode(b"this is not a BCS-encoded Transaction");
@@ -79,6 +85,7 @@ fn sign_valid_base64_but_invalid_bcs_returns_error() {
         transaction: junk,
     }
     .run(&fake_client(), OutputEncoder::Base64)
+    .await
     .unwrap_err();
 
     assert!(
@@ -92,7 +99,7 @@ fn sign_valid_base64_but_invalid_bcs_returns_error() {
 //
 
 fn fake_client() -> NodeClient {
-    NodeClient::new("http://127.0.0.1:1".parse().unwrap())
+    NodeClient::with_url(DEFAULT_NODE_URL.parse().unwrap())
 }
 
 fn test_keypair() -> KeyPair {
@@ -105,13 +112,14 @@ fn make_call_transaction(sender: Address) -> Transaction {
     Transaction::new(sender, gas_coin, TransactionType::MeowCall(call))
 }
 
-fn sign(tmp: &TempDir, tx: Transaction) -> anyhow::Result<TransactionCommandOutput> {
+async fn sign(tmp: &TempDir, tx: Transaction) -> anyhow::Result<TransactionCommandOutput> {
     let tx_b64 = general_purpose::STANDARD.encode(bcs::to_bytes(&tx).unwrap());
     TransactionCommand::Sign {
         keystore_path: Some(keystore_path(tmp)),
         transaction: tx_b64,
     }
     .run(&fake_client(), OutputEncoder::Base64)
+    .await
 }
 
 fn keystore_path(tmp: &TempDir) -> PathBuf {

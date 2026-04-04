@@ -12,14 +12,12 @@ use meow_types::{
         },
     },
     transaction::{
-        Transaction,
-        call::{Call, Input},
-        execution_result::ExecutionStatus,
+        Transaction, call::Call, execution_result::ExecutionStatus, input::Input,
         transaction_type::TransactionType,
     },
 };
 use meow_vm_adapter::{builder, executor};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::GenesisError;
 
@@ -27,7 +25,7 @@ use crate::error::GenesisError;
 pub type Result<T> = std::result::Result<T, GenesisError>;
 
 /// The genesis state of the chain.
-#[derive(Serialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Genesis {
     /// The genesis objects.
     objects: Vec<Object>,
@@ -72,8 +70,8 @@ fn mint_meow_coins(meow_module: Object, allocations: &[(Address, u64)]) -> Resul
         .iter()
         .map(|(address, amount)| -> Result<Object> {
             let inputs = vec![
-                Input::Raw(bcs::to_bytes(amount)?),
-                Input::Raw(bcs::to_bytes(address)?),
+                Input::raw(amount).expect("amount BCS serialization is always valid"),
+                Input::raw(address).expect("address BCS serialization is always valid"),
             ];
 
             let transaction = Transaction::new(

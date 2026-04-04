@@ -10,7 +10,7 @@ use crate::genesis::output::GenesisOutput;
 
 /// Commands for building genesis state.
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum GenesisCommand {
     /// Build a genesis state.
     Build {
@@ -24,7 +24,10 @@ pub enum GenesisCommand {
 impl GenesisCommand {
     pub fn run(self) -> anyhow::Result<GenesisOutput> {
         match self {
-            GenesisCommand::Build { allocations, output } => {
+            GenesisCommand::Build {
+                allocations,
+                output,
+            } => {
                 let allocations = std::fs::read_to_string(allocations)?
                     .lines()
                     .map(|line| match line.split_once(',') {

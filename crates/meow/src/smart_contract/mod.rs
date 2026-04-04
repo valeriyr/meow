@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(Parser)]
-#[command(rename_all = "kebab-case")]
+#[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum SmartContractCommand {
     /// Compile a `.meow` source file into a module (without creating a transaction).
     Build {
@@ -30,23 +30,18 @@ pub enum SmartContractCommand {
         /// Name of the function to call.
         function: Identifier,
         /// Argument to pass to the function (repeatable). Auto-detected by format:
-        ///
         /// - `true` / `false` → bool
-        ///
         /// - digits only → u64
-        ///
         /// - `@0x<hex>` → raw address value (not resolved against the node)
-        ///
         /// - `0x<hex>` → on-chain object (resolved against the node)
-        ///
         /// - anything else → string
-        #[arg(value_name = "VALUE")]
+        #[arg(value_name = "VALUE", verbatim_doc_comment)]
         args: Vec<CallArg>,
     },
 }
 
 impl SmartContractCommand {
-    pub fn run(self, client: &NodeClient) -> anyhow::Result<SmartContractCommandOutput> {
+    pub async fn run(self, client: &NodeClient) -> anyhow::Result<SmartContractCommandOutput> {
         Ok(match self {
             SmartContractCommand::Build { path, encoder } => {
                 let module = builder::build_from_file(path)?;
@@ -59,12 +54,12 @@ impl SmartContractCommand {
                 args,
             } => {
                 let module = builder::build_from_file(path)?;
-                let args = args
-                    .into_iter()
-                    .map(|arg| arg.into_value(client))
-                    .collect::<Result<Vec<_>, _>>()?;
+                let mut values = Vec::new();
+                for arg in args {
+                    values.push(arg.into_value(client).await?);
+                }
 
-                let result = runner::run(module, &function, args)?;
+                let result = runner::run(module, &function, values)?;
 
                 SmartContractCommandOutput::Run(result.into())
             }

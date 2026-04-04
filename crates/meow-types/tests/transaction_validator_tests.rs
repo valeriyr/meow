@@ -6,14 +6,17 @@ use meow_types::{
     },
     digest::Digest,
     identifier::Identifier,
+    keypair::{KeyPair, error::KeyPairError, signature_scheme::SignatureScheme},
     object::{object_ref::ObjectRef, object_version::ObjectVersion},
     transaction::{
-        Transaction,
-        call::{Call, Input},
+        SignedTransaction, Transaction,
+        call::Call,
+        input::Input,
         transaction_type::TransactionType,
         validator::{self, ValidationError},
     },
 };
+use rand::{SeedableRng, rngs::StdRng};
 
 //
 // ─── MeowCall ───
@@ -23,7 +26,7 @@ use meow_types::{
 fn valid_call_with_no_args_passes() {
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), vec![]);
 
-    assert!(validate_transaction(&tx).is_ok());
+    assert!(validator::validate_transaction(&tx).is_ok());
 }
 
 #[test]
@@ -35,7 +38,7 @@ fn valid_call_with_mixed_args_passes() {
     ];
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
 
-    assert!(validate_transaction(&tx).is_ok());
+    assert!(validator::validate_transaction(&tx).is_ok());
 }
 
 #[test]
@@ -43,7 +46,7 @@ fn raw_args_with_same_content_do_not_alias() {
     let args = vec![Input::Raw(vec![1, 2, 3]), Input::Raw(vec![1, 2, 3])];
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
 
-    assert!(validate_transaction(&tx).is_ok());
+    assert!(validator::validate_transaction(&tx).is_ok());
 }
 
 #[test]
@@ -52,13 +55,14 @@ fn call_too_large_returns_error() {
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), vec![large_arg]);
 
     assert!(matches!(
-        validate_transaction(&tx),
+        validator::validate_transaction(&tx),
         Err(ValidationError::TransactionTooLarge { size, limit }) if size > MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE && limit == MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE
     ));
 }
 
 #[test]
 fn too_many_args_returns_error() {
+    // Default config is used for validation so we can use it here.
     let config = config::compiler_config();
 
     let args_amount = config.max_params() + 1;
@@ -68,7 +72,7 @@ fn too_many_args_returns_error() {
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
 
     assert!(matches!(
-        validator::validate_transaction(&tx, &config),
+        validator::validate_transaction(&tx),
         Err(ValidationError::TooManyCallArguments { amount, limit })
             if amount == args_amount && limit == config.max_params()
     ));
@@ -85,7 +89,7 @@ fn gas_coin_as_call_arg_returns_error() {
     );
 
     assert!(matches!(
-        validate_transaction(&tx),
+        validator::validate_transaction(&tx),
         Err(ValidationError::GasCoinUsedAsCallArgument(a)) if a == gas_coin
     ));
 }
@@ -100,7 +104,7 @@ fn aliased_object_arg_returns_error() {
     );
 
     assert!(matches!(
-        validate_transaction(&tx),
+        validator::validate_transaction(&tx),
         Err(ValidationError::AliasedCallArgument(a)) if a == obj
     ));
 }
@@ -112,21 +116,22 @@ fn aliased_object_arg_returns_error() {
 #[test]
 fn valid_publish_module_passes() {
     let tx = publish_tx(vec![0u8; 1024]);
-    assert!(validate_transaction(&tx).is_ok());
+    assert!(validator::validate_transaction(&tx).is_ok());
 }
 
 #[test]
 fn module_at_exact_limit_passes() {
     let tx = publish_tx(vec![0u8; MAX_BCS_SERIALIZED_MODULE_SIZE]);
-    assert!(validate_transaction(&tx).is_ok());
+    assert!(validator::validate_transaction(&tx).is_ok());
 }
 
 #[test]
 fn module_too_large_returns_error() {
     let module_size = MAX_BCS_SERIALIZED_MODULE_SIZE + 1;
     let tx = publish_tx(vec![0u8; module_size]);
+
     assert!(matches!(
-        validate_transaction(&tx),
+        validator::validate_transaction(&tx),
         Err(ValidationError::ModuleTooLarge { size, limit }) if size == module_size && limit == MAX_BCS_SERIALIZED_MODULE_SIZE
     ));
 }
@@ -137,9 +142,76 @@ fn publish_module_transaction_too_large_returns_error() {
         0u8;
         MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE
     ]);
+
     assert!(matches!(
-        validate_transaction(&tx),
+        validator::validate_transaction(&tx),
         Err(ValidationError::TransactionTooLarge { size, limit }) if size > MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE && limit == MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE
+    ));
+}
+
+//
+// ─── SignedTransaction ───
+//
+
+#[test]
+fn signed_transaction_verify_valid() {
+    let key_pair = test_keypair();
+    let tx = publish_tx_with_sender(key_pair.public().into(), vec![1, 2, 3]);
+
+    let (signed, _) = tx.sign(&key_pair);
+
+    assert!(validator::validate_signed_transaction(&signed).is_ok());
+}
+
+#[test]
+fn signed_transaction_verify_wrong_digest() {
+    let key_pair = test_keypair();
+    let sender = key_pair.public().into();
+
+    let tx1 = publish_tx_with_sender(sender, vec![1, 2, 3]);
+    let tx2 = publish_tx_with_sender(sender, vec![4, 5, 6]);
+
+    let sig = key_pair.sign(tx1.digest().as_ref());
+    let signed = SignedTransaction::new(tx2, sig);
+
+    assert!(matches!(
+        validator::validate_signed_transaction(&signed).unwrap_err(),
+        ValidationError::KeyPairError(KeyPairError::Ed25519ConsensusError(e))
+            if e.to_string() == "Invalid signature."
+    ));
+}
+
+#[test]
+fn signed_transaction_verify_wrong_signer() {
+    let key_pair = test_keypair();
+    let tx_signer = Address::from(key_pair.public());
+
+    let tx = publish_tx(vec![1, 2, 3]);
+    let tx_sender = *tx.sender();
+
+    let sig = test_keypair().sign(tx.digest().as_ref());
+    let signed = SignedTransaction::new(tx, sig);
+
+    assert!(matches!(
+        validator::validate_signed_transaction(&signed).unwrap_err(),
+        ValidationError::SignerMismatch { sender, signer } if sender == tx_sender && signer == tx_signer
+    ));
+}
+
+#[test]
+fn signed_transaction_verify_invalid_module_too_large() {
+    let key_pair = test_keypair();
+    let sender = key_pair.public().into();
+
+    let module_size = MAX_BCS_SERIALIZED_MODULE_SIZE + 1;
+    let tx = publish_tx_with_sender(sender, vec![0u8; module_size]);
+
+    let sig = test_keypair().sign(tx.digest().as_ref());
+    let signed = SignedTransaction::new(tx, sig);
+
+    assert!(matches!(
+        validator::validate_signed_transaction(&signed),
+        Err(ValidationError::ModuleTooLarge { size, limit }) if size == module_size && limit == MAX_BCS_SERIALIZED_MODULE_SIZE
     ));
 }
 
@@ -168,13 +240,17 @@ fn call_tx(sender: Address, gas_coin: ObjectRef, args: Vec<Input>) -> Transactio
 }
 
 fn publish_tx(module_bytes: Vec<u8>) -> Transaction {
+    publish_tx_with_sender(Address::fill(0xAA), module_bytes)
+}
+
+fn publish_tx_with_sender(sender: Address, module_bytes: Vec<u8>) -> Transaction {
     Transaction::new(
-        Address::fill(0xAA),
+        sender,
         gas_coin_ref(0xBB),
         TransactionType::MeowModulePublish(module_bytes),
     )
 }
 
-fn validate_transaction(transaction: &Transaction) -> validator::Result<()> {
-    validator::validate_transaction(transaction, &config::compiler_config())
+fn test_keypair() -> KeyPair {
+    KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0; 32]))
 }
