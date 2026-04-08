@@ -65,7 +65,7 @@ crates/
 | Doc | What it covers |
 |---|---|
 | [Quick Start](docs/quickstart.md) | Key generation, genesis, running a node, sending transactions |
-| [Object Model](docs/objects.md) | Objects, ownership, versioning, gas coins, and lifecycle |
+| [Object Model](docs/object-model.md) | Objects, ownership, versioning, gas coins, and lifecycle |
 | [Contracts](docs/contracts.md) | `.meow` language reference, publishing a module, call argument format |
 | [MeowCoin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |

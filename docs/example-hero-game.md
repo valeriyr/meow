@@ -1,8 +1,8 @@
 # Example: hero game
 
-> A minimal on-chain role-playing game in `.meow`.
+> An on-chain role-playing game in `.meow`.
 
-A `Hero` is a uniquely-owned object that accumulates experience and can level up. This example covers the full lifecycle: writing the module, testing locally, publishing on-chain, and calling each function.
+A `Hero` is a named, uniquely-owned object that earns experience, levels up, and can duel other heroes. This example covers the full lifecycle: writing the module, testing locally, publishing on-chain, and calling each function.
 
 See [Contracts](contracts.md) for the language reference and call argument format.
 
@@ -12,29 +12,97 @@ Create `hero.meow`:
 
 ```meow
 // hero.meow
-// A simple on-chain hero that accumulates experience and levels up.
+// An on-chain hero that earns experience, levels up, and can duel others.
 
-object Hero { id: address, level: u64, experience: u64 }
+object Hero {
+    id: address,
+    name: string,
+    level: u64,
+    experience: u64,
+    wins: u64,
+    sword_attack: u64,
+    shield_defense: u64
+}
 
-// Spawn a new level-1 hero and transfer it to `owner`.
-fn spawn(owner: address) {
-    let hero = Hero { id: meow_vm_fresh_id(), level: 1, experience: 0 };
+// Spawn a new level-1 hero with no equipment and transfer it to the transaction sender.
+fn spawn(name: string) {
+    let owner = meow_vm_sender();
+    let hero = Hero {
+        id: meow_vm_fresh_id(),
+        name: name,
+        level: 1,
+        experience: 0,
+        wins: 0,
+        sword_attack: 0,
+        shield_defense: 0
+    };
     meow_vm_transfer(hero, owner);
 }
 
-// Award experience points to the hero.
-// The hero survives in-place — the executor writes it back to the original owner automatically.
-fn award_xp(hero: Hero, xp: u64) {
-    hero.experience = hero.experience + xp;
+// Rename the hero.
+fn rename(hero: Hero, new_name: string) {
+    hero.name = new_name;
 }
 
-// Level up the hero. Requires at least 100 XP; deducts 100 and increments level.
-// No explicit transfer needed — mutated input objects are written back to their
-// original owner automatically when the function returns.
-fn level_up(hero: Hero) {
-    meow_vm_abort(hero.experience >= 100, 1, "Not enough experience to level up");
-    hero.experience = hero.experience - 100;
-    hero.level = hero.level + 1;
+// Forge a sword. Higher attack increases power in duels.
+// Cannot downgrade: the new value must be greater than the current one.
+fn forge_sword(hero: Hero, attack: u64) {
+    meow_vm_abort(attack > hero.sword_attack, 3, "New sword must be stronger than the current one");
+    hero.sword_attack = attack;
+}
+
+// Forge a shield. Higher defense reduces XP loss when losing a duel.
+// Cannot downgrade: the new value must be greater than the current one.
+fn forge_shield(hero: Hero, defense: u64) {
+    meow_vm_abort(defense > hero.shield_defense, 4, "New shield must be stronger than the current one");
+    hero.shield_defense = defense;
+}
+
+// Duel two heroes. Both must be owned by the transaction sender.
+// Power = level * 100 + experience + sword_attack. Attacker wins on a tie.
+// Winner gains XP scaled to the loser's level and levels up automatically if threshold is reached.
+// XP penalty on the loser is reduced by their shield_defense.
+fn duel(attacker: Hero, defender: Hero) {
+    meow_vm_abort(attacker.id != defender.id, 2, "A hero cannot duel itself");
+
+    let attacker_power = attacker.level * 100 + attacker.experience + attacker.sword_attack;
+    let defender_power = defender.level * 100 + defender.experience + defender.sword_attack;
+
+    if attacker_power >= defender_power {
+        attacker.experience = attacker.experience + defender.level * 25;
+        attacker.wins = attacker.wins + 1;
+        let required = attacker.level * 100;
+        if attacker.experience >= required {
+            attacker.experience = attacker.experience - required;
+            attacker.level = attacker.level + 1;
+        }
+        let penalty = attacker.level * 10;
+        if penalty > defender.shield_defense {
+            let net_penalty = penalty - defender.shield_defense;
+            if defender.experience >= net_penalty {
+                defender.experience = defender.experience - net_penalty;
+            } else {
+                defender.experience = 0;
+            }
+        }
+    } else {
+        defender.experience = defender.experience + attacker.level * 25;
+        defender.wins = defender.wins + 1;
+        let required = defender.level * 100;
+        if defender.experience >= required {
+            defender.experience = defender.experience - required;
+            defender.level = defender.level + 1;
+        }
+        let penalty = defender.level * 10;
+        if penalty > attacker.shield_defense {
+            let net_penalty = penalty - attacker.shield_defense;
+            if attacker.experience >= net_penalty {
+                attacker.experience = attacker.experience - net_penalty;
+            } else {
+                attacker.experience = 0;
+            }
+        }
+    }
 }
 
 // Transfer the hero to another player.
@@ -55,20 +123,20 @@ fn retire(hero: Hero) {
 - **Primitive arguments** (`bool`, `u64`, `address`, `string`) — work without a running node.
 - **Object arguments** (`0x<hex>`) — require a running node and the object to already exist on-chain.
 
-`spawn` only takes an `address`, so it can be run offline:
+`spawn` only takes a `string`, so it can be run offline:
 
 ```bash
 # Check that the module compiles cleanly
 meow smart-contract build hero.meow
 
-# Run spawn locally — owner is a raw address (@0x prefix), no node needed
-meow smart-contract run hero.meow spawn @0xaa
+# Run spawn locally — no node needed
+meow smart-contract run hero.meow spawn Thorin
 ```
 
-To test `award_xp`, `level_up`, `transfer`, or `retire` locally, the `Hero` object must already be on-chain. Use the `0x<hex>` form (no `@`) so the CLI fetches it from the node:
+To test `duel` or `retire` locally, the `Hero` objects must already be on-chain. Use the `0x<hex>` form (no `@`) so the CLI fetches them from the node:
 
 ```bash
-meow smart-contract run hero.meow award_xp <HERO_ADDRESS> 50
+meow smart-contract run hero.meow duel <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
 ```
 
 ## Publish on-chain
@@ -96,13 +164,15 @@ Look for the created object — that address is your `<MODULE_ADDRESS>`.
 
 ## Spawn a hero
 
+`spawn` takes a name string and automatically sends the hero to the transaction sender via `meow_vm_sender()`.
+
 ```bash
 meow transaction meow-call \
   --module <MODULE_ADDRESS> \
   --function spawn \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
-  @<YOUR_ADDRESS>
+  Thorin
 ```
 
 Fetch the result to find the `Hero` object address:
@@ -111,31 +181,64 @@ Fetch the result to find the `Hero` object address:
 meow client get-transaction-result <TRANSACTION_DIGEST>
 ```
 
-## Award experience
-
-The hero object address (without `@`) is resolved from the node and passed as a move argument. Plain integers are recognized as `u64` automatically.
+## Rename the hero
 
 ```bash
 meow transaction meow-call \
   --module <MODULE_ADDRESS> \
-  --function award_xp \
+  --function rename \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
-  <HERO_ADDRESS> 75
+  <HERO_ADDRESS> "Thorin Oakenshield"
 ```
 
-## Level up
+## Forge equipment
 
-Fails with abort code `1` if the hero has fewer than 100 XP.
+Equip a sword to boost attack power in duels. Equip a shield to reduce XP loss when losing. Neither can be downgraded.
 
 ```bash
+# Forge a sword with attack power 30
 meow transaction meow-call \
   --module <MODULE_ADDRESS> \
-  --function level_up \
+  --function forge_sword \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
-  <HERO_ADDRESS>
+  <HERO_ADDRESS> 30
+
+# Forge a shield with defense power 15
+meow transaction meow-call \
+  --module <MODULE_ADDRESS> \
+  --function forge_shield \
+  --sender <YOUR_ADDRESS> \
+  --gas-coin <GAS_COIN_ADDRESS> \
+  <HERO_ADDRESS> 15
 ```
+
+## Duel
+
+Both heroes must be owned by the transaction sender. Spawn a second hero first, then pass both addresses as object arguments.
+
+Power is computed as `level × 100 + experience + sword_attack` — equipment directly influences who wins. The attacker wins on a tie. The winner gains `loser.level × 25` XP and **levels up automatically** if their XP reaches `level × 100` (so level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The XP penalty on the loser is `winner.level × 10` reduced by their `shield_defense`.
+
+```bash
+# Spawn a second hero to be the defender
+meow transaction meow-call \
+  --module <MODULE_ADDRESS> \
+  --function spawn \
+  --sender <YOUR_ADDRESS> \
+  --gas-coin <GAS_COIN_ADDRESS> \
+  Goblin
+
+# Duel — attacker is the first argument, defender is the second
+meow transaction meow-call \
+  --module <MODULE_ADDRESS> \
+  --function duel \
+  --sender <YOUR_ADDRESS> \
+  --gas-coin <GAS_COIN_ADDRESS> \
+  <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
+```
+
+After the duel both heroes survive in-place (neither is transferred nor destroyed), so the executor writes them back to the sender automatically with updated `experience` and `wins`.
 
 ## Inspect the hero
 

@@ -15,7 +15,7 @@
 | `struct <Name>` | Value | Named record with primitive fields; freely copyable |
 | `object <Name>` | Move | Owned on-chain resource; must have `id: address` as its first field |
 
-Objects have **move semantics** — passing an object to a function consumes it. At the end of execution the adapter handles it in one of three ways (see [Object Model](objects.md) for the full lifecycle):
+Objects have **move semantics** — passing an object to a function consumes it. At the end of execution the adapter handles it in one of three ways (see [Object Model](object-model.md) for the full lifecycle):
 
 - **Transferred** (`meow_vm_transfer`) — saved with the new owner.
 - **Destroyed** (`meow_vm_destroy`) — removed from state.
