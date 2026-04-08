@@ -13,5 +13,9 @@ thiserror.workspace = true
 tracing.workspace = true
 
 meow-genesis.workspace = true
+meow-nakamoto-types.workspace = true
 meow-types.workspace = true
 meow-vm-adapter.workspace = true
+
+[dev-dependencies]
+rand.workspace = true

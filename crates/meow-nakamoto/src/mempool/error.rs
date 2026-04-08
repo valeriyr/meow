@@ -5,8 +5,6 @@ use meow_types::{address::Address, digest::Digest, object::object_version::Objec
 pub enum MempoolError {
     #[error("transaction already in mempool: {0}")]
     DuplicateTransaction(Digest),
-    #[error("gas coin {0} not found in store")]
-    GasCoinNotFound(Address),
     #[error("object {0} not found in store")]
     ObjectNotFound(Address),
     #[error("object {address} has invalid version: expected {expected}, found {found}")]

@@ -7,7 +7,7 @@ pub enum Type {
     U64,
     /// An address — a 32-byte array, freely copyable.
     Address,
-    /// A UTF-8 string value. Freely copyable; not allowed as a struct/object field type.
+    /// A UTF-8 string value. Freely copyable.
     Str,
     /// A user-defined struct referenced by name.
     Struct(String),
@@ -58,7 +58,7 @@ pub enum Value {
     U64(u64),
     /// An address (32-byte array), freely copyable.
     Address([u8; 32]),
-    /// A string literal — only used as arguments to native functions (e.g. meow_vm_abort).
+    /// A UTF-8 string value.
     Str(String),
     /// Returned by void functions to keep the stack balanced.
     Void,

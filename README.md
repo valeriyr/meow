@@ -14,102 +14,63 @@ A compact blockchain playground written in Rust.
 
 </div>
 
-## Highlights
+## What is MEOW?
 
-| Area | Details |
-|---|---|
-| **Full node** | HTTP API + libp2p gossip networking |
-| **CLI toolkit** | Key management, genesis, transactions, and smart contracts |
-| **Object model** | Minimal object-based state with owner tracking |
-| **VM toolchain** | Compile and execute `.meow` smart contracts |
-| **Test coverage** | Unit, integration, e2e, security, and network |
+MEOW is a self-contained blockchain written from scratch in Rust. It is designed to be small enough to read and understand in full, while still covering the core ideas of a production system: consensus, a typed object model, a smart contract VM, and a peer-to-peer gossip network.
 
-> MEOW is an example project — ready for exploration, experimentation, and sharing.
+The goal is not to ship a coin — it is to show how the pieces fit together.
 
-## Quick Start
+## How it works
+
+**Consensus** — Nakamoto proof-of-work. The miner continuously attempts blocks over the pending mempool transactions. On reorg, only transactions that are no longer valid against the new chain head are evicted; the rest stay in the mempool and are re-mined automatically.
+
+**Object model** — State is a flat map of typed objects, each identified by a 32-byte address and owned by a key pair. Transactions consume and produce objects. The gas coin is itself an object, so fees are enforced the same way as any other balance movement.
+
+**Smart contracts** — Programs are written in `.meow`, a minimal language compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
+
+**Networking** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node receives a block whose height is more than one ahead of its own chain tip, it requests the missing range from the sender and buffers any blocks that arrive during the catch-up.
+
+**RPC** — `meow-node` exposes a JSON-over-HTTP API on `127.0.0.1:8600` by default. The `meow client` CLI sub-commands and the `meow-node-client` library crate both talk to this API.
+
+## Build & test
 
 ```bash
-# Build everything
 cargo build
-
-# Run the full test suite
 cargo test
 ```
-
-**1. Generate a key**
-
-```bash
-meow keytool generate ed25519
-```
-
-**2. Create allocations and build genesis**
-
-```csv
-0xaaaa..aa,1000000
-0xbbbb..bb,2000000
-```
-
-```bash
-meow genesis build allocations.csv genesis.bin
-```
-
-**3. Start a node**
-
-```bash
-meow-node run --genesis genesis.bin
-```
-
-**4. Query the node**
-
-```bash
-meow client get-objects <OWNER_ADDRESS>
-```
-
-> See the full walkthrough in [docs/quickstart.md](docs/quickstart.md).
-
-## CLI Reference
-
-| Command | Purpose |
-|---------|---------|
-| `meow keytool` | Manage local keys |
-| `meow genesis` | Build genesis state from a CSV allocation file |
-| `meow transaction` | Build and sign transactions |
-| `meow smart-contract` | Compile and run `.meow` programs locally |
-| `meow client` | Talk to a running node over HTTP |
-| `meow say-meow` | 🐱 |
-| `meow-node run` | Run a full node |
 
 ## Workspace
 
 ```text
 crates/
-├── meow                 CLI binary
-├── meow-node            Node binary & RPC layer
-├── meow-node-client     HTTP client for node RPC
-├── meow-nakamoto        Chain, miner, mempool & storage
-├── meow-types           Shared types
-├── meow-vm              VM runtime
-├── meow-vm-compiler     .meow → bytecode compiler
-├── meow-vm-adapter      VM ↔ chain glue
+├── meow                 CLI binary (keys, genesis, transactions, contracts, client)
+├── meow-node            Full node binary — HTTP RPC + gossip integration
+├── meow-node-client     Typed HTTP client library for the node RPC
+├── meow-nakamoto        Chain, block validation, miner, mempool, object store
+├── meow-nakamoto-types  Block and block-header type definitions
+├── meow-types           Shared types — addresses, digests, objects, transactions, keys
+├── meow-vm              Smart contract runtime
+├── meow-vm-compiler     .meow source → bytecode compiler
+├── meow-vm-adapter      VM ↔ chain glue layer
 ├── meow-vm-types        VM type definitions
-├── meow-gossip-network  libp2p networking
-├── meow-gossip-types    Network-level types
-├── meow-genesis         Genesis loading
+├── meow-gossip-network  libp2p gossipsub + mDNS networking
+├── meow-gossip-types    Network-level shared types and config
+├── meow-genesis         Genesis file loading and validation
 ├── meow-framework       Built-in modules (meow_coin)
-└── meow-e2e-tests       End-to-end & network tests
+└── meow-e2e-tests       End-to-end, network, and security tests
 ```
 
 ## Documentation
 
 | Doc | What it covers |
 |---|---|
-| [Quick Start](docs/quickstart.md) | Key generation → genesis → node → first query |
+| [Quick Start](docs/quickstart.md) | Key generation, genesis, running a node, sending transactions |
+| [Object Model](docs/objects.md) | Objects, ownership, versioning, gas coins, and lifecycle |
+| [Contracts](docs/contracts.md) | `.meow` language reference, publishing a module, call argument format |
+| [MeowCoin](docs/meow-coin.md) | Built-in system coin reference |
+| [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
+| [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |
 | [Architecture](docs/architecture.md) | Crate map, data flow, and testing strategy |
-
-## Notes
-
-- Default RPC address: `http://127.0.0.1:8600`
-- Some e2e tests are serial — they start real nodes and bind ports.
 
 ## License
 

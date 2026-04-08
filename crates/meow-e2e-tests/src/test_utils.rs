@@ -8,11 +8,16 @@ use meow_types::{
     digest::Digest,
     identifier::Identifier,
     keypair::{KeyPair, signature_scheme::SignatureScheme},
-    object::{Object, object_ref::ObjectRef},
+    object::{Object, object_ref::ObjectRef, object_type::ObjectType},
     transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
 };
 use meow_vm_adapter::builder;
 use rand::{SeedableRng, rngs::StdRng};
+
+/// The timeout for waiting for a result to be available.
+const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
+/// The interval between polls when waiting for a result to be available.
+const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 
 /// Returns a deterministic test keypair.
 pub fn test_keypair() -> KeyPair {
@@ -31,6 +36,16 @@ pub fn genesis_coin_addr(genesis: &Genesis, sender: Address) -> Address {
         .iter()
         .find(|o| o.owner().address() == Some(&sender))
         .expect("genesis must contain a coin for sender")
+        .address()
+}
+
+/// Extract the published module address from a successful execution result.
+pub fn published_module_addr(result: &ExecutionResult) -> Address {
+    *result
+        .created_objects()
+        .iter()
+        .find(|o| o.type_() == &ObjectType::Module)
+        .expect("module publish must create a module object")
         .address()
 }
 
@@ -59,7 +74,7 @@ pub async fn get_object_ref(client: &NodeClient, address: &Address) -> ObjectRef
 
 /// Poll until the transaction result is available, or panic after 5s.
 pub async fn wait_for_object(client: &NodeClient, address: &Address) -> Object {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now() + DEFAULT_WAIT_TIMEOUT;
     loop {
         if let Some(object) = client.get_object(address).await.unwrap() {
             return object;
@@ -68,13 +83,13 @@ pub async fn wait_for_object(client: &NodeClient, address: &Address) -> Object {
             tokio::time::Instant::now() < deadline,
             "timed out waiting for object {address} to be available"
         );
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::time::sleep(DEFAULT_POLL_INTERVAL).await;
     }
 }
 
 /// Poll until the transaction result is available, or panic after 5s.
 pub async fn wait_for_result(client: &NodeClient, digest: &Digest) -> ExecutionResult {
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    let deadline = tokio::time::Instant::now() + DEFAULT_WAIT_TIMEOUT;
     loop {
         if let Some(result) = client.get_transaction_result(digest).await.unwrap() {
             return result;
@@ -83,7 +98,7 @@ pub async fn wait_for_result(client: &NodeClient, digest: &Digest) -> ExecutionR
             tokio::time::Instant::now() < deadline,
             "timed out waiting for transaction {digest} to be mined"
         );
-        tokio::time::sleep(Duration::from_millis(20)).await;
+        tokio::time::sleep(DEFAULT_POLL_INTERVAL).await;
     }
 }
 
@@ -125,12 +140,22 @@ pub fn module_noop() -> Vec<u8> {
     bcs::to_bytes(&module).unwrap()
 }
 
-/// Start three nodes with the same genesis and wait for peer discovery (mDNS).
+/// Start three nodes with the same genesis in a deterministic connected topology.
 pub async fn start_three_nodes_with_genesis(genesis: &Genesis) -> (TestNode, TestNode, TestNode) {
     let node1 = TestNode::start_with_genesis(genesis).await;
-    let node2 = TestNode::start_with_genesis(genesis).await;
-    let node3 = TestNode::start_with_genesis(genesis).await;
-    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let node2 =
+        TestNode::start_with_bootstrap(genesis, vec![node1.gossip_bootstrap_address().clone()])
+            .await;
+    let node3 = TestNode::start_with_bootstrap(
+        genesis,
+        vec![
+            node1.gossip_bootstrap_address().clone(),
+            node2.gossip_bootstrap_address().clone(),
+        ],
+    )
+    .await;
+    // Give peers a short moment to establish outgoing bootstrap connections.
+    tokio::time::sleep(Duration::from_millis(300)).await;
     (node1, node2, node3)
 }
 

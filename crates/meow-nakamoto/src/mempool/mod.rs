@@ -33,6 +33,11 @@ impl Mempool {
         }
     }
 
+    /// Returns the pending transactions in the mempool.
+    pub fn pending(&self) -> impl Iterator<Item = &SignedTransaction> {
+        self.pending.iter()
+    }
+
     /// Submits a transaction after validating:
     /// 1. Signature is valid
     /// 2. Not already in the queue
@@ -45,24 +50,30 @@ impl Mempool {
             return Err(MempoolError::DuplicateTransaction(digest));
         }
 
-        let gas_coin = tx.transaction().gas_coin();
-        if !store.contains(gas_coin.address()) {
-            return Err(MempoolError::GasCoinNotFound(*gas_coin.address()));
-        }
-
-        validate_object_ref(gas_coin, store)?;
-
-        if let TransactionType::MeowCall(call) = tx.transaction().type_() {
-            for argument in call.arguments() {
-                if let Input::Object(object_ref) = argument {
-                    validate_object_ref(object_ref, store)?;
-                }
-            }
-        }
+        validate_against_store(&tx, store)?;
 
         self.seen.insert(digest);
         self.pending.push_back(tx);
         Ok(())
+    }
+
+    /// Drops only transactions that are no longer valid against `store`.
+    /// Called after a chain reorg so that transactions whose object
+    /// references still hold on the new chain head are preserved.
+    pub fn retain_valid(&mut self, store: &Store) {
+        let mut valid: VecDeque<SignedTransaction> = VecDeque::new();
+        let mut valid_seen: BTreeSet<Digest> = BTreeSet::new();
+
+        for tx in self.pending.drain(..) {
+            if validate_against_store(&tx, store).is_ok() {
+                let digest = tx.transaction().digest();
+                valid_seen.insert(digest);
+                valid.push_back(tx);
+            }
+        }
+
+        self.pending = valid;
+        self.seen = valid_seen;
     }
 
     /// Drains up to `limit` transactions from the front of the queue.
@@ -76,6 +87,23 @@ impl Mempool {
     }
 }
 
+/// Validates that all object references in the transaction match the latest version and digest in the store.
+fn validate_against_store(tx: &SignedTransaction, store: &Store) -> Result<()> {
+    let gas_coin = tx.transaction().gas_coin();
+    validate_object_ref(gas_coin, store)?;
+
+    if let TransactionType::MeowCall(call) = tx.transaction().type_() {
+        for argument in call.arguments() {
+            if let Input::Object(object_ref) = argument {
+                validate_object_ref(object_ref, store)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Validates that an object reference matches the latest version and digest in the store.
 fn validate_object_ref(object_ref: &ObjectRef, store: &Store) -> Result<()> {
     let object = store
         .get_object(object_ref.address())

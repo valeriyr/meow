@@ -3,6 +3,7 @@ pub mod error;
 use std::sync::Arc;
 
 use meow_nakamoto::miner::Miner;
+use meow_nakamoto_types::block::Block;
 use meow_types::{
     address::Address,
     object::Object,
@@ -42,17 +43,17 @@ impl RpcHandler {
         let mut miner = self.miner.lock().await;
 
         miner.submit_tx(tx.clone())?;
-        tracing::debug!(%tx_digest, "accepted tx in local mempool");
+        tracing::debug!(%tx_digest, "accepted transaction in local mempool");
 
         // Serialize for gossip; local submission has already succeeded.
         match bcs::to_bytes(&tx) {
             Ok(data) => {
                 if let Err(e) = self.publish_transactions_tx.send(data) {
-                    tracing::warn!(%tx_digest, "failed to publish accepted tx to gossip: {e}");
+                    tracing::warn!(%tx_digest, error = %e, "failed to publish accepted transaction to gossip");
                 }
             }
             Err(e) => {
-                tracing::warn!(%tx_digest, "failed to serialize accepted tx for gossip: {e}");
+                tracing::warn!(%tx_digest, error = %e, "failed to serialize accepted transaction for gossip");
             }
         }
 
@@ -91,5 +92,12 @@ impl RpcHandler {
         let miner = self.miner.lock().await;
 
         Ok(miner.get_transaction_result(digest).cloned())
+    }
+
+    /// Returns all blocks from the given height onwards (for chain synchronization).
+    pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
+        let miner = self.miner.lock().await;
+
+        Ok(miner.get_blocks_since(height))
     }
 }

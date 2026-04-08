@@ -28,7 +28,7 @@ impl<'m> Codegen<'m> {
         ast_fn: AstFunction,
         config: &'m CompilerConfig,
     ) -> Result<Function> {
-        validator::validate_identifier(&ast_fn.name, "function name", config)?;
+        validator::validate_function_name(&ast_fn.name, config)?;
 
         let max_params = config.max_params();
         if ast_fn.params.len() > max_params {

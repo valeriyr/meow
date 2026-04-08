@@ -1,5 +1,5 @@
 use meow_vm_compiler::{Compiler, Result, error::CompilerError};
-use meow_vm_types::{config::CompilerConfig, module::Module};
+use meow_vm_types::{config::CompilerConfig, identifier::RESERVED_FUNCTION_NAMES, module::Module};
 
 //
 // ─── Object rules ───
@@ -191,6 +191,52 @@ fn struct_field_cannot_be_an_object_type() {
         compile("test", src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("non-primitive type")
     ));
+}
+
+//
+// ─── Reserved native names ───
+//
+
+#[test]
+fn vm_level_reserved_names_are_rejected_with_default_config() {
+    // RESERVED_FUNCTION_NAMES contains VM-hardcoded names (meow_vm_abort).
+    // These are always rejected regardless of what the caller passes in CompilerConfig.
+    for name in RESERVED_FUNCTION_NAMES {
+        let src = format!("fn {name}() {{}}");
+        assert!(
+            matches!(
+                compile("test", &src).unwrap_err(),
+                CompilerError::Message(msg) if msg.contains("reserved for a built-in native function")
+            ),
+            "defining a function named '{name}' must be rejected"
+        );
+    }
+}
+
+#[test]
+fn config_supplied_reserved_names_are_rejected() {
+    // Caller-supplied reserved names (e.g. adapter natives) are injected via
+    // CompilerConfig::with_reserved_function_names.
+    let extra = ["my_native_a", "my_native_b"];
+    let config = CompilerConfig::default().with_reserved_function_names(&extra);
+
+    for name in extra {
+        let src = format!("fn {name}() {{}}");
+        assert!(
+            matches!(
+                Compiler::compile("test", &src, config.clone()).unwrap_err(),
+                CompilerError::Message(msg) if msg.contains("reserved for a built-in native function")
+            ),
+            "config-reserved name '{name}' must be rejected"
+        );
+    }
+}
+
+#[test]
+fn non_reserved_function_with_name_starting_meow_is_accepted() {
+    // Sanity check: a name that starts with 'meow' but is not a native is fine.
+    let src = "fn meow_my_function() {}";
+    assert!(compile("test", src).is_ok());
 }
 
 //

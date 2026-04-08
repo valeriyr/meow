@@ -1,8 +1,8 @@
 use meow_nakamoto::{
-    block::{Block, BlockHeader},
     chain::{ChainState, compute_state_root, compute_transactions_root},
     store::Store,
 };
+use meow_nakamoto_types::{block::Block, block_header::BlockHeader};
 use meow_types::{digest::Digest, transaction::execution_result::ExecutionResult};
 
 #[test]
@@ -23,7 +23,7 @@ fn block_with_forged_results_is_rejected() {
         results: vec![ExecutionResult::failure("forged", Digest::ZERO)],
     };
 
-    assert!(!chain.on_block_received(block));
+    assert!(!chain.apply_block(block));
     assert_eq!(chain.head_height(), 0);
     assert!(chain.get_transaction_result(&Digest::ZERO).is_none());
 }

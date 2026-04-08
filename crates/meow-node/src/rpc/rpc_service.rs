@@ -44,6 +44,7 @@ impl RpcState {
 /// - `GET /objects/{owner}` to fetch all the live objects owned by an address.
 /// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
 /// - `GET /transaction-result/{digest}` to fetch an execution result by transaction digest.
+/// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards (for sync).
 pub fn router(state: RpcState) -> Router {
     Router::new()
         .route("/submit-transaction", post(submit_tx))
@@ -51,6 +52,7 @@ pub fn router(state: RpcState) -> Router {
         .route("/objects/{owner}", get(get_objects))
         .route("/transaction/{digest}", get(get_transaction))
         .route("/transaction-result/{digest}", get(get_transaction_result))
+        .route("/blocks-since/{height}", get(get_blocks_since))
         .with_state(state)
 }
 
@@ -77,11 +79,6 @@ async fn submit_tx(
                     StatusCode::CONFLICT,
                     "duplicate_transaction",
                     format!("duplicate transaction: {digest}"),
-                ),
-                MempoolError::GasCoinNotFound(addr) => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "gas_coin_not_found",
-                    format!("gas coin not found: {addr}"),
                 ),
                 MempoolError::ObjectNotFound(addr) => error_response(
                     StatusCode::BAD_REQUEST,
@@ -215,6 +212,18 @@ async fn get_transaction_result(
             "transaction_not_found",
             format!("transaction not found: {digest}"),
         ),
+        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
+    }
+}
+
+/// GET /blocks-since/:height — returns all blocks from the given height onwards.
+/// Used by nodes to synchronize the chain after joining the network.
+async fn get_blocks_since(
+    State(state): State<RpcState>,
+    Path(height): Path<u64>,
+) -> impl IntoResponse {
+    match state.handler.get_blocks_since(height).await {
+        Ok(blocks) => Json(blocks).into_response(),
         Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
     }
 }

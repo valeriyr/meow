@@ -8,6 +8,7 @@ members = [
     "crates/meow-gossip-network",
     "crates/meow-gossip-types",
     "crates/meow-nakamoto",
+    "crates/meow-nakamoto-types",
     "crates/meow-node",
     "crates/meow-node-client",
     "crates/meow-types",
@@ -58,6 +59,7 @@ meow-genesis = { path = "crates/meow-genesis" }
 meow-gossip-network = { path = "crates/meow-gossip-network" }
 meow-gossip-types = { path = "crates/meow-gossip-types" }
 meow-nakamoto = { path = "crates/meow-nakamoto" }
+meow-nakamoto-types = { path = "crates/meow-nakamoto-types" }
 meow-node = { path = "crates/meow-node" }
 meow-node-client = { path = "crates/meow-node-client" }
 meow-types = { path = "crates/meow-types" }

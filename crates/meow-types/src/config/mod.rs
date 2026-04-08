@@ -27,6 +27,16 @@ pub const MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE: usize = 32 * 1024; // 32 KiB
 pub const MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE: usize =
     MAX_BCS_SERIALIZED_MODULE_SIZE + 1024; // 513 KiB (module size + overhead)
 
+/// The names of the native functions registered by this adapter.
+/// Used to populate [`meow_vm_types::config::CompilerConfig::reserved_function_names`]
+/// so the compiler rejects user-defined functions that would shadow them.
+pub const NATIVE_FUNCTION_NAMES: &[&str] = &[
+    "meow_vm_fresh_id",
+    "meow_vm_transfer",
+    "meow_vm_destroy",
+    "meow_vm_sender",
+];
+
 /// Returns the path to the meow configuration directory.
 ///
 /// Creates the directory if it does not exist.
@@ -55,7 +65,7 @@ pub fn meow_keystore_path() -> Result<PathBuf> {
 
 /// Returns the compiler configuration.
 pub fn compiler_config() -> CompilerConfig {
-    CompilerConfig::default()
+    CompilerConfig::default().with_reserved_function_names(NATIVE_FUNCTION_NAMES)
 }
 
 /// Returns the VM configuration.

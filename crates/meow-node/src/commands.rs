@@ -1,15 +1,19 @@
-use std::{net::SocketAddr, path::PathBuf};
+use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use meow_genesis::Genesis;
 use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
+use meow_nakamoto_types::miner_config::MinerConfig;
 
-use crate::node::Node;
+use crate::node::{Node, config::NodeConfig};
 
 /// The default node RPC URL.
 pub const DEFAULT_NODE_URL: &str = "127.0.0.1:8600";
 /// The default gossip listen address.
 pub const DEFAULT_GOSSIP_LISTEN_ADDRESS: &str = "/ip4/0.0.0.0/tcp/0";
+
+/// The default mDNS query interval in seconds (5 minutes).
+pub const DEFAULT_MDNS_QUERY_INTERVAL_SECS: u64 = 300; // 5 minutes
 
 /// The main command line commands.
 #[derive(Parser)]
@@ -29,6 +33,10 @@ pub enum Command {
         /// Example: /ip4/1.2.3.4/tcp/30333/p2p/<peer-id>
         #[arg(long, verbatim_doc_comment)]
         bootstrap_peers: Vec<Multiaddr>,
+        /// mDNS re-query interval in seconds.
+        /// Controls how often the node re-broadcasts discovery queries when no peers are found.
+        #[arg(long, default_value_t = DEFAULT_MDNS_QUERY_INTERVAL_SECS, verbatim_doc_comment)]
+        mdns_query_interval: u64,
         /// Path to a BCS-serialized Genesis file.
         /// If omitted, the node starts with an empty state.
         #[arg(long, verbatim_doc_comment)]
@@ -52,23 +60,27 @@ impl Command {
                 rpc_listen,
                 listen_address,
                 bootstrap_peers,
+                mdns_query_interval,
                 genesis,
                 difficulty,
             } => {
                 print_startup_banner();
 
-                let gossip_network_config = GossipNetworkConfig {
+                let gossip_network_config = GossipNetworkConfig::new(
                     listen_address,
                     bootstrap_peers,
-                };
+                    Duration::from_secs(mdns_query_interval),
+                );
+                let node_config = NodeConfig::new(rpc_listen, gossip_network_config);
+                let miner_config = MinerConfig::new(difficulty);
 
                 let node = if let Some(genesis_path) = genesis {
                     let genesis_bytes = std::fs::read(&genesis_path)?;
                     let genesis = bcs::from_bytes::<Genesis>(&genesis_bytes)?;
 
-                    Node::with_genesis(rpc_listen, gossip_network_config, difficulty, &genesis)
+                    Node::with_genesis(node_config, miner_config, &genesis)
                 } else {
-                    Node::empty(rpc_listen, gossip_network_config, difficulty)
+                    Node::empty(node_config, miner_config)
                 };
 
                 node.run().await?;
@@ -82,11 +94,11 @@ impl Command {
 fn print_startup_banner() {
     println!(
         r#"
- __  __ _____ _____ _       __   _   _  ___  ____  _____
-|  \/  | ____| ____| |     / /  | \ | |/ _ \|  _ \| ____|
-| |\/| |  _| |  _| | | /| / /   |  \| | | | | | | |  _|
-| |  | | |___| |___| |/ |/ /    | |\  | |_| | |_| | |___
-|_|  |_|_____|_____|__/|__/     |_| \_|\___/|____/|_____|
+ __  __ _____  ___  _       __   _   _  ___  ____  _____
+|  \/  | ____|/ _ \| |     / /  | \ | |/ _ \|  _ \| ____|
+| |\/| |  _| | | | | | /| / /   |  \| | | | | | | |  _|
+| |  | | |___| |_| | |/ |/ /    | |\  | |_| | |_| | |___
+|_|  |_|_____|\___/|__/|__/     |_| \_|\___/|____/|_____|
 
 version {}
 "#,

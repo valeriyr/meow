@@ -18,9 +18,12 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+url.workspace = true
 
 meow-genesis.workspace = true
 meow-gossip-network.workspace = true
 meow-gossip-types.workspace = true
 meow-nakamoto.workspace = true
+meow-nakamoto-types.workspace = true
+meow-node-client.workspace = true
 meow-types.workspace = true

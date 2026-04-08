@@ -1,8 +1,12 @@
-use meow_types::{identifier::Identifier, system_framework::meow_coin::MEOW_COIN_MODULE_PATH};
+use meow_types::{
+    config::NATIVE_FUNCTION_NAMES, identifier::Identifier,
+    system_framework::meow_coin::MEOW_COIN_MODULE_PATH,
+};
 use meow_vm_adapter::{
     Module,
     builder::{self, MAX_SOURCE_SIZE, error::BuilderError},
 };
+use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
 
 #[test]
 fn build_module_successful() {
@@ -84,6 +88,30 @@ fn build_source_size_limit() {
         ),
         "source exceeding MAX_SOURCE_SIZE must return SourceTooLarge"
     );
+}
+
+//
+// ─── Reserved native names ───
+//
+
+#[test]
+fn defining_adapter_native_function_name_is_rejected() {
+    // The adapter passes NATIVE_FUNCTION_NAMES into CompilerConfig so the
+    // compiler rejects any user-defined function that would shadow them
+    // as well as the compiler-reserved names.
+    let mut native_functions = RESERVED_FUNCTION_NAMES.to_vec();
+    native_functions.extend(NATIVE_FUNCTION_NAMES);
+
+    for name in native_functions {
+        let src = format!("fn {name}() {{}}");
+        assert!(
+            matches!(
+                build_module("test", &src).unwrap_err(),
+                BuilderError::CompileError(_)
+            ),
+            "defining a function named '{name}' must be rejected by the adapter builder"
+        );
+    }
 }
 
 //

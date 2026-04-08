@@ -1,16 +1,17 @@
 [package]
-name = "meow-node-client"
+name = "meow-nakamoto-types"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
-description = "HTTP client for the MEOW node API"
+description = "Nakamoto-consensus types — block, block header, etc."
 
 [dependencies]
-reqwest = { version = "0.13", features = ["json"] }
+bcs.workspace = true
 serde.workspace = true
 thiserror.workspace = true
-url.workspace = true
+tracing.workspace = true
 
+meow-genesis.workspace = true
 meow-types.workspace = true
-meow-nakamoto-types.workspace = true
+meow-vm-adapter.workspace = true

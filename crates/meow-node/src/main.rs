@@ -35,7 +35,7 @@ fn init_tracing() {
 
     fmt()
         .with_env_filter(env_filter)
-        .with_target(false)
+        .with_target(true)
         .with_thread_ids(true)
         .with_line_number(true)
         .compact()

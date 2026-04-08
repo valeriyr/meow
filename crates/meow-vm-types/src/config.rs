@@ -19,6 +19,10 @@ pub struct CompilerConfig {
     max_locals: usize,
     /// Maximum number of bytecode instructions in a single function.
     max_fun_code_size: usize,
+    /// Additional function names reserved by the caller (e.g. native functions
+    /// registered by the adapter). The compiler rejects any user-defined function
+    /// whose name appears in this list.
+    reserved_function_names: Vec<String>,
 }
 
 impl CompilerConfig {
@@ -56,6 +60,17 @@ impl CompilerConfig {
     pub fn max_fun_code_size(&self) -> usize {
         self.max_fun_code_size
     }
+
+    /// Returns the caller-supplied reserved function names.
+    pub fn reserved_function_names(&self) -> &[String] {
+        &self.reserved_function_names
+    }
+
+    /// Returns a new config with additional reserved function names appended.
+    pub fn with_reserved_function_names<T: AsRef<str>>(mut self, names: &[T]) -> Self {
+        self.reserved_function_names = names.iter().map(|name| name.as_ref().to_string()).collect();
+        self
+    }
 }
 
 impl Default for CompilerConfig {
@@ -68,6 +83,7 @@ impl Default for CompilerConfig {
             max_params: 16,
             max_locals: 255,
             max_fun_code_size: 65_536,
+            reserved_function_names: Vec::new(),
         }
     }
 }

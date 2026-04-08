@@ -1,6 +1,6 @@
 use meow_types::{
     address::Address,
-    config::MAX_BCS_SERIALIZED_MODULE_SIZE,
+    config::{MAX_BCS_SERIALIZED_MODULE_SIZE, NATIVE_FUNCTION_NAMES},
     digest::Digest,
     identifier::Identifier,
     object::{
@@ -20,6 +20,7 @@ use meow_vm_adapter::{
     Value, builder,
     executor::{self, error::ExecutorError},
 };
+use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
 
 //
 // ─── Happy path tests ───
@@ -328,6 +329,29 @@ fn execute_with_function_not_found_returns_failure() {
         1,
         "gas coin must still be returned"
     );
+}
+
+#[test]
+fn calling_native_function_by_name_returns_failure() {
+    // Native functions (meow_vm_transfer, meow_vm_fresh_id, etc.) are not part
+    // of the compiled module — they live only in the VM's internal native registry.
+    // A transaction targeting a native name must be rejected with "not found in module".
+    let mut native_functions = RESERVED_FUNCTION_NAMES.to_vec();
+    native_functions.extend(NATIVE_FUNCTION_NAMES);
+
+    for native in native_functions {
+        let module_obj = make_default_module_object();
+        let gas_obj = make_gas_coin_object();
+        let tx = make_meow_call_transaction(native, vec![]);
+
+        let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+
+        assert!(
+            matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found in module")),
+            "native '{native}' must not be callable as a transaction target, got: {:?}",
+            result.status()
+        );
+    }
 }
 
 #[test]
@@ -659,7 +683,7 @@ fn execute_module_publish_derives_address_from_tx_digest() {
     assert_eq!(
         result.created_objects()[0].address(),
         &expected_addr,
-        "published module address must be derived from tx digest"
+        "published module address must be derived from transaction digest"
     );
 }
 

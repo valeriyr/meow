@@ -1,9 +1,10 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use meow_genesis::Genesis;
-use meow_gossip_types::config::GossipNetworkConfig;
+use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
 
-use meow_node::node::Node;
+use meow_nakamoto_types::miner_config::MinerConfig;
+use meow_node::node::{Node, config::NodeConfig};
 use meow_node_client::NodeClient;
 use tokio::sync::oneshot;
 
@@ -11,38 +12,54 @@ use tokio::sync::oneshot;
 const DEFAULT_RPC_ADDR: &str = "127.0.0.1:0";
 // difficulty 0: instant mining
 const DEFAULT_DIFFICULTY: u32 = 0;
+/// mDNS re-query interval used in tests. Tests rely on explicit bootstrap peers rather than
+/// mDNS auto-discovery, so the exact value does not affect test behaviour.
+const DEFAULT_MDNS_QUERY_INTERVAL: Duration = Duration::from_secs(300);
 
 /// A running MEOW node for use in tests.
 pub struct TestNode {
     client: NodeClient,
+    gossip_bootstrap_address: Multiaddr,
     task: tokio::task::JoinHandle<()>,
 }
 
 impl TestNode {
     /// Start a node with an empty store (no genesis objects).
     pub async fn start_empty() -> Self {
-        Self::start(Node::empty(
-            DEFAULT_RPC_ADDR.parse().unwrap(),
-            GossipNetworkConfig::default(),
-            DEFAULT_DIFFICULTY,
-        ))
-        .await
+        let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
+
+        let gossip_config =
+            GossipNetworkConfig::new(listen_addr, vec![], DEFAULT_MDNS_QUERY_INTERVAL);
+        let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
+        let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
+
+        let node = Node::empty(node_config, miner_config);
+
+        Self::start(node, bootstrap_addr).await
     }
 
     /// Start a node pre-seeded with the given genesis.
     pub async fn start_with_genesis(genesis: &Genesis) -> Self {
-        Self::start(Node::with_genesis(
-            DEFAULT_RPC_ADDR.parse().unwrap(),
-            GossipNetworkConfig::default(),
-            DEFAULT_DIFFICULTY,
-            genesis,
-        ))
-        .await
+        Self::start_with_bootstrap(genesis, vec![]).await
+    }
+
+    /// Start a node pre-seeded with the given genesis and explicit bootstrap peers.
+    pub async fn start_with_bootstrap(genesis: &Genesis, bootstrap_peers: Vec<Multiaddr>) -> Self {
+        let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
+
+        let gossip_config =
+            GossipNetworkConfig::new(listen_addr, bootstrap_peers, DEFAULT_MDNS_QUERY_INTERVAL);
+        let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
+        let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
+
+        let node = Node::with_genesis(node_config, miner_config, genesis);
+
+        Self::start(node, bootstrap_addr).await
     }
 
     /// Start the node and return a handle to it.
     /// The node will be automatically stopped when the handle is dropped.
-    async fn start(node: Node) -> Self {
+    async fn start(node: Node, gossip_bootstrap_address: Multiaddr) -> Self {
         let (tcp_listener_ready_tx, tcp_listener_ready_rx) = oneshot::channel::<SocketAddr>();
 
         let task = tokio::spawn(async move {
@@ -54,12 +71,21 @@ impl TestNode {
 
         let client = NodeClient::with_address(addr);
 
-        Self { client, task }
+        Self {
+            client,
+            gossip_bootstrap_address,
+            task,
+        }
     }
 
     /// Returns a reference to the node's RPC client.
     pub fn client(&self) -> &NodeClient {
         &self.client
+    }
+
+    /// Returns the node's gossip address, suitable for use as a bootstrap peer by other nodes.
+    pub fn gossip_bootstrap_address(&self) -> &Multiaddr {
+        &self.gossip_bootstrap_address
     }
 }
 
@@ -67,4 +93,26 @@ impl Drop for TestNode {
     fn drop(&mut self) {
         self.task.abort();
     }
+}
+
+/// Returns `(listen_addr, bootstrap_addr)` for a fresh test gossip endpoint.
+/// - `listen_addr` binds to `0.0.0.0` so gossipsub uses the real interface.
+/// - `bootstrap_addr` uses `127.0.0.1` and is safe to pass to other test nodes as a dial target.
+fn random_gossip_listen_addr() -> (Multiaddr, Multiaddr) {
+    let listener = std::net::TcpListener::bind(DEFAULT_RPC_ADDR)
+        .expect("must bind an ephemeral gossip port for tests");
+    let port = listener
+        .local_addr()
+        .expect("ephemeral listener must have local address")
+        .port();
+    drop(listener);
+
+    let listen_addr = format!("/ip4/0.0.0.0/tcp/{port}")
+        .parse()
+        .expect("generated gossip listen address must be valid");
+    let bootstrap_addr = format!("/ip4/127.0.0.1/tcp/{port}")
+        .parse()
+        .expect("generated gossip bootstrap address must be valid");
+
+    (listen_addr, bootstrap_addr)
 }

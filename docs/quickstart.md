@@ -27,8 +27,8 @@ meow keytool list
 Create `allocations.csv` with one `<address>,<amount>` pair per line:
 
 ```csv
-0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,1000000
-0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,2000000
+0xaa,1000000
+0xbb,2000000
 ```
 
 ## 3. Build Genesis
@@ -50,12 +50,43 @@ meow-node run --genesis genesis.bin
 
 | Flag | Default | Description |
 |------|---------|-------------|
+| `--genesis` | _(none)_ | Path to a BCS-serialized genesis file |
 | `--rpc-listen` | `127.0.0.1:8600` | HTTP API bind address |
 | `--listen-address` | `/ip4/0.0.0.0/tcp/0` | libp2p listen address |
-| `--bootstrap-peers` | — | Multiaddr of an existing peer |
+| `--bootstrap-peers` | _(none)_ | Multiaddr of an existing peer (repeatable) |
+| `--mdns-query-interval` | `300` | Seconds between mDNS re-query broadcasts |
 | `--difficulty` | `8` | Proof-of-work leading zero bits |
 
 </details>
+
+## Running two nodes locally
+
+Nodes discover each other automatically via mDNS when listening on `0.0.0.0`. Start each in a separate terminal:
+
+```bash
+# Terminal 1
+meow-node run --genesis genesis.bin --rpc-listen 127.0.0.1:8601 --listen-address /ip4/0.0.0.0/tcp/30333
+
+# Terminal 2 — discovers node 1 via mDNS automatically
+meow-node run --genesis genesis.bin --rpc-listen 127.0.0.1:8600 --listen-address /ip4/0.0.0.0/tcp/30334
+```
+
+mDNS only works on the local network. To connect nodes on different machines, or to skip the discovery wait, pass the first node's address explicitly:
+
+```bash
+meow-node run --genesis genesis.bin \
+  --rpc-listen 127.0.0.1:8600 \
+  --listen-address /ip4/0.0.0.0/tcp/30334 \
+  --bootstrap-peers /ip4/<node1-ip>/tcp/30333
+```
+
+Node 2 detects any block height gap and pulls the missing range from node 1 automatically. To reduce the mDNS discovery wait during local development:
+
+```bash
+meow-node run --genesis genesis.bin \
+  --listen-address /ip4/0.0.0.0/tcp/30333 \
+  --mdns-query-interval 5   # re-query every 5 seconds
+```
 
 ## 5. Query the Node
 
@@ -77,8 +108,7 @@ meow client get-transaction-result <TRANSACTION_DIGEST>
 
 ```bash
 # Build a publish transaction
-meow transaction publish path/to/module.meow \
-  --sender <ADDRESS> --gas-coin <OBJECT_ADDRESS>
+meow transaction publish path/to/module.meow --sender <ADDRESS> --gas-coin <OBJECT_ADDRESS>
 
 # Or build a call transaction
 meow transaction meow-call \
@@ -99,3 +129,5 @@ meow smart-contract run path/to/module.meow add 3 5
 ```
 
 > This executes locally through the CLI. No transaction is submitted.
+
+For a full worked example — writing a module, publishing it, calling its functions, and sending coins — see [Contracts](contracts.md).

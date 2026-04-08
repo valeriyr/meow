@@ -14,4 +14,6 @@ pub enum NetworkEvent {
     PeerConnected(PeerId),
     /// A peer disconnected.
     PeerDisconnected(PeerId),
+    /// A peer subscribed to a topic. Safe to send messages to that peer on this topic now.
+    PeerSubscribedToTopic { peer: PeerId, topic: String },
 }

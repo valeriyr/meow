@@ -3,6 +3,7 @@ pub mod error;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use meow_genesis::Genesis;
+use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
 use meow_types::{
     digest::Digest,
     object::Object,
@@ -14,7 +15,6 @@ use meow_types::{
 use meow_vm_adapter::executor;
 
 use crate::{
-    block::{Block, BlockHeader},
     chain::{ChainState, compute_state_root, compute_transactions_root},
     mempool::Mempool,
     miner::error::MinerError,
@@ -37,19 +37,19 @@ pub struct Miner {
 }
 
 impl Miner {
-    /// Creates a new `Miner` with the given initial store state and PoW difficulty.
-    pub fn empty(difficulty: u32) -> Self {
+    /// Creates a new `Miner` with the given configuration.
+    pub fn empty(config: MinerConfig) -> Self {
         Self {
-            chain: ChainState::new(Store::default(), difficulty),
+            chain: ChainState::new(Store::default(), config.difficulty),
             mempool: Mempool::empty(),
         }
     }
 
     /// Creates a new `Miner` pre-seeded with the given genesis state.
-    pub fn with_genesis(genesis: &Genesis, difficulty: u32) -> Self {
+    pub fn with_genesis(genesis: &Genesis, config: MinerConfig) -> Self {
         let store = Store::with_objects(genesis.objects().iter().cloned());
         Self {
-            chain: ChainState::new(store, difficulty),
+            chain: ChainState::new(store, config.difficulty),
             mempool: Mempool::empty(),
         }
     }
@@ -57,6 +57,11 @@ impl Miner {
     /// Returns a reference to the current head store for transaction validation and execution.
     pub fn head_store(&self) -> &Store {
         self.chain.head_store()
+    }
+
+    /// Returns the height of the current best block.
+    pub fn head_height(&self) -> u64 {
+        self.chain.head_height()
     }
 
     /// Look up an execution result by transaction digest.
@@ -69,6 +74,11 @@ impl Miner {
         self.chain.get_transaction(digest)
     }
 
+    /// Get all blocks from the given height onwards.
+    pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
+        self.chain.get_blocks_since(height)
+    }
+
     /// Validate and enqueue a transaction. Internally clones the head store
     /// so that the immutable borrow on `chain` and the mutable borrow on
     /// `mempool` do not overlap.
@@ -78,8 +88,16 @@ impl Miner {
     }
 
     /// Apply a block received from a peer. Returns `true` if the head changed.
-    pub fn on_block_received(&mut self, block: Block) -> bool {
-        self.chain.on_block_received(block)
+    ///
+    /// On a chain reorg, transactions still valid against the new head
+    /// store are kept; only those referencing stale object versions are dropped.
+    pub fn apply_block(&mut self, block: Block) -> bool {
+        let reorged = self.chain.apply_block(block);
+        if reorged {
+            let store = self.chain.head_store();
+            self.mempool.retain_valid(store);
+        }
+        reorged
     }
 
     /// Drain the mempool and execute a batch of transactions against the current

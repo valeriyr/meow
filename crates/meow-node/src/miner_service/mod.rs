@@ -74,7 +74,7 @@ impl MinerService {
                             if let Ok(data) = bcs::to_bytes(&block)
                                 && let Err(e) = self.blocks_tx.send(data)
                             {
-                                tracing::warn!("failed to publish block: {e}");
+                                tracing::warn!(error = %e, "failed to publish block");
                             }
                         }
                         // Yield between rounds so other tasks can run.

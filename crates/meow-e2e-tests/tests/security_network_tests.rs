@@ -83,7 +83,7 @@ async fn forged_sender_transaction_is_rejected() {
     let balance_after = meow_coin::gas_meow_coin_balance(&coin_after).unwrap();
     assert_eq!(
         balance_after, 10_000,
-        "victim balance must be unchanged after spoofed tx rejection"
+        "victim balance must be unchanged after spoofed transaction rejection"
     );
 }
 

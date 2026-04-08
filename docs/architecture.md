@@ -10,6 +10,7 @@
 | **meow-node** | Full node — HTTP RPC, gossip integration, startup |
 | **meow-node-client** | Typed HTTP client for node endpoints |
 | **meow-nakamoto** | Chain state, block validation, mempool, mining, object store |
+| **meow-nakamoto-types** | Block and block-header type definitions |
 | **meow-types** | Addresses, digests, objects, transactions, keys |
 | **meow-vm** | Smart contract runtime |
 | **meow-vm-compiler** | `.meow` source → bytecode |

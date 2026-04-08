@@ -13,7 +13,7 @@ use crate::{
 use meow_types::{config::meow_keystore_path, keystore::Keystore};
 
 /// The default output formatter for commands that support formatting.
-const DEFAULT_OUTPUT_FORMATTER: OutputFormatter = OutputFormatter::Table;
+const DEFAULT_OUTPUT_FORMATTER: OutputFormatter = OutputFormatter::Json;
 /// The default node RPC URL for client commands.
 pub const DEFAULT_NODE_URL: &str = "http://127.0.0.1:8600";
 

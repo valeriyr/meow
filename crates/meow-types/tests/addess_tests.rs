@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use meow_types::{
-    address::Address,
+    address::{Address, error::AddressError},
     digest::Digest,
     keypair::{KeyPair, signature_scheme::SignatureScheme},
 };
@@ -136,6 +136,54 @@ fn address_from_bytes() {
     let expected = Address::from(&test_keypair());
 
     assert_eq!(parsed, expected);
+}
+
+//
+// ─── Address invalid conversion tests ───
+//
+
+#[test]
+fn address_from_string_missing_prefix_returns_error() {
+    let err = Address::from_str("42").expect_err("missing 0x prefix must fail");
+    assert!(matches!(err, AddressError::PrefixHexError(_)));
+}
+
+#[test]
+fn address_from_string_invalid_hex_returns_error() {
+    let err = Address::from_str("0xzz").expect_err("invalid hex must fail");
+    assert!(matches!(err, AddressError::PrefixHexError(_)));
+}
+
+#[test]
+fn address_from_string_odd_length_hex_returns_error() {
+    let err = Address::from_str("0x1").expect_err("odd-length hex must fail");
+    assert!(matches!(err, AddressError::PrefixHexError(_)));
+}
+
+#[test]
+fn address_from_string_too_long_returns_error() {
+    let too_long = format!("0x{}", "00".repeat(33));
+    let err = Address::from_str(&too_long).expect_err("more than 32 bytes must fail");
+    assert!(matches!(
+        err,
+        AddressError::InvalidAddressBytesLength {
+            actual: 33,
+            expected: 32
+        }
+    ));
+}
+
+#[test]
+fn address_from_bytes_invalid_length_returns_error() {
+    let bytes = [0u8; 31];
+    let err = Address::try_from(bytes.as_slice()).expect_err("31 bytes must fail");
+    assert!(matches!(
+        err,
+        AddressError::InvalidAddressBytesLength {
+            actual: 31,
+            expected: 32
+        }
+    ));
 }
 
 //

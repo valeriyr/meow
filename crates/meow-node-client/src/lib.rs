@@ -2,6 +2,7 @@ pub mod error;
 
 use std::net::SocketAddr;
 
+use meow_nakamoto_types::block::Block;
 use serde::de::DeserializeOwned;
 use url::Url;
 
@@ -32,10 +33,21 @@ impl NodeClient {
         }
     }
 
+    /// Create a new client with a base URL string.
+    pub fn with_url_str<T: AsRef<str>>(base_url: T) -> Result<Self> {
+        let base_url = Url::parse(base_url.as_ref())?;
+        Ok(Self::with_url(base_url))
+    }
+
     /// Create a new client by connecting to the given socket address.
     pub fn with_address(address: SocketAddr) -> Self {
         let base_url = Url::parse(&format!("http://{address}/")).expect("invalid URL");
         Self::with_url(base_url)
+    }
+
+    /// Returns the base URL of the node this client is connected to.
+    pub fn base_url(&self) -> &Url {
+        &self.base_url
     }
 
     /// POST /submit-transaction — submit a signed transaction.
@@ -75,6 +87,12 @@ impl NodeClient {
             .base_url
             .join(&format!("transaction-result/{digest}"))?;
         self.get_optional(url).await
+    }
+
+    /// GET /blocks-since/:height — fetch committed blocks from the given height onwards.
+    pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
+        let url = self.base_url.join(&format!("blocks-since/{height}"))?;
+        self.get_list(url).await
     }
 
     /// Sends a GET request and deserializes the JSON body on success.
@@ -124,4 +142,39 @@ fn normalize_url(mut url: Url) -> Url {
         url.set_path(&path);
     }
     url
+}
+
+#[cfg(test)]
+mod tests {
+    use url::Url;
+
+    use super::normalize_url;
+
+    #[test]
+    fn normalize_url_adds_trailing_slash_when_missing() {
+        let url = Url::parse("http://localhost:8080").unwrap();
+        let normalized = normalize_url(url);
+        assert_eq!(normalized.path(), "/");
+    }
+
+    #[test]
+    fn normalize_url_keeps_trailing_slash_when_present() {
+        let url = Url::parse("http://localhost:8080/").unwrap();
+        let normalized = normalize_url(url.clone());
+        assert_eq!(normalized, url);
+    }
+
+    #[test]
+    fn normalize_url_preserves_sub_path_with_trailing_slash() {
+        let url = Url::parse("http://localhost:8080/api/v1/").unwrap();
+        let normalized = normalize_url(url.clone());
+        assert_eq!(normalized.path(), "/api/v1/");
+    }
+
+    #[test]
+    fn normalize_url_appends_slash_to_sub_path() {
+        let url = Url::parse("http://localhost:8080/api/v1").unwrap();
+        let normalized = normalize_url(url);
+        assert_eq!(normalized.path(), "/api/v1/");
+    }
 }

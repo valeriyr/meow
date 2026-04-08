@@ -74,7 +74,7 @@ async fn meow_call_transaction_is_mined_and_succeeds() {
     let publish_result = test_utils::sign_and_execute(client, &keypair, publish_tx).await;
     assert_eq!(*publish_result.status(), ExecutionStatus::Success);
 
-    let module_addr = *publish_result.created_objects()[0].address();
+    let module_addr = test_utils::published_module_addr(&publish_result);
 
     let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
     let call = Call::new(

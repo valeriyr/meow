@@ -1,5 +1,10 @@
 use crate::config;
 
+/// Names reserved at the VM level — always injected by the VM regardless of
+/// what native functions the caller registers. User code may not define a
+/// function with any of these names.
+pub const RESERVED_FUNCTION_NAMES: &[&str] = &["meow_vm_abort"];
+
 /// Returns `true` if `name` satisfies identifier rules:
 /// starts with an ASCII letter or `_`, followed by letters, digits, or `_`,
 /// and is at most [`config::CompilerConfig::max_identifier_len`] characters long.

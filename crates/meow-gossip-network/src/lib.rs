@@ -2,6 +2,7 @@ pub mod error;
 
 use std::time::Duration;
 
+use crate::error::NetworkError;
 use futures::StreamExt;
 use libp2p::{
     Multiaddr, SwarmBuilder,
@@ -12,9 +13,6 @@ use libp2p::{
 use meow_gossip_types::{
     config::GossipNetworkConfig, event::NetworkEvent, message_id::MessageId, peer_id::PeerId,
 };
-use tracing::debug;
-
-use crate::error::NetworkError;
 
 /// The result type related to gossip network operations.
 pub type Result<T> = std::result::Result<T, NetworkError>;
@@ -72,7 +70,10 @@ impl GossipNetwork {
                 )
                 .expect("gossipsub config must be valid"),
                 mdns: mdns::tokio::Behaviour::new(
-                    mdns::Config::default(),
+                    mdns::Config {
+                        query_interval: config.mdns_query_interval,
+                        ..Default::default()
+                    },
                     key.public().to_peer_id(),
                 )
                 .expect("mDNS config must be valid"),
@@ -136,6 +137,14 @@ impl GossipNetwork {
                         from: message.source.map(PeerId::from),
                     });
                 }
+                SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(
+                    gossipsub::Event::Subscribed { peer_id, topic },
+                )) => {
+                    return Some(NetworkEvent::PeerSubscribedToTopic {
+                        peer: PeerId::from(peer_id),
+                        topic: topic.to_string(),
+                    });
+                }
                 SwarmEvent::Behaviour(BehaviourEvent::Mdns(mdns::Event::Discovered(peers))) => {
                     for (peer_id, _addr) in peers {
                         self.swarm
@@ -159,7 +168,7 @@ impl GossipNetwork {
                     return Some(NetworkEvent::PeerDisconnected(PeerId::from(peer_id)));
                 }
                 other => {
-                    debug!("unhandled swarm event: {:?}", other);
+                    tracing::debug!(event = ?other, "unhandled swarm event");
                 }
             }
         }

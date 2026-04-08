@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use meow_nakamoto_types::block::Block;
 use meow_types::{
     digest::Digest,
     object::Object,
@@ -10,7 +11,7 @@ use meow_types::{
 };
 use meow_vm_adapter::executor;
 
-use crate::{block::Block, store::Store};
+use crate::store::Store;
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
 ///
@@ -144,7 +145,7 @@ impl ChainState {
     ///
     /// If the block extends a chain longer than the current head, the head
     /// is updated (chain reorganization). Returns `true` when the head changed.
-    pub fn on_block_received(&mut self, block: Block) -> bool {
+    pub fn apply_block(&mut self, block: Block) -> bool {
         let block_hash = block.hash();
 
         // Already known — skip.
@@ -187,7 +188,7 @@ impl ChainState {
 
         for tx in &block.transactions {
             if let Err(e) = transaction::validator::validate_signed_transaction(tx) {
-                tracing::warn!(height, "block has invalid transaction signature: {e}");
+                tracing::warn!(height, error = %e, "block has invalid transaction signature");
                 return false;
             }
         }
@@ -202,7 +203,7 @@ impl ChainState {
             let result = match executor::execute(tx, inputs) {
                 Ok(result) => result,
                 Err(e) => {
-                    tracing::warn!(height, "block execution failed during verification: {e}");
+                    tracing::warn!(height, error = %e, "block execution failed during verification");
                     return false;
                 }
             };
@@ -232,13 +233,22 @@ impl ChainState {
 
         // Switch head to this block if it's on a longer chain.
         if height > self.head_height() {
-            tracing::info!(height, "chain reorganization: switching to longer chain");
+            tracing::info!(height, "chain reorg: switching to longer chain");
             self.head = block_hash;
             self.prune_old_snapshots();
             return true;
         }
 
         false
+    }
+
+    /// Returns all blocks from the given height onwards (in height order).
+    pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
+        self.blocks
+            .values()
+            .filter(|b| b.header.height >= height)
+            .cloned()
+            .collect()
     }
 }
 

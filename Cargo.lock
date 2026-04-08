@@ -2284,6 +2284,7 @@ dependencies = [
  "bcs",
  "meow-genesis",
  "meow-gossip-types",
+ "meow-nakamoto-types",
  "meow-node",
  "meow-node-client",
  "meow-types",
@@ -2340,6 +2341,21 @@ version = "0.1.0"
 dependencies = [
  "bcs",
  "meow-genesis",
+ "meow-nakamoto-types",
+ "meow-types",
+ "meow-vm-adapter",
+ "rand 0.8.5",
+ "serde",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "meow-nakamoto-types"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "meow-genesis",
  "meow-types",
  "meow-vm-adapter",
  "serde",
@@ -2359,6 +2375,8 @@ dependencies = [
  "meow-gossip-network",
  "meow-gossip-types",
  "meow-nakamoto",
+ "meow-nakamoto-types",
+ "meow-node-client",
  "meow-types",
  "serde",
  "serde_json",
@@ -2366,12 +2384,14 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
 ]
 
 [[package]]
 name = "meow-node-client"
 version = "0.1.0"
 dependencies = [
+ "meow-nakamoto-types",
  "meow-types",
  "reqwest",
  "serde",
