@@ -24,6 +24,23 @@ use crate::{
 /// The result type related to the node.
 pub type Result<T> = std::result::Result<T, NodeError>;
 
+/// A macro to await a service shutdown and log any errors that occur during shutdown.
+macro_rules! await_service_shutdown {
+    ($service_name:literal, $future:ident, $err_variant:path) => {
+        match (&mut $future).await {
+            Ok(()) => {}
+            Err(e) => {
+                tracing::error!(
+                    service = $service_name,
+                    error = %e,
+                    "service terminated with error during shutdown"
+                );
+                return Err($err_variant(e));
+            }
+        }
+    };
+}
+
 /// The main node struct, containing configuration and shared state.
 pub struct Node {
     config: NodeConfig,
@@ -100,7 +117,7 @@ impl Node {
 
         let bound_addr = tcp_listener
             .local_addr()
-            .map_err(NodeError::RpcServiceError)?;
+            .map_err(NodeError::TcpListenerError)?;
         tracing::info!(addr = %bound_addr, "RPC listening");
 
         if let Some(tcp_listener_ready_tx) = tcp_listener_ready_tx {
@@ -111,18 +128,7 @@ impl Node {
         let gossip_service =
             GossipService::new(self.miner.clone(), transactions_rx, blocks_rx, bound_addr);
 
-        let mut rpc_shutdown_rx = shutdown_rx.clone();
-        let rpc_future = async move {
-            tracing::info!("starting RPC service");
-            let result = axum::serve(tcp_listener, rpc_router)
-                .with_graceful_shutdown(async move {
-                    let _ = rpc_shutdown_rx.changed().await;
-                    tracing::info!("RPC shutdown signal received");
-                })
-                .await;
-            tracing::info!("RPC service stopped");
-            result
-        };
+        let rpc_future = rpc_service::run(rpc_router, tcp_listener, shutdown_rx.clone());
         let miner_future = miner_service.run(shutdown_rx.clone());
         let gossip_future = gossip_service.run(gossip_network_config, shutdown_rx.clone());
         let ctrl_c_future = tokio::signal::ctrl_c();
@@ -131,22 +137,6 @@ impl Node {
         pin!(miner_future);
         pin!(gossip_future);
         pin!(ctrl_c_future);
-
-        macro_rules! await_service_shutdown {
-            ($service_name:literal, $future:ident, $err_variant:path) => {
-                match (&mut $future).await {
-                    Ok(()) => {}
-                    Err(e) => {
-                        tracing::error!(
-                            service = $service_name,
-                            error = %e,
-                            "service terminated with error during shutdown"
-                        );
-                        return Err($err_variant(e));
-                    }
-                }
-            };
-        }
 
         tokio::select! {
             result = &mut ctrl_c_future => {

@@ -29,6 +29,12 @@ impl From<Multiaddr> for libp2p::Multiaddr {
     }
 }
 
+impl From<Multiaddr> for libp2p::swarm::dial_opts::DialOpts {
+    fn from(multiaddr: Multiaddr) -> Self {
+        multiaddr.0.into()
+    }
+}
+
 impl FromStr for Multiaddr {
     type Err = MultiaddrError;
 

@@ -1,7 +1,5 @@
 pub mod error;
 
-use std::time::Duration;
-
 use crate::error::NetworkError;
 use futures::StreamExt;
 use libp2p::{
@@ -51,9 +49,16 @@ pub struct GossipNetwork {
 impl GossipNetwork {
     /// Creates a new node with a freshly generated identity keypair.
     pub async fn new(config: GossipNetworkConfig) -> Result<Self> {
+        let GossipNetworkConfig {
+            listen_address,
+            bootstrap_peers,
+            mdns_query_interval,
+            check_explicit_peers_ticks,
+        } = config;
+
         let gossipsub_config = gossipsub::ConfigBuilder::default()
-            .heartbeat_interval(Duration::from_secs(1))
-            .validation_mode(gossipsub::ValidationMode::Strict)
+            .heartbeat_initial_delay(std::time::Duration::from_millis(100))
+            .check_explicit_peers_ticks(check_explicit_peers_ticks)
             .build()?;
 
         let mut swarm = SwarmBuilder::with_new_identity()
@@ -71,7 +76,7 @@ impl GossipNetwork {
                 .expect("gossipsub config must be valid"),
                 mdns: mdns::tokio::Behaviour::new(
                     mdns::Config {
-                        query_interval: config.mdns_query_interval,
+                        query_interval: mdns_query_interval,
                         ..Default::default()
                     },
                     key.public().to_peer_id(),
@@ -81,10 +86,10 @@ impl GossipNetwork {
             .expect("infallible error")
             .build();
 
-        swarm.listen_on(config.listen_address.into())?;
+        swarm.listen_on(listen_address.into())?;
 
-        for addr in config.bootstrap_peers {
-            swarm.dial(Into::<libp2p::Multiaddr>::into(addr))?;
+        for addr in bootstrap_peers {
+            swarm.dial(addr)?;
         }
 
         Ok(Self { swarm })

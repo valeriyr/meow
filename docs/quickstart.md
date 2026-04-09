@@ -55,6 +55,7 @@ meow-node run --genesis genesis.bin
 | `--listen-address` | `/ip4/0.0.0.0/tcp/0` | libp2p listen address |
 | `--bootstrap-peers` | _(none)_ | Multiaddr of an existing peer (repeatable) |
 | `--mdns-query-interval` | `300` | Seconds between mDNS re-query broadcasts |
+| `--check-explicit-peers-ticks` | `300` | Heartbeat ticks between reconnection attempts to explicit bootstrap peers |
 | `--difficulty` | `8` | Proof-of-work leading zero bits |
 
 </details>
@@ -86,6 +87,7 @@ Node 2 detects any block height gap and pulls the missing range from node 1 auto
 meow-node run --genesis genesis.bin \
   --listen-address /ip4/0.0.0.0/tcp/30333 \
   --mdns-query-interval 5   # re-query every 5 seconds
+  --check-explicit-peers-ticks 5   # recheck every 5 heartbeat ticks
 ```
 
 ## 5. Query the Node

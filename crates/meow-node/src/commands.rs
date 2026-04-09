@@ -2,7 +2,12 @@ use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::Parser;
 use meow_genesis::Genesis;
-use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
+use meow_gossip_types::{
+    config::{
+        DEFAULT_CHECK_EXPLICIT_PEERS_TICKS, DEFAULT_MDNS_QUERY_INTERVAL_SECS, GossipNetworkConfig,
+    },
+    multiaddr::Multiaddr,
+};
 use meow_nakamoto_types::miner_config::MinerConfig;
 
 use crate::node::{Node, config::NodeConfig};
@@ -11,9 +16,6 @@ use crate::node::{Node, config::NodeConfig};
 pub const DEFAULT_NODE_URL: &str = "127.0.0.1:8600";
 /// The default gossip listen address.
 pub const DEFAULT_GOSSIP_LISTEN_ADDRESS: &str = "/ip4/0.0.0.0/tcp/0";
-
-/// The default mDNS query interval in seconds (5 minutes).
-pub const DEFAULT_MDNS_QUERY_INTERVAL_SECS: u64 = 300; // 5 minutes
 
 /// The main command line commands.
 #[derive(Parser)]
@@ -37,6 +39,10 @@ pub enum Command {
         /// Controls how often the node re-broadcasts discovery queries when no peers are found.
         #[arg(long, default_value_t = DEFAULT_MDNS_QUERY_INTERVAL_SECS, verbatim_doc_comment)]
         mdns_query_interval: u64,
+        /// The number of heartbeat ticks until the connection to explicit peers are rechecked
+        /// and reconnected if necessary.
+        #[arg(long, default_value_t = DEFAULT_CHECK_EXPLICIT_PEERS_TICKS, verbatim_doc_comment)]
+        check_explicit_peers_ticks: u64,
         /// Path to a BCS-serialized Genesis file.
         /// If omitted, the node starts with an empty state.
         #[arg(long, verbatim_doc_comment)]
@@ -61,6 +67,7 @@ impl Command {
                 listen_address,
                 bootstrap_peers,
                 mdns_query_interval,
+                check_explicit_peers_ticks,
                 genesis,
                 difficulty,
             } => {
@@ -70,6 +77,7 @@ impl Command {
                     listen_address,
                     bootstrap_peers,
                     Duration::from_secs(mdns_query_interval),
+                    check_explicit_peers_ticks,
                 );
                 let node_config = NodeConfig::new(rpc_listen, gossip_network_config);
                 let miner_config = MinerConfig::new(difficulty);

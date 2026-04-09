@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, time::Duration};
+use std::net::SocketAddr;
 
 use meow_genesis::Genesis;
 use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
@@ -12,9 +12,6 @@ use tokio::sync::oneshot;
 const DEFAULT_RPC_ADDR: &str = "127.0.0.1:0";
 // difficulty 0: instant mining
 const DEFAULT_DIFFICULTY: u32 = 0;
-/// mDNS re-query interval used in tests. Tests rely on explicit bootstrap peers rather than
-/// mDNS auto-discovery, so the exact value does not affect test behaviour.
-const DEFAULT_MDNS_QUERY_INTERVAL: Duration = Duration::from_secs(300);
 
 /// A running MEOW node for use in tests.
 pub struct TestNode {
@@ -28,8 +25,7 @@ impl TestNode {
     pub async fn start_empty() -> Self {
         let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
 
-        let gossip_config =
-            GossipNetworkConfig::new(listen_addr, vec![], DEFAULT_MDNS_QUERY_INTERVAL);
+        let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
         let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
 
@@ -47,8 +43,7 @@ impl TestNode {
     pub async fn start_with_bootstrap(genesis: &Genesis, bootstrap_peers: Vec<Multiaddr>) -> Self {
         let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
 
-        let gossip_config =
-            GossipNetworkConfig::new(listen_addr, bootstrap_peers, DEFAULT_MDNS_QUERY_INTERVAL);
+        let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, bootstrap_peers);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
         let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
 

@@ -8,8 +8,15 @@ use axum::{
 use meow_nakamoto::{mempool::error::MempoolError, miner::error::MinerError};
 use meow_types::{address::Address, digest::Digest, transaction::SignedTransaction};
 use serde::Serialize;
+use tokio::{net::TcpListener, sync::watch};
 
-use crate::rpc::rpc_handler::{RpcHandler, error::RpcHandlerError};
+use crate::rpc::{
+    error::RpcServiceError,
+    rpc_handler::{RpcHandler, error::RpcHandlerError},
+};
+
+/// The result type related to the RPC service.
+pub type Result<T> = std::result::Result<T, RpcServiceError>;
 
 /// Shared application state for RPC handlers.
 ///
@@ -34,6 +41,26 @@ impl RpcState {
     pub fn new(handler: RpcHandler) -> Self {
         Self { handler }
     }
+}
+
+/// Runs the RPC server with the given TCP listener and application state.
+pub async fn run(
+    rpc_router: Router,
+    tcp_listener: TcpListener,
+    mut rpc_shutdown_rx: watch::Receiver<()>,
+) -> Result<()> {
+    tracing::info!("starting RPC service");
+
+    let result = axum::serve(tcp_listener, rpc_router)
+        .with_graceful_shutdown(async move {
+            let _ = rpc_shutdown_rx.changed().await;
+            tracing::info!("RPC shutdown signal received");
+        })
+        .await;
+
+    tracing::info!("RPC service stopped");
+
+    result.map_err(Into::into)
 }
 
 /// Builds the Axum router for node RPC endpoints.
