@@ -82,7 +82,7 @@ impl GossipService {
     ) -> Result<()> {
         tracing::info!("starting gossip service");
 
-        let mut gossip: GossipNetwork = GossipNetwork::new(config).await?;
+        let mut gossip: GossipNetwork = GossipNetwork::new(config)?;
         let local_peer_id = gossip.local_peer_id();
 
         tracing::info!(%local_peer_id, "network started");
@@ -92,10 +92,6 @@ impl GossipService {
         gossip.subscribe(TOPIC_PEER_INFO)?;
 
         tracing::info!(topics = ?TOPICS, "subscriptions ready");
-
-        for addr in gossip.listeners() {
-            tracing::info!(%addr, %local_peer_id, "listening");
-        }
 
         let mut sync_fut: Pin<Box<dyn Future<Output = Vec<Block>> + Send>> =
             Box::pin(std::future::pending());
@@ -190,7 +186,7 @@ impl GossipService {
                                             };
                                             if let Some(peer_id) = from {
                                                 self.known_peer_urls.entry(peer_id).or_insert_with(|| {
-                                                    tracing::debug!(url = %peer_rpc_url, "discovered peer RPC URL");
+                                                    tracing::info!(rpc_url = %peer_rpc_url, "new peer discovered");
                                                     peer_rpc_url
                                                 });
                                             }
@@ -199,16 +195,19 @@ impl GossipService {
                                     }
                                 }
                                 NetworkEvent::Message { topic, .. } => {
-                                    tracing::debug!(%topic, "message on unknown topic — ignoring");
+                                    tracing::debug!(name = %topic, "message on unknown topic — ignoring");
+                                }
+                                NetworkEvent::Listening { addr } => {
+                                    tracing::info!(%addr, %local_peer_id, "gossip listening");
                                 }
                                 NetworkEvent::PeerConnected(peer) => {
-                                    tracing::info!(%peer, "peer connected");
+                                    tracing::info!(peer_id = %peer, "peer connected");
                                 }
                                 NetworkEvent::PeerDisconnected(peer) => {
-                                    tracing::info!(%peer, "peer disconnected");
+                                    tracing::info!(peer_id = %peer, "peer disconnected");
                                 }
                                 NetworkEvent::PeerSubscribedToTopic { peer, topic } if topic == TOPIC_PEER_INFO => {
-                                    tracing::debug!(%peer, "peer subscribed to peer-info, broadcasting our RPC URL");
+                                    tracing::debug!(peer_id = %peer, "peer subscribed to peer-info, broadcasting our RPC URL");
                                     // The peer is now ready to receive on this topic — safe to send.
                                     let data = self.node_rpc_url.as_str().as_bytes().to_vec();
                                     if let Err(e) = gossip.publish(TOPIC_PEER_INFO, data) {
@@ -216,7 +215,7 @@ impl GossipService {
                                     }
                                 }
                                 NetworkEvent::PeerSubscribedToTopic { topic, .. } => {
-                                    tracing::debug!(%topic, "unknown subscribed topic — ignoring");
+                                    tracing::debug!(name = %topic, "unknown subscribed topic — ignoring");
                                 }
                             }
                         }
@@ -234,6 +233,7 @@ impl GossipService {
                             }
                         }
                         None => {
+                            tracing::warn!("transactions channel closed unexpectedly");
                             break;
                         }
                     }
@@ -246,6 +246,7 @@ impl GossipService {
                             }
                         }
                         None => {
+                            tracing::warn!("blocks channel closed unexpectedly");
                             break;
                         }
                     }

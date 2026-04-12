@@ -177,7 +177,7 @@ Fetch all committed blocks from `height` onwards (inclusive). Returns an empty a
     "parent_hash":       "<Digest>",
     "transactions_root": "<Digest>",
     "state_root":        "<Digest>",
-    "timestamp":         1712534400,
+    "timestamp":         1712534400000,
     "nonce":             99312
   },
   "transactions": [ ... ],

@@ -1,7 +1,5 @@
 pub mod error;
 
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use meow_genesis::Genesis;
 use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
 use meow_types::{
@@ -12,13 +10,14 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm_adapter::executor;
+use meow_vm_adapter::{executor, external_context::ExternalContext};
 
 use crate::{
     chain::{ChainState, compute_state_root, compute_transactions_root},
     mempool::Mempool,
     miner::error::MinerError,
     store::Store,
+    utils,
 };
 
 /// The result type related to the miner.
@@ -113,41 +112,25 @@ impl Miner {
         let parent_hash = self.chain.head();
         let height = self.chain.head_height() + 1;
         let difficulty = self.chain.difficulty();
+        let parent_store = self.chain.head_store().clone();
 
-        let mut new_store = self.chain.head_store().clone();
-        let mut executed_txs: Vec<SignedTransaction> = Vec::new();
-        let mut results = Vec::new();
-
-        for signed_tx in batch {
-            let tx = signed_tx.transaction();
-            let inputs = resolve_inputs(tx, &new_store);
-            match executor::execute(tx, inputs) {
-                Ok(result) => {
-                    new_store.apply_execution_result(&result);
-                    results.push(result);
-                    executed_txs.push(signed_tx);
-                }
-                Err(e) => {
-                    tracing::warn!("transaction dropped: {e}");
-                }
-            }
-        }
-
-        let transactions_root = compute_transactions_root(&executed_txs);
-        let state_root = compute_state_root(&new_store);
+        // transactions_root is computed upfront so it can be included in the
+        // mining hash — committing the miner to this exact transaction set before
+        // grinding begins. state_root is still unknown until after execution.
+        let transactions_root = compute_transactions_root(&batch);
 
         Some(MiningWork {
             header: BlockHeader {
                 height,
                 parent_hash,
                 transactions_root,
-                state_root,
-                timestamp: current_timestamp(),
+                // State root is unknown until after execution, so set to ZERO for now.
+                state_root: meow_types::digest::Digest::ZERO,
+                timestamp: utils::current_timestamp(),
                 nonce: 0,
             },
-            transactions: executed_txs,
-            results,
-            new_store,
+            batch,
+            parent_store,
             difficulty,
         })
     }
@@ -172,17 +155,23 @@ impl Miner {
 /// Work produced by [`Miner::prepare_round`]. Grind the nonce outside the
 /// `Miner` lock so that RPC and gossip handlers can run concurrently.
 pub struct MiningWork {
-    /// Header with `nonce = 0`; grind until it meets `difficulty`.
+    /// Header with `transactions_root` already set and `nonce = 0`.
+    /// `state_root` is zeroed — `grind()` fills it in after execution.
+    /// `grind()` finds the valid nonce, executes transactions using
+    /// `mining_hash()` as the randomness seed, then sets `state_root`.
     pub header: BlockHeader,
-    pub transactions: Vec<SignedTransaction>,
-    pub results: Vec<ExecutionResult>,
-    pub new_store: Store,
+    /// Transactions drained from the mempool, pending execution.
+    pub batch: Vec<SignedTransaction>,
+    /// Object store snapshot at the parent block tip.
+    pub parent_store: Store,
     pub difficulty: u32,
 }
 
 impl MiningWork {
-    /// Increment `nonce` until the header hash meets `difficulty`, then return
-    /// the completed block and the resulting store state.
+    /// 1. Grind `nonce` until `mining_hash()` meets `difficulty`.
+    /// 2. Execute `batch` using `mining_hash()` as the randomness seed.
+    /// 3. Fill in `state_root` (transactions_root was set in `prepare_round`).
+    /// 4. Return the completed block and the resulting store state.
     pub fn grind(mut self) -> (Block, Store) {
         while !self.header.meets_difficulty(self.difficulty) {
             self.header.nonce += 1;
@@ -194,12 +183,39 @@ impl MiningWork {
             "PoW solved"
         );
 
+        // Nonce is now final — mining_hash() is the committed randomness seed.
+        let execution_context =
+            ExternalContext::new(self.header.mining_hash().into(), self.header.timestamp);
+
+        let mut new_store = self.parent_store;
+        let mut executed_txs: Vec<SignedTransaction> = Vec::new();
+        let mut results = Vec::new();
+
+        for signed_tx in self.batch {
+            let tx = signed_tx.transaction();
+            let inputs = resolve_inputs(tx, &new_store);
+            match executor::execute(tx, inputs, &execution_context) {
+                Ok(result) => {
+                    new_store.apply_execution_result(&result);
+                    results.push(result);
+                    executed_txs.push(signed_tx);
+                }
+                Err(e) => {
+                    tracing::warn!(digest = ?signed_tx.transaction().digest(), error = %e, "transaction dropped during execution");
+                }
+            }
+        }
+
+        // transactions_root was already set in prepare_round; only state_root
+        // is unknown until execution completes.
+        self.header.state_root = compute_state_root(&new_store);
+
         let block = Block {
             header: self.header,
-            transactions: self.transactions,
-            results: self.results,
+            transactions: executed_txs,
+            results,
         };
-        (block, self.new_store)
+        (block, new_store)
     }
 }
 
@@ -225,12 +241,4 @@ fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
     }
 
     inputs
-}
-
-/// Current Unix timestamp in seconds.
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
 }

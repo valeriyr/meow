@@ -35,6 +35,8 @@ pub const NATIVE_FUNCTION_NAMES: &[&str] = &[
     "meow_vm_transfer",
     "meow_vm_destroy",
     "meow_vm_sender",
+    "meow_vm_rand",
+    "meow_vm_timestamp",
 ];
 
 /// Returns the path to the meow configuration directory.

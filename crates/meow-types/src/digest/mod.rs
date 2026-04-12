@@ -72,6 +72,12 @@ impl TryFrom<&[u8]> for Digest {
     }
 }
 
+impl From<Digest> for [u8; DIGEST_LENGTH] {
+    fn from(digest: Digest) -> Self {
+        digest.0
+    }
+}
+
 impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0

@@ -9,9 +9,9 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm_adapter::executor;
+use meow_vm_adapter::{executor, external_context::ExternalContext};
 
-use crate::store::Store;
+use crate::{store::Store, utils};
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
 ///
@@ -34,6 +34,9 @@ pub struct ChainState {
 
 /// How many block snapshots to keep behind the head. Limits reorg depth.
 const SNAPSHOT_DEPTH: u64 = 64;
+/// Maximum number of milliseconds a block's timestamp may be ahead of local clock.
+/// Blocks further in the future than this are rejected to prevent timestamp manipulation.
+const MAX_BLOCK_FUTURE_DRIFT_MS: u64 = 120_000; // 2 minutes
 
 impl ChainState {
     /// Creates a chain rooted at genesis, with the given initial store as the
@@ -179,6 +182,34 @@ impl ChainState {
             return false;
         }
 
+        let timestamp = block.header.timestamp;
+
+        // Timestamp must be strictly greater than the parent's to ensure time
+        // only moves forward — important for contracts that read the block time.
+        let parent_timestamp = self.blocks[&parent_hash].header.timestamp;
+        if timestamp <= parent_timestamp {
+            tracing::warn!(
+                height,
+                timestamp,
+                parent_timestamp,
+                "block timestamp is not greater than parent — ignoring"
+            );
+            return false;
+        }
+
+        // Reject blocks stamped too far in the future to prevent miners from
+        // manipulating the clock to unlock time-sensitive contract logic early.
+        let now = utils::current_timestamp();
+        if timestamp > now + MAX_BLOCK_FUTURE_DRIFT_MS {
+            tracing::warn!(
+                height,
+                timestamp,
+                now,
+                "block timestamp is too far in the future — ignoring"
+            );
+            return false;
+        }
+
         // Transactions root must match the transaction list in the block.
         let transactions_root = compute_transactions_root(&block.transactions);
         if transactions_root != block.header.transactions_root {
@@ -197,10 +228,16 @@ impl ChainState {
         let mut new_store = self.snapshots[&parent_hash].clone();
         let mut expected_results = Vec::with_capacity(block.transactions.len());
 
+        // Use the mining hash as the randomness seed — it commits height,
+        // parent_hash, transactions_root, timestamp, and nonce, all of which
+        // are fixed before any transaction runs and verifiable by every validator.
+        let external_executor_context =
+            ExternalContext::new(block.header.mining_hash().into(), timestamp);
+
         for signed_tx in &block.transactions {
             let tx = signed_tx.transaction();
             let inputs = resolve_inputs(tx, &new_store);
-            let result = match executor::execute(tx, inputs) {
+            let result = match executor::execute(tx, inputs, &external_executor_context) {
                 Ok(result) => result,
                 Err(e) => {
                     tracing::warn!(height, error = %e, "block execution failed during verification");

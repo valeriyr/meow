@@ -19,6 +19,7 @@ use meow_types::{
 use meow_vm_adapter::{
     Value, builder,
     executor::{self, error::ExecutorError},
+    external_context::{DEFAULT_RAND_SEED, ExternalContext, RandSeed},
 };
 use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
 
@@ -38,7 +39,7 @@ fn mint_succeeds_and_creates_object() {
         ],
     );
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -64,7 +65,7 @@ fn burn_succeeds_and_destroys_object() {
     let gas_obj = make_gas_coin_object();
 
     let tx = make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -92,7 +93,7 @@ fn transfer_changes_owner() {
             Input::raw(&new_owner).unwrap(),
         ],
     );
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.changed_objects().len(), 2);
@@ -121,7 +122,7 @@ fn split_with_sufficient_balance() {
             Input::raw(&40u64).unwrap(),
         ],
     );
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -149,6 +150,56 @@ fn split_with_sufficient_balance() {
 }
 
 //
+// ─── meow_vm_rand tests ───
+//
+
+#[test]
+fn meow_vm_rand_is_deterministic_for_same_seed() {
+    let seed = [42u8; 32];
+    let result1 = execute_rand_roll(seed);
+    let result2 = execute_rand_roll(seed);
+    let v1 = read_u64_field(&result1.created_objects()[0], "value");
+    let v2 = read_u64_field(&result2.created_objects()[0], "value");
+    assert_eq!(v1, v2, "same seed must produce the same random value");
+}
+
+#[test]
+fn meow_vm_rand_differs_with_different_seeds() {
+    let result1 = execute_rand_roll([1u8; 32]);
+    let result2 = execute_rand_roll([2u8; 32]);
+    let v1 = read_u64_field(&result1.created_objects()[0], "value");
+    let v2 = read_u64_field(&result2.created_objects()[0], "value");
+    assert_ne!(
+        v1, v2,
+        "different seeds must produce different random values"
+    );
+}
+
+//
+// ─── meow_vm_timestamp tests ───
+//
+
+#[test]
+fn meow_vm_timestamp_returns_block_timestamp() {
+    let ts = 1_700_000_000u64;
+    let result = execute_timestamp_capture(ts);
+    let captured = read_u64_field(&result.created_objects()[0], "value");
+    assert_eq!(captured, ts, "contract must see the block timestamp");
+}
+
+#[test]
+fn meow_vm_timestamp_differs_with_different_timestamps() {
+    let result1 = execute_timestamp_capture(1_000_000);
+    let result2 = execute_timestamp_capture(2_000_000);
+    let v1 = read_u64_field(&result1.created_objects()[0], "value");
+    let v2 = read_u64_field(&result2.created_objects()[0], "value");
+    assert_ne!(
+        v1, v2,
+        "different block timestamps must produce different values"
+    );
+}
+
+//
 // ─── Gas coin validation tests (resolvers.rs) ───
 //
 
@@ -166,7 +217,7 @@ fn execute_with_gas_coin_not_found_returns_error() {
         TransactionType::MeowCall(call),
     );
 
-    let err = executor::execute(&tx, vec![module_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::GasCoinNotFound));
 }
 
@@ -179,7 +230,7 @@ fn execute_with_invalid_gas_coin_returns_error() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::InvalidGasCoin));
 }
 
@@ -192,7 +243,7 @@ fn execute_with_invalid_gas_coin_owner_returns_error() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::InvalidGasCoinOwner));
 }
 
@@ -205,7 +256,7 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::ObjectAtMaxVersion(address) if address == GAS_ADDR));
 }
 
@@ -219,7 +270,7 @@ fn execute_with_gas_coin_wrong_version_returns_error() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
         ExecutorError::InvalidObjectVersion { address, expected, found }
@@ -245,7 +296,7 @@ fn execute_with_gas_coin_wrong_digest_returns_error() {
     );
     let tx = Transaction::new(SENDER, wrong_ref, TransactionType::MeowCall(call));
 
-    let err = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
+    let err = execute(&tx, vec![module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
         ExecutorError::InvalidObjectDigest { address, expected, found }
@@ -268,7 +319,7 @@ fn execute_meow_call_without_module_returns_failure() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("expected exactly 1 module object in inputs, found 0")),
@@ -293,7 +344,7 @@ fn execute_meow_call_with_multiple_modules_returns_failure() {
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let result = executor::execute(&tx, vec![module1, module2, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module1, module2, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("expected exactly 1 module object in inputs, found 2")),
@@ -317,7 +368,7 @@ fn execute_with_function_not_found_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction("nonexistent_function", vec![]);
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("function 'nonexistent_function' not found in module")),
@@ -344,7 +395,7 @@ fn calling_native_function_by_name_returns_failure() {
         let gas_obj = make_gas_coin_object();
         let tx = make_meow_call_transaction(native, vec![]);
 
-        let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+        let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
         assert!(
             matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found in module")),
@@ -361,7 +412,7 @@ fn execute_with_input_object_at_max_version_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is at the maximum version")),
@@ -384,7 +435,7 @@ fn execute_with_input_object_wrong_version_returns_failure() {
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ZERO, coin_obj.digest());
     let tx = make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
 
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid version")),
@@ -407,7 +458,7 @@ fn execute_with_input_object_wrong_digest_returns_failure() {
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ONE, Digest::ZERO);
     let tx = make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
 
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid digest")),
@@ -428,7 +479,7 @@ fn execute_with_module_as_argument_returns_failure() {
     // Pass the module object itself as a call argument.
     let tx = make_meow_call_transaction("burn", vec![Input::Object(module_obj.object_ref())]);
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is a module and cannot be used as a call argument")),
@@ -449,7 +500,7 @@ fn execute_with_argument_count_mismatch_returns_failure() {
     // mint expects 2 args; pass only 1.
     let tx = make_meow_call_transaction("mint", vec![Input::raw(&10u64).unwrap()]);
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("argument count mismatch")),
@@ -471,7 +522,7 @@ fn execute_vm_abort_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction("do_abort", vec![]);
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("abort message")),
@@ -498,7 +549,7 @@ fn split_with_insufficient_balance_returns_failure() {
             Input::raw(&20u64).unwrap(), // amount > balance
         ],
     );
-    let result = executor::execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("The balance is insufficient")),
@@ -528,7 +579,7 @@ fn fresh_object_not_consumed_returns_failure() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction("generate_id", vec![]);
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("created object not consumed")),
@@ -560,7 +611,7 @@ fn exhausted_gas_coin_goes_to_changed() {
     );
     let tx = Transaction::new(SENDER, gas_coin_ref, TransactionType::MeowCall(call));
 
-    let result = executor::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         result
@@ -593,7 +644,7 @@ fn execute_module_publish_succeeds() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(module_bytes);
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -622,7 +673,7 @@ fn execute_module_publish_charges_gas_per_byte() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(module_bytes);
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     let spent = GAS_BALANCE - meow_coin::gas_meow_coin_balance(find_gas_coin(&result)).unwrap();
@@ -640,7 +691,7 @@ fn execute_module_publish_fails_when_module_too_large() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(oversized);
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("exceeds maximum")),
@@ -658,7 +709,7 @@ fn execute_module_publish_fails_when_module_not_deserializable() {
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(not_a_module);
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("failed to deserialize module")),
@@ -677,7 +728,7 @@ fn execute_module_publish_derives_address_from_tx_digest() {
     let tx = make_meow_module_publish_transaction(module_bytes);
     let tx_digest = tx.digest();
 
-    let result = executor::execute(&tx, vec![gas_obj]).unwrap();
+    let result = execute(&tx, vec![gas_obj]).unwrap();
 
     let expected_addr = Address::derive(tx_digest, 0, 0);
     assert_eq!(
@@ -797,4 +848,87 @@ fn find_gas_coin(result: &ExecutionResult) -> &Object {
         .iter()
         .find(|o| o.address() == &GAS_ADDR)
         .expect("gas coin must be in changed_objects")
+}
+
+pub fn execute(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+) -> executor::Result<ExecutionResult> {
+    executor::execute(transaction, inputs, &ExternalContext::default())
+}
+
+fn execute_with_seed(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+    seed: RandSeed,
+) -> executor::Result<ExecutionResult> {
+    executor::execute(transaction, inputs, &ExternalContext::new(seed, 0))
+}
+
+fn execute_with_timestamp(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+    timestamp: u64,
+) -> executor::Result<ExecutionResult> {
+    executor::execute(
+        transaction,
+        inputs,
+        &ExternalContext::new(DEFAULT_RAND_SEED, timestamp),
+    )
+}
+
+/// Execute the `roll()` function with the given seed.
+fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
+    const RAND_MODULE_SRC: &str = r#"
+        object RandBox { id: address, value: u64 }
+        fn roll() {
+            let box = RandBox { id: meow_vm_fresh_id(), value: meow_vm_rand() };
+            meow_vm_transfer(box, meow_vm_sender());
+        }
+        "#;
+
+    let module_obj = make_module_object_from_src("rand_test", RAND_MODULE_SRC);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(Address::ZERO, Identifier::new("roll").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+    let result = execute_with_seed(&tx, vec![module_obj, gas_obj], seed).unwrap();
+    assert_eq!(result.status(), &ExecutionStatus::Success);
+    result
+}
+
+/// Execute the `capture()` function with the given block timestamp.
+fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
+    const TIMESTAMP_MODULE_SRC: &str = r#"
+        object TimestampBox { id: address, value: u64 }
+        fn capture() {
+            let box = TimestampBox { id: meow_vm_fresh_id(), value: meow_vm_timestamp() };
+            meow_vm_transfer(box, meow_vm_sender());
+        }
+        "#;
+
+    let module_obj = make_module_object_from_src("timestamp_test", TIMESTAMP_MODULE_SRC);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(Address::ZERO, Identifier::new("capture").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+    let result = execute_with_timestamp(&tx, vec![module_obj, gas_obj], timestamp).unwrap();
+    assert_eq!(result.status(), &ExecutionStatus::Success);
+    result
+}
+
+/// Read a named `u64` field from the BCS-encoded content of an object.
+fn read_u64_field(obj: &Object, field: &str) -> u64 {
+    let fields: Vec<(String, Value)> = bcs::from_bytes(obj.content()).unwrap();
+    fields
+        .iter()
+        .find(|(name, _)| name == field)
+        .and_then(|(_, val)| val.as_u64())
+        .unwrap_or_else(|| panic!("field '{field}' not found or not a u64"))
 }

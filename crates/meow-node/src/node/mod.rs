@@ -33,7 +33,7 @@ macro_rules! await_service_shutdown {
                 tracing::error!(
                     service = $service_name,
                     error = %e,
-                    "service terminated with error during shutdown"
+                    "terminated with error during shutdown"
                 );
                 return Err($err_variant(e));
             }
@@ -157,10 +157,10 @@ impl Node {
             rpc_result = &mut rpc_future => {
                 match rpc_result {
                     Ok(()) => {
-                        tracing::warn!(service = "rpc", "service terminated gracefully");
+                        tracing::warn!(service = "rpc", "terminated gracefully");
                     }
                     Err(e) => {
-                        tracing::error!(service = "rpc", error = %e, "service terminated unexpectedly");
+                        tracing::error!(service = "rpc", error = %e, "terminated unexpectedly");
                         return Err(NodeError::RpcServiceError(e));
                     }
                 }
@@ -168,10 +168,10 @@ impl Node {
             miner_result = &mut miner_future => {
                 match miner_result {
                     Ok(()) => {
-                        tracing::warn!(service = "miner", "service terminated gracefully");
+                        tracing::warn!(service = "miner", "terminated gracefully");
                     }
                     Err(e) => {
-                        tracing::error!(service = "miner", error = %e, "service terminated unexpectedly");
+                        tracing::error!(service = "miner", error = %e, "terminated unexpectedly");
                         return Err(NodeError::MinerServiceError(e));
                     }
                 }
@@ -179,10 +179,10 @@ impl Node {
             gossip_result = &mut gossip_future => {
                 match gossip_result {
                     Ok(()) => {
-                        tracing::warn!(service = "gossip", "service terminated gracefully");
+                        tracing::warn!(service = "gossip", "terminated gracefully");
                     }
                     Err(e) => {
-                        tracing::error!(service = "gossip", error = %e, "service terminated unexpectedly");
+                        tracing::error!(service = "gossip", error = %e, "terminated unexpectedly");
                         return Err(NodeError::GossipServiceError(e));
                     }
                 }

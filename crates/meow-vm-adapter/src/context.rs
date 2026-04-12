@@ -1,5 +1,8 @@
 use meow_types::{address::Address, digest::Digest};
 use meow_vm_types::types::Value;
+use rand::{RngCore, SeedableRng, rngs::StdRng};
+
+use crate::external_context::{DEFAULT_RAND_SEED, RandSeed};
 
 /// Tracks side effects of native function calls during execution.
 pub struct Context {
@@ -15,11 +18,15 @@ pub struct Context {
     transfers: Vec<(Value, Address)>,
     /// Objects destroyed.
     destroyed: Vec<Value>,
+    /// Random number generator (needed for native functions that require randomness).
+    random_generator: rand::rngs::StdRng,
+    /// Block timestamp (Unix milliseconds) at the time the block was mined.
+    timestamp: u64,
 }
 
 impl Context {
-    /// Create a new execution context for a transaction.
-    pub fn new(sender: Address, tx_digest: Digest) -> Self {
+    /// Creates a new execution context for a transaction.
+    pub fn new(sender: Address, tx_digest: Digest, rand_seed: RandSeed, timestamp: u64) -> Self {
         Self {
             sender,
             tx_digest,
@@ -27,6 +34,8 @@ impl Context {
             fresh_ids: Vec::new(),
             transfers: Vec::new(),
             destroyed: Vec::new(),
+            random_generator: create_random_generator(tx_digest, rand_seed),
+            timestamp,
         }
     }
 
@@ -77,6 +86,32 @@ impl Context {
         );
         self.destroyed.push(obj);
     }
+
+    /// Get the next pseudo-random `u64` from the transaction's RNG sequence.
+    pub fn next_rand(&mut self) -> u64 {
+        self.random_generator.next_u64()
+    }
+
+    /// Returns the block timestamp (Unix milliseconds) at the time the block was mined.
+    pub fn timestamp(&self) -> u64 {
+        self.timestamp
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new(Address::ZERO, Digest::ZERO, DEFAULT_RAND_SEED, 0)
+    }
+}
+
+/// Create a random generator seeded from the transaction digest and random seed.
+fn create_random_generator(tx_digest: Digest, rand_seed: RandSeed) -> StdRng {
+    let mut signable = tx_digest.as_ref().to_vec();
+    signable.extend_from_slice(&rand_seed);
+
+    let seed = Digest::compute(&signable).expect("Failed to compute a seed for random generator");
+
+    StdRng::from_seed(seed.into())
 }
 
 #[cfg(test)]
@@ -84,13 +119,11 @@ mod tests {
     use meow_types::{address::Address, digest::Digest};
     use meow_vm_types::types::Value;
 
+    use crate::external_context::DEFAULT_RAND_SEED;
+
     use super::Context;
 
     const SENDER: Address = Address::fill(0xAA);
-
-    fn make_ctx() -> Context {
-        Context::new(SENDER, Digest::ZERO)
-    }
 
     #[test]
     fn initial_state_is_empty() {
@@ -124,8 +157,8 @@ mod tests {
 
     #[test]
     fn fresh_ids_are_deterministic() {
-        let mut ctx1 = Context::new(SENDER, Digest::ZERO);
-        let mut ctx2 = Context::new(SENDER, Digest::ZERO);
+        let mut ctx1 = make_ctx();
+        let mut ctx2 = make_ctx();
         assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
         assert_eq!(ctx1.next_fresh_id(), ctx2.next_fresh_id());
     }
@@ -154,5 +187,36 @@ mod tests {
                 ("balance".to_string(), Value::U64(100)),
             ],
         }
+    }
+
+    #[test]
+    fn rand_values_are_deterministic() {
+        let mut ctx1 = make_ctx();
+        let mut ctx2 = make_ctx();
+        assert_eq!(ctx1.next_rand(), ctx2.next_rand());
+        assert_eq!(ctx1.next_rand(), ctx2.next_rand());
+    }
+
+    #[test]
+    fn rand_advances_per_call() {
+        let mut ctx = make_ctx();
+        let v1 = ctx.next_rand();
+        let v2 = ctx.next_rand();
+        assert_ne!(v1, v2, "successive rand calls must return different values");
+    }
+
+    #[test]
+    fn different_seeds_produce_different_rand_values() {
+        let mut ctx1 = Context::new(SENDER, Digest::ZERO, [1u8; 32], 0);
+        let mut ctx2 = Context::new(SENDER, Digest::ZERO, [2u8; 32], 0);
+        assert_ne!(
+            ctx1.next_rand(),
+            ctx2.next_rand(),
+            "different seeds must produce different random values"
+        );
+    }
+
+    fn make_ctx() -> Context {
+        Context::new(SENDER, Digest::ZERO, DEFAULT_RAND_SEED, 0)
     }
 }

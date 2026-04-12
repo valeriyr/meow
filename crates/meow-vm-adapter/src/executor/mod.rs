@@ -23,7 +23,9 @@ use meow_types::{
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_types::module::Module;
 
-use crate::{context::Context, executor::error::ExecutorError, natives};
+use crate::{
+    context::Context, executor::error::ExecutorError, external_context::ExternalContext, natives,
+};
 
 /// Gas cost per byte of module bytecode when publishing.
 const GAS_PER_MODULE_BYTE: u64 = 10;
@@ -41,7 +43,11 @@ pub type Result<T> = std::result::Result<T, ExecutorError>;
 ///
 /// Gas is always spent and the gas coin is always returned as a changed object,
 /// even when execution fails.
-pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> Result<ExecutionResult> {
+pub fn execute(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+    external_context: &ExternalContext,
+) -> Result<ExecutionResult> {
     let sender = transaction.sender();
     let tx_digest = transaction.digest();
 
@@ -54,9 +60,14 @@ pub fn execute(transaction: &Transaction, inputs: Vec<Object>) -> Result<Executi
 
     let result = match gas.charge(BASE_TRANSACTION_GAS_COST) {
         Ok(_) => match transaction.type_() {
-            TransactionType::MeowCall(call) => {
-                execute_meow_call(sender, &tx_digest, call, &inputs, &mut gas)
-            }
+            TransactionType::MeowCall(call) => execute_meow_call(
+                sender,
+                &tx_digest,
+                call,
+                &inputs,
+                &mut gas,
+                external_context,
+            ),
             TransactionType::MeowModulePublish(module) => {
                 execute_meow_module_publish(&tx_digest, module, &mut gas)
             }
@@ -87,9 +98,14 @@ pub fn execute_genesis_transaction(
     let mut gas_meter = GasMeter::unlimited();
 
     Ok(match transaction.type_() {
-        TransactionType::MeowCall(call) => {
-            execute_meow_call(sender, &tx_digest, call, &inputs, &mut gas_meter)
-        }
+        TransactionType::MeowCall(call) => execute_meow_call(
+            sender,
+            &tx_digest,
+            call,
+            &inputs,
+            &mut gas_meter,
+            &ExternalContext::default(),
+        ),
         TransactionType::MeowModulePublish(module) => {
             execute_meow_module_publish(&tx_digest, module, &mut gas_meter)
         }
@@ -103,6 +119,7 @@ fn execute_meow_call(
     call: &Call,
     inputs: &[Object],
     gas: &mut GasMeter,
+    external_context: &ExternalContext,
 ) -> ExecutionResult {
     let module_address = call.module();
 
@@ -134,7 +151,12 @@ fn execute_meow_call(
     };
 
     // Build executor context and native functions.
-    let ctx = Rc::new(RefCell::new(Context::new(*sender, *tx_digest)));
+    let ctx = Rc::new(RefCell::new(Context::new(
+        *sender,
+        *tx_digest,
+        *external_context.rand_seed(),
+        external_context.timestamp(),
+    )));
     let natives = natives::build_natives(ctx.clone());
     let vm = Vm::new(module, natives, GasSchedule::default(), config::vm_config());
 

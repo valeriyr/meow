@@ -19,12 +19,10 @@ object Hero {
     name: string,
     level: u64,
     experience: u64,
-    wins: u64,
-    sword_attack: u64,
-    shield_defense: u64
+    wins: u64
 }
 
-// Spawn a new level-1 hero with no equipment and transfer it to the transaction sender.
+// Spawn a new level-1 hero and transfer it to the transaction sender.
 fn spawn(name: string) {
     let owner = meow_vm_sender();
     let hero = Hero {
@@ -32,9 +30,7 @@ fn spawn(name: string) {
         name: name,
         level: 1,
         experience: 0,
-        wins: 0,
-        sword_attack: 0,
-        shield_defense: 0
+        wins: 0
     };
     meow_vm_transfer(hero, owner);
 }
@@ -44,63 +40,30 @@ fn rename(hero: Hero, new_name: string) {
     hero.name = new_name;
 }
 
-// Forge a sword. Higher attack increases power in duels.
-// Cannot downgrade: the new value must be greater than the current one.
-fn forge_sword(hero: Hero, attack: u64) {
-    meow_vm_abort(attack > hero.sword_attack, 3, "New sword must be stronger than the current one");
-    hero.sword_attack = attack;
-}
-
-// Forge a shield. Higher defense reduces XP loss when losing a duel.
-// Cannot downgrade: the new value must be greater than the current one.
-fn forge_shield(hero: Hero, defense: u64) {
-    meow_vm_abort(defense > hero.shield_defense, 4, "New shield must be stronger than the current one");
-    hero.shield_defense = defense;
-}
-
 // Duel two heroes. Both must be owned by the transaction sender.
-// Power = level * 100 + experience + sword_attack. Attacker wins on a tie.
-// Winner gains XP scaled to the loser's level and levels up automatically if threshold is reached.
-// XP penalty on the loser is reduced by their shield_defense.
+// Each hero draws a random number — higher roll wins. The winner gains
+// XP equal to the loser's level × 25 and levels up automatically when
+// their XP reaches level × 100. The outcome is non-deterministic:
+// it is seeded from the block's mining hash (see Contracts → Randomness).
 fn duel(attacker: Hero, defender: Hero) {
-    meow_vm_abort(attacker.id != defender.id, 2, "A hero cannot duel itself");
+    meow_vm_abort(attacker.id != defender.id, 1, "A hero cannot duel itself");
 
-    let attacker_power = attacker.level * 100 + attacker.experience + attacker.sword_attack;
-    let defender_power = defender.level * 100 + defender.experience + defender.sword_attack;
+    let attacker_roll = meow_vm_rand();
+    let defender_roll = meow_vm_rand();
 
-    if attacker_power >= defender_power {
-        attacker.experience = attacker.experience + defender.level * 25;
+    if attacker_roll >= defender_roll {
         attacker.wins = attacker.wins + 1;
-        let required = attacker.level * 100;
-        if attacker.experience >= required {
-            attacker.experience = attacker.experience - required;
+        attacker.experience = attacker.experience + defender.level * 25;
+        if attacker.experience >= attacker.level * 100 {
+            attacker.experience = attacker.experience - attacker.level * 100;
             attacker.level = attacker.level + 1;
         }
-        let penalty = attacker.level * 10;
-        if penalty > defender.shield_defense {
-            let net_penalty = penalty - defender.shield_defense;
-            if defender.experience >= net_penalty {
-                defender.experience = defender.experience - net_penalty;
-            } else {
-                defender.experience = 0;
-            }
-        }
     } else {
-        defender.experience = defender.experience + attacker.level * 25;
         defender.wins = defender.wins + 1;
-        let required = defender.level * 100;
-        if defender.experience >= required {
-            defender.experience = defender.experience - required;
+        defender.experience = defender.experience + attacker.level * 25;
+        if defender.experience >= defender.level * 100 {
+            defender.experience = defender.experience - defender.level * 100;
             defender.level = defender.level + 1;
-        }
-        let penalty = defender.level * 10;
-        if penalty > attacker.shield_defense {
-            let net_penalty = penalty - attacker.shield_defense;
-            if attacker.experience >= net_penalty {
-                attacker.experience = attacker.experience - net_penalty;
-            } else {
-                attacker.experience = 0;
-            }
         }
     }
 }
@@ -164,7 +127,7 @@ Look for the created object — that address is your `<MODULE_ADDRESS>`.
 
 ## Spawn a hero
 
-`spawn` takes a name string and automatically sends the hero to the transaction sender via `meow_vm_sender()`.
+`spawn` takes a name string and sends the new hero to the transaction sender via `meow_vm_sender()`.
 
 ```bash
 meow transaction meow-call \
@@ -192,33 +155,11 @@ meow transaction meow-call \
   <HERO_ADDRESS> "Thorin Oakenshield"
 ```
 
-## Forge equipment
-
-Equip a sword to boost attack power in duels. Equip a shield to reduce XP loss when losing. Neither can be downgraded.
-
-```bash
-# Forge a sword with attack power 30
-meow transaction meow-call \
-  --module <MODULE_ADDRESS> \
-  --function forge_sword \
-  --sender <YOUR_ADDRESS> \
-  --gas-coin <GAS_COIN_ADDRESS> \
-  <HERO_ADDRESS> 30
-
-# Forge a shield with defense power 15
-meow transaction meow-call \
-  --module <MODULE_ADDRESS> \
-  --function forge_shield \
-  --sender <YOUR_ADDRESS> \
-  --gas-coin <GAS_COIN_ADDRESS> \
-  <HERO_ADDRESS> 15
-```
-
 ## Duel
 
 Both heroes must be owned by the transaction sender. Spawn a second hero first, then pass both addresses as object arguments.
 
-Power is computed as `level × 100 + experience + sword_attack` — equipment directly influences who wins. The attacker wins on a tie. The winner gains `loser.level × 25` XP and **levels up automatically** if their XP reaches `level × 100` (so level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The XP penalty on the loser is `winner.level × 10` reduced by their `shield_defense`.
+Each hero draws a random number from `meow_vm_rand()`. Higher roll wins — the outcome is never guaranteed regardless of level. The winner gains `loser.level × 25` XP and **levels up automatically** when their XP reaches `level × 100` (level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The randomness is seeded from the block's mining hash (which commits to the transaction set and nonce), so it is deterministic across all validators but cannot be predicted by a transaction sender before the block is mined. See [Contracts → Randomness](contracts.md#randomness) for the full security model.
 
 ```bash
 # Spawn a second hero to be the defender

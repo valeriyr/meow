@@ -1,8 +1,10 @@
-use crate::{message_id::MessageId, peer_id::PeerId};
+use crate::{message_id::MessageId, multiaddr::Multiaddr, peer_id::PeerId};
 
 /// An event produced by the gossip network.
 #[derive(Debug)]
 pub enum NetworkEvent {
+    /// The node is now listening on a bound address.
+    Listening { addr: Multiaddr },
     /// A message arrived on a subscribed topic.
     Message {
         id: MessageId,

@@ -66,9 +66,11 @@ crates/
 |---|---|
 | [Quick Start](docs/quickstart.md) | Key generation, genesis, running a node, sending transactions |
 | [Object Model](docs/object-model.md) | Objects, ownership, versioning, gas coins, and lifecycle |
+| [Consensus](docs/consensus.md) | PoW, block validation rules, fork choice, reorgs, mempool, timestamps, and randomness |
 | [Contracts](docs/contracts.md) | `.meow` language reference, publishing a module, call argument format |
 | [MeowCoin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
+| [Example: time capsule](docs/example-time-capsule.md) | Time-locked contract using `meow_vm_timestamp()` |
 | [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |
 | [Architecture](docs/architecture.md) | Crate map, data flow, and testing strategy |
 

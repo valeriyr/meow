@@ -6,6 +6,7 @@ use libp2p::{
     Multiaddr, SwarmBuilder,
     gossipsub::{self, IdentTopic, MessageAuthenticity},
     mdns,
+    multiaddr::Protocol,
     swarm::{NetworkBehaviour, SwarmEvent},
 };
 use meow_gossip_types::{
@@ -48,7 +49,7 @@ pub struct GossipNetwork {
 
 impl GossipNetwork {
     /// Creates a new node with a freshly generated identity keypair.
-    pub async fn new(config: GossipNetworkConfig) -> Result<Self> {
+    pub fn new(config: GossipNetworkConfig) -> Result<Self> {
         let GossipNetworkConfig {
             listen_address,
             bootstrap_peers,
@@ -171,6 +172,23 @@ impl GossipNetwork {
                 }
                 SwarmEvent::ConnectionClosed { peer_id, .. } => {
                     return Some(NetworkEvent::PeerDisconnected(PeerId::from(peer_id)));
+                }
+                SwarmEvent::NewListenAddr { address, .. } => {
+                    // libp2p emits NewListenAddr for each resolved interface address (wildcard,
+                    // loopback, LAN) plus a /p2p/<peer_id>-suffixed variant of each.
+                    // Only surface routable addresses.
+                    let is_routable = address.iter().all(|p| match p {
+                        Protocol::P2p(_) => false,
+                        Protocol::Ip4(addr) => !addr.is_unspecified() && !addr.is_loopback(),
+                        Protocol::Ip6(addr) => !addr.is_unspecified() && !addr.is_loopback(),
+                        _ => true,
+                    });
+
+                    if is_routable {
+                        return Some(NetworkEvent::Listening {
+                            addr: address.into(),
+                        });
+                    }
                 }
                 other => {
                     tracing::debug!(event = ?other, "unhandled swarm event");

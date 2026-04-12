@@ -8,8 +8,9 @@ description = "Adapter that executes MEOW smart contracts against the blockchain
 
 [dependencies]
 bcs.workspace = true
-thiserror.workspace = true
+rand.workspace = true
 serde.workspace = true
+thiserror.workspace = true
 
 meow-types.workspace = true
 meow-vm.workspace = true

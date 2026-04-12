@@ -6,10 +6,8 @@ use crate::{Value, context::Context};
 
 /// Constructs the native function table used by the executor.
 ///
-/// Binds each built-in native (`meow_vm_fresh_id`, `meow_vm_transfer`,
-/// `meow_vm_destroy`, `meow_vm_sender`) to a closure that captures the shared
-/// `Context`, and returns the resulting `Vec<NativeFnEntry>` for registration
-/// with the VM.
+/// Binds each built-in native to a closure that captures the shared `Context`,
+/// and returns the resulting `Vec<NativeFnEntry>` for registration with the VM.
 pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let fresh_id = {
         let c = ctx.clone();
@@ -87,5 +85,27 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         }
     };
 
-    vec![fresh_id, transfer, destroy, sender]
+    let rand = {
+        let c = ctx.clone();
+        NativeFnEntry {
+            name: "meow_vm_rand".to_string(),
+            param_count: 0,
+            gas_cost: 10, // 10 gas — random generation involves a hash computation
+            func: Box::new(move |_| {
+                NativeResult::Return(Some(Value::U64(c.borrow_mut().next_rand())))
+            }),
+        }
+    };
+
+    let timestamp = {
+        let c = ctx.clone();
+        NativeFnEntry {
+            name: "meow_vm_timestamp".to_string(),
+            param_count: 0,
+            gas_cost: 1, // 1 gas — cheap lookup of a pre-loaded context field
+            func: Box::new(move |_| NativeResult::Return(Some(Value::U64(c.borrow().timestamp())))),
+        }
+    };
+
+    vec![fresh_id, transfer, destroy, sender, rand, timestamp]
 }
