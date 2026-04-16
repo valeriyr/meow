@@ -144,11 +144,11 @@ async fn run_unknown_function_returns_error() {
 
 const ADD_SRC: &str = r#"
         module math;
-        fn add(a: u64, b: u64): u64 { return a + b; }
+        pub fn add(a: u64, b: u64): u64 { return a + b; }
     "#;
 const NOOP_SRC: &str = r#"
         module utils;
-        fn noop() {}
+        pub fn noop() {}
     "#;
 
 fn fake_client() -> NodeClient {

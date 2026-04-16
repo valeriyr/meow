@@ -26,7 +26,7 @@ The goal is not to ship a coin — it is to show how the pieces fit together.
 
 **Object model** — State is a flat map of typed objects, each identified by a 32-byte address and owned by a key pair. Transactions consume and produce objects. The gas coin is itself an object, so fees are enforced the same way as any other balance movement.
 
-**Smart contracts** — Programs are written in `.meow`, a minimal language compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
+**Smart contracts** — Programs are written in the Meow Language, compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
 
 **Networking** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node receives a block whose height is more than one ahead of its own chain tip, it requests the missing range from the sender and buffers any blocks that arrive during the catch-up.
 
@@ -67,8 +67,8 @@ crates/
 | [Quick Start](docs/quickstart.md) | Key generation, genesis, running a node, sending transactions |
 | [Object Model](docs/object-model.md) | Objects, ownership, versioning, gas coins, and lifecycle |
 | [Consensus](docs/consensus.md) | PoW, block validation rules, fork choice, reorgs, mempool, timestamps, and randomness |
-| [Contracts](docs/contracts.md) | `.meow` language reference, publishing a module, call argument format |
-| [MeowCoin](docs/meow-coin.md) | Built-in system coin reference |
+| [Contracts](docs/contracts.md) | The Meow Language reference, publishing a module, call argument format |
+| [Meow Coin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
 | [Example: time capsule](docs/example-time-capsule.md) | Time-locked contract using `meow_vm_timestamp()` |
 | [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |

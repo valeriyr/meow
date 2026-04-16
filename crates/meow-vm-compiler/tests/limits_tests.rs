@@ -131,7 +131,7 @@ fn too_many_dep_modules_rejected() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -141,7 +141,7 @@ fn too_many_dep_modules_rejected() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg,
@@ -175,7 +175,7 @@ fn dep_modules_at_limit_succeeds() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -185,7 +185,7 @@ fn dep_modules_at_limit_succeeds() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg,

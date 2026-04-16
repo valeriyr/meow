@@ -76,6 +76,8 @@ pub enum Stmt {
 
 #[derive(Debug, Clone)]
 pub struct AstFunction {
+    /// True if this function is declared with `pub`.
+    pub is_public: bool,
     pub name: String,
     pub params: Vec<(String, Type)>,
     pub return_type: Option<Type>,
@@ -84,8 +86,12 @@ pub struct AstFunction {
 
 #[derive(Debug, Clone)]
 pub struct AstStruct {
+    /// True if this struct/object is declared with `pub`.
+    pub is_public: bool,
     pub name: String,
-    pub fields: Vec<(String, Type)>,
+    /// Fields in declaration order: (is_public, name, type).
+    /// A field marked `pub` is readable from other modules (writes remain module-local).
+    pub fields: Vec<(bool, String, Type)>,
     pub is_object: bool,
 }
 

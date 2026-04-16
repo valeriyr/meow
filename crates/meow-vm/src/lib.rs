@@ -22,7 +22,7 @@
 //! let source = r#"
 //!     module math;
 //!
-//!     fn add(a: u64, b: u64): u64 {
+//!     pub fn add(a: u64, b: u64): u64 {
 //!         return a + b;
 //!     }
 //! "#;
@@ -233,10 +233,21 @@ impl Vm {
             return Err(VmError::TooManyDepModules(max_dep_modules));
         }
 
+        // Native built-ins can only be invoked from within contract bytecode, not directly.
+        if self.natives.contains_key(fn_name) {
+            return Err(VmError::NativeFunctionCallDirect(fn_name.to_string()));
+        }
+
         let func = self
             .module
             .get_function(fn_name)
             .ok_or_else(|| VmError::UndefinedFunction(fn_name.to_string()))?;
+
+        // Only public functions are externally callable.
+        if !func.is_public && !self.config.enable_call_private_functions() {
+            return Err(VmError::PrivateFunction(fn_name.to_string()));
+        }
+
         let param_count = func.params.len();
 
         let (return_value, final_locals) = self.call_inner(fn_name, &self.module, args, gas, 0)?;

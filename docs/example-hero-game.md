@@ -13,8 +13,21 @@ Create `hero.meow`:
 ```meow
 // hero.meow
 // An on-chain hero that earns experience, levels up, and can duel others.
+//
+// Each Hero is a uniquely-owned object. Spawn creates one and sends it to the
+// transaction sender. Duel resolves combat using on-chain randomness seeded
+// from the block's mining hash — results are deterministic across validators
+// but unpredictable at submission time.
 
-object Hero {
+module hero;
+
+// An on-chain hero owned by a player.
+//   id         — unique on-chain address, set at creation and immutable.
+//   name       — display name chosen at spawn; can be changed via rename.
+//   level      — starts at 1; increases as experience accumulates.
+//   experience — XP earned by winning duels; resets on each level-up.
+//   wins       — total number of duels won; never decreases.
+pub object Hero {
     id: address,
     name: string,
     level: u64,
@@ -22,8 +35,9 @@ object Hero {
     wins: u64
 }
 
-// Spawn a new level-1 hero and transfer it to the transaction sender.
-fn spawn(name: string) {
+// Creates a new level-1 Hero with the given name and transfers it to the
+// transaction sender.
+pub fn spawn(name: string) {
     let owner = meow_vm_sender();
     let hero = Hero {
         id: meow_vm_fresh_id(),
@@ -35,17 +49,20 @@ fn spawn(name: string) {
     meow_vm_transfer(hero, owner);
 }
 
-// Rename the hero.
-fn rename(hero: Hero, new_name: string) {
+// Changes the hero's display name. The hero is written back to its owner
+// with the updated name (no transfer or destroy occurs).
+pub fn rename(hero: Hero, new_name: string) {
     hero.name = new_name;
 }
 
-// Duel two heroes. Both must be owned by the transaction sender.
-// Each hero draws a random number — higher roll wins. The winner gains
-// XP equal to the loser's level × 25 and levels up automatically when
-// their XP reaches level × 100. The outcome is non-deterministic:
-// it is seeded from the block's mining hash (see Contracts → Randomness).
-fn duel(attacker: Hero, defender: Hero) {
+// Resolves a duel between two heroes. Both must be owned by the transaction sender.
+//
+// Each hero draws a random u64 from the block's RNG sequence. Higher roll wins.
+// The winner gains loser.level × 25 XP and levels up when XP reaches level × 100
+// (resetting the XP to the remainder). Ties go to the attacker.
+//
+// Aborts with code 1 if attacker and defender are the same hero.
+pub fn duel(attacker: Hero, defender: Hero) {
     meow_vm_abort(attacker.id != defender.id, 1, "A hero cannot duel itself");
 
     let attacker_roll = meow_vm_rand();
@@ -68,13 +85,13 @@ fn duel(attacker: Hero, defender: Hero) {
     }
 }
 
-// Transfer the hero to another player.
-fn transfer(hero: Hero, to: address) {
+// Transfers the hero to another player.
+pub fn transfer(hero: Hero, to: address) {
     meow_vm_transfer(hero, to);
 }
 
-// Permanently remove the hero from the chain.
-fn retire(hero: Hero) {
+// Permanently destroys the hero and removes it from chain state.
+pub fn retire(hero: Hero) {
     meow_vm_destroy(hero);
 }
 ```

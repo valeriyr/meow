@@ -31,8 +31,8 @@ use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
 
 #[test]
 fn mint_succeeds_and_creates_object() {
+    // mint is private — use the genesis execution path (privileged config, no gas deduction).
     let module_obj = make_default_module_object();
-    let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
         vec![
@@ -41,7 +41,7 @@ fn mint_succeeds_and_creates_object() {
         ],
     );
 
-    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = executor::execute_genesis_transaction(&tx, vec![module_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -49,15 +49,11 @@ fn mint_succeeds_and_creates_object() {
         1,
         "mint must create one coin"
     );
-    assert_eq!(result.changed_objects().len(), 1);
+    assert_eq!(result.changed_objects().len(), 0); // genesis does not deduct gas
     assert_eq!(result.destroyed_objects().len(), 0);
     let created = &result.created_objects()[0];
     assert_eq!(meow_coin::gas_meow_coin_balance(created).unwrap(), 100);
     assert_eq!(created.owner().address(), Some(&SENDER));
-    assert!(
-        meow_coin::gas_meow_coin_balance(find_gas_coin(&result)).unwrap() == 998909,
-        "gas must have been deducted from gas coin"
-    );
 }
 
 #[test]
@@ -340,20 +336,18 @@ fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
     // An unrelated module object in inputs (not declared in main module's imports)
     // must be silently ignored and must not prevent successful execution.
     let module_obj = make_default_module_object();
+    let coin_obj = make_coin_object(Address::fill(0xCC), SENDER, 50);
     let unrelated_bytes = compile_to_bytes(
         r#"
             module unrelated;
-            fn noop() {}
+            pub fn noop() {}
         "#,
     );
     let unrelated_obj = make_module_object(Address::fill(0x02), unrelated_bytes);
     let gas_obj = make_gas_coin_object();
-    let tx = make_meow_call_transaction(
-        "mint",
-        vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
-    );
+    let tx = make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = execute(&tx, vec![module_obj, unrelated_obj, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, coin_obj, unrelated_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.status(),
@@ -620,6 +614,39 @@ fn calling_native_function_by_name_returns_failure() {
 }
 
 #[test]
+fn calling_private_function_from_transaction_returns_failure() {
+    // Private functions are implementation details and cannot be invoked directly
+    // from a transaction — only `pub fn` is part of a module's external interface.
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(
+        r#"
+            module priv_test;
+            fn secret(): u64 { return 42; }
+        "#,
+    );
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(module_addr, Identifier::new("secret").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("private")),
+        "calling private fn from transaction must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
 fn execute_with_input_object_at_max_version_returns_failure() {
     let module_obj = make_default_module_object();
     let coin_obj = make_coin_object_at_version(Address::fill(0xCC), SENDER, 50, ObjectVersion::MAX);
@@ -733,7 +760,7 @@ fn execute_vm_abort_returns_failure() {
     // meow_vm_abort(condition: bool, code: u64, message: str) — aborts when condition is false.
     let src = r#"
         module abort_test;
-        fn do_abort() { meow_vm_abort(false, 1, "abort message"); }
+        pub fn do_abort() { meow_vm_abort(false, 1, "abort message"); }
     "#;
     let module_addr = Address::ZERO;
     let module_obj = make_module_object_from_src(src);
@@ -799,7 +826,7 @@ fn fresh_object_not_consumed_returns_failure() {
     // the generated object — effects.rs requires all fresh IDs to be consumed.
     let src = r#"
         module leak_test;
-        fn generate_id() { let id = meow_vm_fresh_id(); }
+        pub fn generate_id() { let id = meow_vm_fresh_id(); }
     "#;
     let module_addr = Address::ZERO;
     let module_obj = make_module_object_from_src(src);
@@ -1013,7 +1040,7 @@ fn make_dep_chain() -> (
     let dep_module = meow_vm_compiler::Compiler::compile(
         r#"
             module helper;
-            fn get(): u64 { return 42; }
+            pub fn get(): u64 { return 42; }
         "#,
         &[],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1023,7 +1050,7 @@ fn make_dep_chain() -> (
         r#"
             module main_mod;
             use helper@0x42;
-            fn run(): u64 { return helper::get(); }
+            pub fn run(): u64 { return helper::get(); }
         "#,
         &[(dep_addr, &dep_module)],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1051,7 +1078,7 @@ fn make_three_module_chain() -> (
     let c_module = meow_vm_compiler::Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 42; }
+            pub fn get(): u64 { return 42; }
         "#,
         &[],
         cfg.clone(),
@@ -1061,7 +1088,7 @@ fn make_three_module_chain() -> (
         r#"
             module b;
             use c@0x42;
-            fn run(): u64 { return c::get(); }
+            pub fn run(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -1071,7 +1098,7 @@ fn make_three_module_chain() -> (
         r#"
             module a;
             use b@0x43;
-            fn run(): u64 { return b::run(); }
+            pub fn run(): u64 { return b::run(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -1104,7 +1131,7 @@ fn make_diamond_dep_chain() -> (
     let d_module = meow_vm_compiler::Compiler::compile(
         r#"
             module d;
-            fn get(): u64 { return 42; }
+            pub fn get(): u64 { return 42; }
         "#,
         &[],
         cfg.clone(),
@@ -1114,7 +1141,7 @@ fn make_diamond_dep_chain() -> (
         r#"
             module b;
             use d@0x44;
-            fn run(): u64 { return d::get(); }
+            pub fn run(): u64 { return d::get(); }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1124,7 +1151,7 @@ fn make_diamond_dep_chain() -> (
         r#"
             module c;
             use d@0x44;
-            fn run(): u64 { return d::get(); }
+            pub fn run(): u64 { return d::get(); }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1135,7 +1162,7 @@ fn make_diamond_dep_chain() -> (
             module a;
             use b@0x42;
             use c@0x43;
-            fn run(): u64 { return b::run(); }
+            pub fn run(): u64 { return b::run(); }
         "#,
         &[
             (b_addr, &b_module),
@@ -1290,7 +1317,7 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
 
         object RandBox { id: address, value: u64 }
 
-        fn roll() {
+        pub fn roll() {
             let box = RandBox { id: meow_vm_fresh_id(), value: meow_vm_rand() };
             meow_vm_transfer(box, meow_vm_sender());
         }
@@ -1316,7 +1343,7 @@ fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
 
         object TimestampBox { id: address, value: u64 }
 
-        fn capture() {
+        pub fn capture() {
             let box = TimestampBox { id: meow_vm_fresh_id(), value: meow_vm_timestamp() };
             meow_vm_transfer(box, meow_vm_sender());
         }

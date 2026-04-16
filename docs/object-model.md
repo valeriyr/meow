@@ -75,7 +75,7 @@ Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroy
 
 ## Object IDs
 
-In `.meow`, every object struct must declare `id: address` as its first field:
+In the Meow Language, every object struct must declare `id: address` as its first field:
 
 ```
 object Hero { id: address, level: u64, experience: u64 }

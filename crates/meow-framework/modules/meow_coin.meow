@@ -1,28 +1,48 @@
+// meow_coin — The built-in Meow Coin module.
+//
+// Meow Coin is the native coin of MEOW. It is defined here and published at genesis
+// at the fixed address 0x01. Every genesis allocation creates one MeowCoin object
+// whose balance equals the allocated amount.
+//
+// All functions except mint are public and callable from transactions.
+// mint is private: it can only be invoked at genesis to create the initial supply.
+
 module meow_coin;
 
-object MeowCoin { id: address, balance: u64 }
+// A single Meow Coin. Each instance is an owned object with a unique id and a
+// non-negative balance. The balance field is readable from other modules.
+pub object MeowCoin { id: address, pub balance: u64 }
 
+// Creates a new MeowCoin with the given balance and transfers it to owner.
+// Private: callable only at genesis, not from user transactions.
 fn mint(balance: u64, owner: address) {
     let coin = MeowCoin { id: meow_vm_fresh_id(), balance: balance };
     meow_vm_transfer(coin, owner);
 }
 
-fn burn(coin: MeowCoin) {
+// Permanently destroys a coin, removing it from chain state.
+// The balance is irrecoverably lost.
+pub fn burn(coin: MeowCoin) {
     meow_vm_destroy(coin);
 }
 
-fn transfer(coin: MeowCoin, to: address) {
+// Transfers the whole coin to a new owner.
+pub fn transfer(coin: MeowCoin, to: address) {
     meow_vm_transfer(coin, to);
 }
 
-fn merge(from: MeowCoin, to: MeowCoin) {
+// Merges from into to: adds from.balance to to.balance, then destroys from.
+// Both coins must be owned by the transaction sender.
+pub fn merge(from: MeowCoin, to: MeowCoin) {
     to.balance = to.balance + from.balance;
 
     from.balance = 0;
     meow_vm_destroy(from);
 }
 
-fn split(from: MeowCoin, amount: u64) {
+// Splits amount out of from and sends the new coin to the transaction sender.
+// from.balance is reduced by amount. Aborts with code 1 if from.balance < amount.
+pub fn split(from: MeowCoin, amount: u64) {
     meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;
@@ -32,7 +52,9 @@ fn split(from: MeowCoin, amount: u64) {
     meow_vm_transfer(coin, meow_vm_sender());
 }
 
-fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
+// Splits amount out of from and sends the new coin to to.
+// from.balance is reduced by amount. Aborts with code 1 if from.balance < amount.
+pub fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
     meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;

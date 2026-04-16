@@ -126,6 +126,10 @@ pub struct VmConfig {
     /// may be loaded for a single call. Prevents unbounded memory use from
     /// deeply nested or wide dependency graphs.
     max_dep_modules: usize,
+    /// Whether to allow calls to private functions.
+    /// This is used to enforce that only `pub fn` can be called from outside a module
+    /// (e.g. directly from a transaction).
+    enable_call_private_functions: bool,
 }
 
 impl VmConfig {
@@ -140,6 +144,11 @@ impl VmConfig {
         self.max_dep_modules
     }
 
+    /// Returns whether calls to private functions are allowed.
+    pub fn enable_call_private_functions(&self) -> bool {
+        self.enable_call_private_functions
+    }
+
     /// Returns a new config with the maximum call stack depth set.
     pub fn with_max_call_depth(mut self, max: usize) -> Self {
         self.max_call_depth = max;
@@ -151,6 +160,12 @@ impl VmConfig {
         self.max_dep_modules = max;
         self
     }
+
+    /// Returns a new config with the `enable_call_private_functions` flag set.
+    pub fn with_enable_call_private_functions(mut self, enable: bool) -> Self {
+        self.enable_call_private_functions = enable;
+        self
+    }
 }
 
 impl Default for VmConfig {
@@ -158,6 +173,7 @@ impl Default for VmConfig {
         Self {
             max_call_depth: 256,
             max_dep_modules: 64,
+            enable_call_private_functions: false,
         }
     }
 }

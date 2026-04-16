@@ -161,7 +161,7 @@ fn cross_module_object_as_field_type_rejected() {
         r#"
             module coin;
 
-            object Coin { id: address, balance: u64 }
+            pub object Coin { id: address, balance: u64 }
         "#,
     )
     .expect("coin must compile");
@@ -194,7 +194,7 @@ fn missing_transitive_dep_is_rejected() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -204,7 +204,7 @@ fn missing_transitive_dep_is_rejected() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -237,7 +237,7 @@ fn complete_transitive_closure_is_accepted() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -247,7 +247,7 @@ fn complete_transitive_closure_is_accepted() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),

@@ -256,80 +256,80 @@ fn bool_or() {
 
 const ADD_SRC: &str = r#"
         module math;
-        fn add(a: u64, b: u64): u64 { return a + b; }
+        pub fn add(a: u64, b: u64): u64 { return a + b; }
     "#;
 
 const SUB_SRC: &str = r#"
         module math;
-        fn sub(a: u64, b: u64): u64 { return a - b; }
+        pub fn sub(a: u64, b: u64): u64 { return a - b; }
     "#;
 
 const MUL_SRC: &str = r#"
         module math;
-        fn mul(a: u64, b: u64): u64 { return a * b; }
+        pub fn mul(a: u64, b: u64): u64 { return a * b; }
     "#;
 
 const DIV_SRC: &str = r#"
         module math;
-        fn div(a: u64, b: u64): u64 { return a / b; }
+        pub fn div(a: u64, b: u64): u64 { return a / b; }
     "#;
 
 const REM_SRC: &str = r#"
         module math;
-        fn rem(a: u64, b: u64): u64 { return a % b; }
+        pub fn rem(a: u64, b: u64): u64 { return a % b; }
     "#;
 
 const GROUP_EXPR_SRC_WITH_PARENTHESES: &str = r#"
         module math;
-        fn f(a: u64, b: u64, c: u64): u64 { return (a + b) % c; }
+        pub fn f(a: u64, b: u64, c: u64): u64 { return (a + b) % c; }
     "#;
 
 const GROUP_EXPR_SRC_WITHOUT_PARENTHESES: &str = r#"
         module math;
-        fn f(a: u64, b: u64, c: u64): u64 { return a + b % c; }
+        pub fn f(a: u64, b: u64, c: u64): u64 { return a + b % c; }
     "#;
 
 const EVEN_SRC: &str = r#"
         module math;
-        fn is_even(n: u64): bool { return n % 2 == 0; }
+        pub fn is_even(n: u64): bool { return n % 2 == 0; }
     "#;
 
 const EQUAL_SRC: &str = r#"
         module math;
-        fn eq(a: u64, b: u64): bool { return a == b; }
+        pub fn eq(a: u64, b: u64): bool { return a == b; }
     "#;
 
 const NOT_EQUAL_SRC: &str = r#"
         module math;
-        fn ne(a: u64, b: u64): bool { return a != b; }
+        pub fn ne(a: u64, b: u64): bool { return a != b; }
     "#;
 
 const LT_SRC: &str = r#"
         module math;
-        fn lt(a: u64, b: u64): bool { return a < b; }
+        pub fn lt(a: u64, b: u64): bool { return a < b; }
     "#;
 
 const LE_SRC: &str = r#"
         module math;
-        fn le(a: u64, b: u64): bool { return a <= b; }
+        pub fn le(a: u64, b: u64): bool { return a <= b; }
     "#;
 
 const GT_SRC: &str = r#"
         module math;
-        fn gt(a: u64, b: u64): bool { return a > b; }
+        pub fn gt(a: u64, b: u64): bool { return a > b; }
     "#;
 
 const GE_SRC: &str = r#"
         module math;
-        fn ge(a: u64, b: u64): bool { return a >= b; }
+        pub fn ge(a: u64, b: u64): bool { return a >= b; }
     "#;
 
 const AND_SRC: &str = r#"
         module math;
-        fn f(a: bool, b: bool): bool { return a && b; }
+        pub fn f(a: bool, b: bool): bool { return a && b; }
     "#;
 
 const OR_SRC: &str = r#"
         module math;
-        fn f(a: bool, b: bool): bool { return a || b; }
+        pub fn f(a: bool, b: bool): bool { return a || b; }
     "#;

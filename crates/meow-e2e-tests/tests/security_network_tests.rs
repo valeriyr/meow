@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use meow_e2e_tests::{test_node::TestNode, test_utils};
+use meow_genesis::Genesis;
 use meow_types::{
     address::Address,
     identifier::Identifier,
@@ -122,27 +123,24 @@ async fn reusing_same_gas_coin_ref_is_forbidden() {
 #[tokio::test]
 #[serial]
 async fn reusing_same_owned_object_input_ref_is_forbidden() {
-    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    // Genesis with two coins for sender: one used as gas, the other as the owned object.
+    let keypair = test_utils::test_keypair();
+    let sender = Address::from(&keypair);
+    let genesis = Genesis::build(&[(sender, 10_000), (sender, 500)]).expect("genesis must build");
     let receiver = Address::fill(0xAB);
 
     let node = TestNode::start_with_genesis(&genesis).await;
     let client = node.client();
 
-    // Mint a new coin (owned object).
-    let gas_for_mint = test_utils::get_object_ref(client, &coin_addr).await;
-    let mint_call = Call::new(
-        meow_coin::MEOW_COIN_MODULE_ADDRESS,
-        Identifier::new("mint").unwrap(),
-        vec![Input::raw(&11u64).unwrap(), Input::raw(&sender).unwrap()],
-    );
-    let mint_tx = Transaction::new(sender, gas_for_mint, TransactionType::MeowCall(mint_call));
-    let mint_result = test_utils::sign_and_execute(client, &keypair, mint_tx).await;
-    assert!(matches!(mint_result.status(), ExecutionStatus::Success));
+    // Identify the two coins: gas coin (first one found) and the owned coin (the other).
+    let all_coin_addrs = test_utils::genesis_coin_addrs(&genesis, sender);
+    let gas_coin_addr = all_coin_addrs[0];
+    let owned_coin_addr = all_coin_addrs[1];
 
-    let stale_owned_ref = mint_result.created_objects()[0].object_ref();
+    let stale_owned_ref = test_utils::get_object_ref(client, &owned_coin_addr).await;
 
     // Transfer the minted coin to receiver (succeeds).
-    let gas_for_transfer1 = test_utils::get_object_ref(client, &coin_addr).await;
+    let gas_for_transfer1 = test_utils::get_object_ref(client, &gas_coin_addr).await;
     let transfer1 = Call::new(
         meow_coin::MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("transfer").unwrap(),
@@ -163,7 +161,7 @@ async fn reusing_same_owned_object_input_ref_is_forbidden() {
     ));
 
     // Try to transfer the same coin again using the stale ref (must be rejected at submit time).
-    let gas_for_transfer2 = test_utils::get_object_ref(client, &coin_addr).await;
+    let gas_for_transfer2 = test_utils::get_object_ref(client, &gas_coin_addr).await;
     let transfer2 = Call::new(
         meow_coin::MEOW_COIN_MODULE_ADDRESS,
         Identifier::new("transfer").unwrap(),

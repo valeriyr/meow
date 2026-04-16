@@ -5,6 +5,44 @@ use meow_vm_types::{address::Address, types::Type};
 
 use crate::ast::{AstFunction, AstItem, AstStruct, BinOp, Expr, Stmt};
 
+/// Strip `//` line comments from source, preserving all character positions
+/// by replacing comment text (not the newline) with spaces.
+/// String literals are handled correctly — `//` inside `"..."` is not a comment.
+pub fn strip_line_comments(source: &str) -> String {
+    let mut result = String::with_capacity(source.len());
+    let mut in_string = false;
+    let mut chars = source.chars().peekable();
+
+    while let Some(ch) = chars.next() {
+        if in_string {
+            result.push(ch);
+            if ch == '"' {
+                in_string = false;
+            }
+        } else if ch == '"' {
+            result.push(ch);
+            in_string = true;
+        } else if ch == '/' && chars.peek() == Some(&'/') {
+            // Consume the second '/' and everything up to (not including) the newline.
+            chars.next(); // consume second '/'
+            result.push(' ');
+            result.push(' ');
+            for ch2 in chars.by_ref() {
+                if ch2 == '\n' {
+                    result.push('\n');
+                    break;
+                } else {
+                    result.push(' ');
+                }
+            }
+        } else {
+            result.push(ch);
+        }
+    }
+
+    result
+}
+
 type ParseErr<'src> = extra::Err<Rich<'src, char>>;
 type BoxedParser<'src, T> = chumsky::Boxed<'src, 'src, &'src str, T, ParseErr<'src>>;
 
@@ -312,7 +350,23 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     // ── Top-level items ───────────────────────────────────────────────────────
 
-    let struct_field = ident.then_ignore(just(':').padded()).then(ty);
+    // Optional `pub` keyword — produces `true` if present, `false` otherwise.
+    let is_pub = text::ascii::keyword("pub")
+        .padded()
+        .to(true)
+        .or_not()
+        .map(|b| b.unwrap_or(false));
+
+    // struct field: `pub? name: type`
+    let struct_field = text::ascii::keyword("pub")
+        .padded()
+        .to(true)
+        .or_not()
+        .map(|b| b.unwrap_or(false))
+        .then(ident)
+        .then_ignore(just(':').padded())
+        .then(ty)
+        .map(|((is_field_pub, name), ty)| (is_field_pub, name, ty));
 
     let struct_body = struct_field
         .separated_by(just(',').padded())
@@ -320,12 +374,15 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .collect::<Vec<_>>()
         .delimited_by(just('{').padded(), just('}').padded());
 
-    // struct Foo { x: u64, y: bool }
-    let struct_item: BoxedParser<'src, AstItem> = kw("struct")
-        .ignore_then(ident)
-        .then(struct_body)
-        .map(|(name, fields)| {
+    // pub? struct Foo { pub? x: u64, y: bool }
+    let struct_item: BoxedParser<'src, AstItem> = is_pub
+        .clone()
+        .then_ignore(kw("struct"))
+        .then(ident)
+        .then(struct_body.clone())
+        .map(|((is_public, name), fields)| {
             AstItem::Struct(AstStruct {
+                is_public,
                 name,
                 fields,
                 is_object: false,
@@ -333,12 +390,15 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .boxed();
 
-    // object Foo { id: address, x: u64 }
-    let object_item: BoxedParser<'src, AstItem> = kw("object")
-        .ignore_then(ident)
+    // pub? object Foo { id: address, pub? x: u64 }
+    let object_item: BoxedParser<'src, AstItem> = is_pub
+        .clone()
+        .then_ignore(kw("object"))
+        .then(ident)
         .then(struct_body)
-        .map(|(name, fields)| {
+        .map(|((is_public, name), fields)| {
             AstItem::Struct(AstStruct {
+                is_public,
                 name,
                 fields,
                 is_object: true,
@@ -346,11 +406,12 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .boxed();
 
-    // fn foo(a: u64, b: bool): RetType { ... }
+    // pub? fn foo(a: u64, b: bool): RetType { ... }
     let param = ident.then_ignore(just(':').padded()).then(ty);
 
-    let fn_item: BoxedParser<'src, AstItem> = kw("fn")
-        .ignore_then(ident)
+    let fn_item: BoxedParser<'src, AstItem> = is_pub
+        .then_ignore(kw("fn"))
+        .then(ident)
         .then(
             param
                 .separated_by(just(',').padded())
@@ -364,8 +425,9 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 .collect::<Vec<_>>()
                 .delimited_by(just('{').padded(), just('}').padded()),
         )
-        .map(|(((name, params), return_type), body)| {
+        .map(|((((is_public, name), params), return_type), body)| {
             AstItem::Fn(AstFunction {
+                is_public,
                 name,
                 params,
                 return_type,

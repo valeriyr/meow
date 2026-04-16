@@ -50,4 +50,12 @@ pub enum VmError {
     /// An object is missing the required `id: address` first field.
     #[error("invalid object definition '{0}': first field must be 'id: address'")]
     InvalidObject(String),
+
+    /// A private function was called from outside its module (e.g. directly from a transaction).
+    #[error("function '{0}' is private — only `pub fn` can be called from outside the module")]
+    PrivateFunction(String),
+
+    /// A native built-in was used as a direct call target (e.g. from a transaction).
+    #[error("'{0}' is a native function and cannot be called directly from outside a contract")]
+    NativeFunctionCallDirect(String),
 }

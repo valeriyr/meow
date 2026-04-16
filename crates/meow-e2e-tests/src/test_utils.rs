@@ -38,6 +38,16 @@ pub fn genesis_coin_addr(genesis: &Genesis, sender: Address) -> Address {
         .address()
 }
 
+/// Return all coin addresses owned by `sender` in genesis.
+pub fn genesis_coin_addrs(genesis: &Genesis, sender: Address) -> Vec<Address> {
+    genesis
+        .objects()
+        .iter()
+        .filter(|o| o.owner().address() == Some(&sender))
+        .map(|o| *o.address())
+        .collect()
+}
+
 /// Extract the published module address from a successful execution result.
 pub fn published_module_addr(result: &ExecutionResult) -> Address {
     *result
@@ -128,7 +138,7 @@ pub fn module_math() -> Vec<u8> {
     let module = builder::build(
         r#"
             module math;
-            fn add(a: u64, b: u64): u64 { return a + b; }
+            pub fn add(a: u64, b: u64): u64 { return a + b; }
         "#,
         &[],
     )
@@ -141,7 +151,7 @@ pub fn module_noop() -> Vec<u8> {
     let module = builder::build(
         r#"
             module noop;
-            fn noop() {}
+            pub fn noop() {}
         "#,
         &[],
     )

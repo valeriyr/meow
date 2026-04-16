@@ -70,5 +70,5 @@ fn out_of_gas_returns_error() {
 
 const SRC: &str = r#"
         module gas_test;
-        fn add(a: u64, b: u64): u64 { return a + b; }
+        pub fn add(a: u64, b: u64): u64 { return a + b; }
     "#;

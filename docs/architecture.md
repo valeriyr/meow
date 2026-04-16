@@ -13,7 +13,7 @@
 | **meow-nakamoto-types** | Block and block-header type definitions |
 | **meow-types** | Addresses, digests, objects, transactions, keys |
 | **meow-vm** | Smart contract runtime |
-| **meow-vm-compiler** | `.meow` source → bytecode |
+| **meow-vm-compiler** | The Meow Language source → bytecode |
 | **meow-vm-adapter** | VM ↔ chain glue |
 | **meow-vm-types** | VM type definitions |
 | **meow-gossip-network** | libp2p peer-to-peer networking |

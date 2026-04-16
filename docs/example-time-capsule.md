@@ -13,17 +13,29 @@ Create `time-capsule.meow`:
 ```meow
 // time-capsule.meow
 // A message sealed on-chain until a future block time.
+//
+// seal creates a Capsule that stores a message and an unlock_time computed as
+// the current block timestamp plus a caller-supplied delay. open destroys the
+// capsule once the block time reaches unlock_time — before that the transaction
+// fails. reclaim lets the owner cancel early; transfer changes ownership.
 
-object Capsule {
+module time_capsule;
+
+// A time-locked message stored on-chain.
+//   id          — unique on-chain address, set at creation and immutable.
+//   owner       — the address allowed to reclaim, transfer, or open this capsule.
+//   unlock_time — Unix milliseconds after which open is permitted.
+//   message     — the sealed message; readable in the execution result after open.
+pub object Capsule {
     id: address,
     owner: address,
     unlock_time: u64,
     message: string
 }
 
-// Seal a message that cannot be opened for at least `delay_ms` milliseconds.
-// `delay_ms` is added to the current block timestamp to compute the unlock time.
-fn seal(message: string, delay_ms: u64) {
+// Creates a Capsule containing message, locked until at least delay_ms milliseconds
+// after the current block timestamp. Transfers the capsule to the transaction sender.
+pub fn seal(message: string, delay_ms: u64) {
     let owner = meow_vm_sender();
     let capsule = Capsule {
         id: meow_vm_fresh_id(),
@@ -34,21 +46,24 @@ fn seal(message: string, delay_ms: u64) {
     meow_vm_transfer(capsule, owner);
 }
 
-// Open a capsule. Aborts if the unlock time has not been reached.
-// Once open, the capsule is destroyed — inspect the execution result to read the message.
-fn open(capsule: Capsule) {
+// Destroys the capsule and makes its message visible in the execution result.
+// Aborts with code 1 if the current block timestamp has not yet reached unlock_time.
+pub fn open(capsule: Capsule) {
     meow_vm_abort(meow_vm_timestamp() >= capsule.unlock_time, 1, "Capsule is not ready to open yet");
     meow_vm_destroy(capsule);
 }
 
-// Reclaim a capsule before it unlocks. Only the original owner can do this.
-fn reclaim(capsule: Capsule) {
+// Destroys the capsule without waiting for the unlock time.
+// Aborts with code 2 if the transaction sender is not the capsule owner.
+pub fn reclaim(capsule: Capsule) {
     meow_vm_abort(capsule.owner == meow_vm_sender(), 2, "Only the owner can reclaim");
     meow_vm_destroy(capsule);
 }
 
-// Transfer the capsule to a new owner before it is opened.
-fn transfer(capsule: Capsule, to: address) {
+// Transfers the capsule to a new owner. Updates capsule.owner so the new owner
+// can reclaim, transfer, or open it. Aborts with code 3 if the sender is not
+// the current owner.
+pub fn transfer(capsule: Capsule, to: address) {
     meow_vm_abort(capsule.owner == meow_vm_sender(), 3, "Only the owner can transfer");
     capsule.owner = to;
     meow_vm_transfer(capsule, to);

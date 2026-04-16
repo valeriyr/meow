@@ -174,21 +174,35 @@ impl std::fmt::Display for Value {
     }
 }
 
+/// A field in a struct or object definition, with its visibility flag.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldDef {
+    /// The field name.
+    pub name: String,
+    /// The field type.
+    pub ty: Type,
+    /// True if the field is readable from modules other than the one that declared this type.
+    /// Field writes are always restricted to the declaring module regardless of this flag.
+    pub is_public: bool,
+}
+
 /// Schema of a user-defined struct or object.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructDef {
     /// The struct or object name.
     pub name: String,
-    /// Fields in declaration order (name, type).
-    pub fields: Vec<(String, Type)>,
+    /// Fields in declaration order.
+    pub fields: Vec<FieldDef>,
     /// True if declared with the `object` keyword.
     /// Object structs must have `id: address` as their first field.
     pub is_object: bool,
+    /// True if this type is accessible from modules other than the one that declared it.
+    pub is_public: bool,
 }
 
 impl StructDef {
     /// Returns the index of `field_name` in this struct, or `None` if not found.
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
-        self.fields.iter().position(|(n, _)| n == field_name)
+        self.fields.iter().position(|f| f.name == field_name)
     }
 }

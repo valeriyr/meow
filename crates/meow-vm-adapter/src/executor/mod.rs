@@ -21,7 +21,7 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::module::Module;
+use meow_vm_types::{config::VmConfig, module::Module};
 
 use crate::{
     context::Context, executor::error::ExecutorError, external_context::ExternalContext, natives,
@@ -66,6 +66,7 @@ pub fn execute(
                 call,
                 &inputs,
                 &mut gas,
+                config::vm_config(),
                 external_context,
             ),
             TransactionType::MeowModulePublish(module) => {
@@ -104,6 +105,7 @@ pub fn execute_genesis_transaction(
             call,
             &inputs,
             &mut gas_meter,
+            config::vm_config_privileged(),
             &ExternalContext::default(),
         ),
         TransactionType::MeowModulePublish(module) => {
@@ -119,6 +121,7 @@ fn execute_meow_call(
     call: &Call,
     inputs: &[Object],
     gas: &mut GasMeter,
+    vm_config: VmConfig,
     external_context: &ExternalContext,
 ) -> ExecutionResult {
     let module_address = call.module();
@@ -166,13 +169,7 @@ fn execute_meow_call(
         external_context.timestamp(),
     )));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(
-        module,
-        natives,
-        GasSchedule::default(),
-        deps,
-        config::vm_config(),
-    );
+    let vm = Vm::new(module, natives, GasSchedule::default(), deps, vm_config);
 
     // Execute the function.
     let call_result = match vm.call(fn_name, vm_args, gas) {

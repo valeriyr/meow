@@ -11,7 +11,7 @@ use meow_vm_types::types::Value;
 fn let_binding() {
     let src = r#"
         module test;
-        fn compute(x: u64): u64 { let a = x + 1; let b = a * 2; return b; }
+        pub fn compute(x: u64): u64 { let a = x + 1; let b = a * 2; return b; }
     "#;
     assert_eq!(
         utils::run(src, "compute", vec![Value::U64(4)]),
@@ -27,7 +27,7 @@ fn let_binding() {
 fn if_branch_taken() {
     let src = r#"
         module test;
-        fn max(a: u64, b: u64): u64 { if a > b { return a; } return b; }
+        pub fn max(a: u64, b: u64): u64 { if a > b { return a; } return b; }
     "#;
     assert_eq!(
         utils::run(src, "max", vec![Value::U64(10), Value::U64(5)]),
@@ -43,7 +43,7 @@ fn if_branch_taken() {
 fn if_mutates_local() {
     let src = r#"
         module test;
-        fn clamp(x: u64, max: u64): u64 {
+        pub fn clamp(x: u64, max: u64): u64 {
             let result = x;
             if x > max { result = max; }
             return result;
@@ -67,7 +67,7 @@ fn if_mutates_local() {
 fn if_else_branches() {
     let src = r#"
         module test;
-        fn classify(x: u64): u64 { if x > 10 { return 1; } else { return 0; } }
+        pub fn classify(x: u64): u64 { if x > 10 { return 1; } else { return 0; } }
     "#;
     assert_eq!(
         utils::run(src, "classify", vec![Value::U64(20)]),
@@ -84,7 +84,7 @@ fn if_else_with_let_in_both_branches() {
     let src = r#"
         module test;
 
-        fn abs_diff(a: u64, b: u64): u64 {
+        pub fn abs_diff(a: u64, b: u64): u64 {
             if a > b { return a - b; } else { return b - a; }
         }
     "#;
@@ -107,8 +107,8 @@ fn function_call_chain() {
     let src = r#"
         module test;
 
-        fn double(n: u64): u64 { return n * 2; }
-        fn quad(n: u64): u64 { return double(double(n)); }
+        pub fn double(n: u64): u64 { return n * 2; }
+        pub fn quad(n: u64): u64 { return double(double(n)); }
     "#;
     assert_eq!(
         utils::run(src, "quad", vec![Value::U64(3)]),
@@ -124,7 +124,7 @@ fn function_call_chain() {
 fn void_function_returns_none() {
     let src = r#"
         module test;
-        fn do_nothing() {}
+        pub fn do_nothing() {}
     "#;
     let vm = utils::vm(utils::compile(src));
     let mut gas = GasMeter::unlimited();
@@ -137,9 +137,9 @@ fn void_function_returns_none() {
 fn void_call_as_statement_does_not_corrupt_stack() {
     let src = r#"
         module test;
-    
-        fn noop() {}
-        fn compute(x: u64): u64 { noop(); return x * 2; }
+
+        pub fn noop() {}
+        pub fn compute(x: u64): u64 { noop(); return x * 2; }
     "#;
     assert_eq!(
         utils::run(src, "compute", vec![Value::U64(5)]),

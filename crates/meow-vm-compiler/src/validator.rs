@@ -5,7 +5,7 @@ use meow_vm_types::{
     config::CompilerConfig,
     identifier::{self, RESERVED_FUNCTION_NAMES},
     module::Module,
-    types::{StructDef, Type},
+    types::{FieldDef, StructDef, Type},
 };
 
 use crate::{Result, ast::AstStruct, error::CompilerError};
@@ -56,7 +56,7 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
         )));
     }
 
-    for (field_name, ty) in &def.fields {
+    for (is_pub, field_name, ty) in &def.fields {
         validate_identifier(
             field_name,
             &format!("field in {kind} '{}'", def.name),
@@ -70,12 +70,19 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
                 ty.name()
             )));
         }
+        if *is_pub && !def.is_public {
+            return Err(CompilerError::Message(format!(
+                "{kind} '{}': field '{field_name}' is declared `pub` but the {kind} itself is private — \
+                 `pub` fields are only allowed on `pub` structs and objects",
+                def.name,
+            )));
+        }
     }
 
     // Objects must have `id: address` as their first field.
     if def.is_object {
         match def.fields.first() {
-            Some((name, Type::Address)) if name == "id" => {}
+            Some((_is_pub, name, Type::Address)) if name == "id" => {}
             _ => {
                 return Err(CompilerError::Message(format!(
                     "object '{}': first field must be 'id: address'",
@@ -86,6 +93,18 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
     }
 
     Ok(())
+}
+
+/// Build a [`FieldDef`] list from an AST struct's field tuples.
+pub fn ast_fields_to_field_defs(fields: &[(bool, String, Type)]) -> Vec<FieldDef> {
+    fields
+        .iter()
+        .map(|(is_public, name, ty)| FieldDef {
+            name: name.clone(),
+            ty: ty.clone(),
+            is_public: *is_public,
+        })
+        .collect()
 }
 
 /// Detect circular import dependencies among the provided dep modules.
@@ -171,21 +190,21 @@ pub fn validate_struct_refs(
 
     for def in local_structs {
         let kind = if def.is_object { "object" } else { "struct" };
-        for (field_name, ty) in &def.fields {
-            if let Type::Struct(sname) = ty {
+        for field in &def.fields {
+            if let Type::Struct(sname) = &field.ty {
                 // Reject objects used as struct field types.
                 if let Some(referenced) = all_structs.iter().find(|s| s.name == *sname) {
                     if referenced.is_object {
                         return Err(CompilerError::Message(format!(
-                            "{kind} '{}': field '{field_name}' has type '{sname}' which is an object — \
+                            "{kind} '{}': field '{}' has type '{sname}' which is an object — \
                              objects cannot be used as struct field types",
-                            def.name,
+                            def.name, field.name,
                         )));
                     }
                 } else if !known_struct_names.contains(sname.as_str()) {
                     return Err(CompilerError::Message(format!(
-                        "{kind} '{}': field '{field_name}' references unknown struct '{sname}'",
-                        def.name,
+                        "{kind} '{}': field '{}' references unknown struct '{sname}'",
+                        def.name, field.name,
                     )));
                 }
             }
@@ -232,8 +251,8 @@ fn dfs_cycle<'a>(
     in_stack.insert(name.to_string());
 
     if let Some(def) = all.iter().find(|s| s.name == name) {
-        for (_, ty) in &def.fields {
-            if let Type::Struct(dep_name) = ty {
+        for field in &def.fields {
+            if let Type::Struct(dep_name) = &field.ty {
                 if !visited.contains(dep_name.as_str()) {
                     if let Some(c) = dfs_cycle(dep_name, all, visited, in_stack) {
                         return Some(c);

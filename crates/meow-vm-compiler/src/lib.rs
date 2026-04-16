@@ -14,9 +14,18 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use chumsky::Parser;
 use error::CompilerError;
-use meow_vm_types::{address::Address, config::CompilerConfig, module::Module, types::StructDef};
+use meow_vm_types::{
+    address::Address,
+    config::CompilerConfig,
+    module::Module,
+    types::{StructDef, Type},
+};
 
-use crate::{ast::AstItem, codegen::Codegen, parser::parser};
+use crate::{
+    ast::AstItem,
+    codegen::Codegen,
+    parser::{parser, strip_line_comments},
+};
 
 /// An error that can occur during compilation.
 pub type Result<T> = std::result::Result<T, CompilerError>;
@@ -68,6 +77,8 @@ impl Compiler {
     ///
     /// No dep modules need to be provided — this is intended for callers that need
     /// to know *which* modules to fetch before calling [`Compiler::compile`].
+    ///
+    /// Line comments (`// ...`) are stripped before parsing.
     pub fn extract_deps(source: &str) -> Result<Vec<(String, Address)>> {
         let (_, _, use_decls) = Self::parse_and_extract(source)?;
         Ok(use_decls)
@@ -199,16 +210,20 @@ impl Compiler {
                 validator::validate_struct_def(ast_struct, &config)?;
                 module.structs.push(StructDef {
                     name: ast_struct.name.clone(),
-                    fields: ast_struct.fields.clone(),
+                    fields: validator::ast_fields_to_field_defs(&ast_struct.fields),
                     is_object: ast_struct.is_object,
+                    is_public: ast_struct.is_public,
                 });
             }
         }
 
         // Build dep struct list.
-        // Structs are stored under source-level qualified names (`dep_name::StructName`)
-        // for compile-time look-up. The codegen later translates these to address-qualified
-        // names (`@<hex>::StructName`) in the emitted bytecode.
+        // Only `pub` structs from dep modules are included — private types are not visible
+        // to other modules. Structs are stored under source-level qualified names
+        // (`dep_name::StructName`) for compile-time look-up. The codegen later translates
+        // these to address-qualified names (`@<hex>::StructName`) in the emitted bytecode.
+        // All fields (including private ones) are retained so that the codegen can enforce
+        // per-field read visibility.
         let dep_structs: Vec<StructDef> = deps
             .iter()
             .filter_map(|(addr, dep)| {
@@ -219,11 +234,17 @@ impl Compiler {
                     .iter()
                     .find(|(_, a)| *a == addr)
                     .map(|(n, _)| n.clone())?;
-                Some(dep.structs.iter().map(move |s| StructDef {
-                    name: format!("{}::{}", dep_name, s.name),
-                    fields: s.fields.clone(),
-                    is_object: s.is_object,
-                }))
+                Some(
+                    dep.structs
+                        .iter()
+                        .filter(|s| s.is_public) // only pub types cross-module visible
+                        .map(move |s| StructDef {
+                            name: format!("{}::{}", dep_name, s.name),
+                            fields: s.fields.clone(),
+                            is_object: s.is_object,
+                            is_public: true,
+                        }),
+                )
             })
             .flatten()
             .collect();
@@ -235,11 +256,29 @@ impl Compiler {
         let mut all_structs = module.structs.clone();
         all_structs.extend(dep_structs);
 
+        // Build dep module map (address → Module) for function visibility lookup in codegen.
+        let dep_modules: HashMap<Address, &Module> = deps.iter().map(|(a, m)| (*a, *m)).collect();
+
+        // Pre-collect local function return types for intra-module type inference.
+        let local_fn_return_types: HashMap<String, Option<Type>> = items
+            .iter()
+            .filter_map(|item| match item {
+                AstItem::Fn(f) => Some((f.name.clone(), f.return_type.clone())),
+                _ => None,
+            })
+            .collect();
+
         // Second pass: compile functions.
         for item in items {
             if let AstItem::Fn(ast_fn) = item {
-                let func =
-                    Codegen::compile_function(&all_structs, &dep_addresses, ast_fn, &config)?;
+                let func = Codegen::compile_function(
+                    &all_structs,
+                    &dep_addresses,
+                    dep_modules.clone(),
+                    &local_fn_return_types,
+                    ast_fn,
+                    &config,
+                )?;
                 module.functions.push(func);
             }
         }
@@ -259,14 +298,18 @@ impl Compiler {
     /// `(name, address)` pairs in source order.
     #[allow(clippy::type_complexity)]
     fn parse_and_extract(source: &str) -> Result<(Vec<AstItem>, String, Vec<(String, Address)>)> {
-        let items = parser().parse(source).into_result().map_err(|errs| {
-            let msg = errs
-                .iter()
-                .map(|e| e.to_string())
-                .collect::<Vec<_>>()
-                .join("; ");
-            CompilerError::Message(msg)
-        })?;
+        let source_no_comments = strip_line_comments(source);
+        let items = parser()
+            .parse(source_no_comments.as_str())
+            .into_result()
+            .map_err(|errs| {
+                let msg = errs
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                CompilerError::Message(msg)
+            })?;
 
         let module_name = match items.first() {
             Some(AstItem::ModuleDecl(name)) => name.clone(),

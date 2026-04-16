@@ -62,7 +62,7 @@ fn build_from_file_with_dep_successful() {
     let dep = builder::build(
         r#"
             module math;
-            fn add(a: u64, b: u64): u64 { return a + b; }
+            pub fn add(a: u64, b: u64): u64 { return a + b; }
         "#,
         &[],
     )
@@ -213,7 +213,7 @@ fn build_with_dep_cross_module_function_call() {
     let math = builder::build(
         r#"
             module math;
-            fn add(a: u64, b: u64): u64 { return a + b; }
+            pub fn add(a: u64, b: u64): u64 { return a + b; }
         "#,
         &[],
     )
@@ -244,9 +244,10 @@ fn build_with_dep_cross_module_struct() {
         r#"
             module shapes;
 
-            struct Point { x: u64, y: u64 }
+            pub struct Point { pub x: u64, y: u64 }
 
-            fn get_x(p: Point): u64 { return p.x; }
+            pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn get_x(p: Point): u64 { return p.x; }
         "#,
         &[],
     )
@@ -259,7 +260,7 @@ fn build_with_dep_cross_module_struct() {
             use shapes@0x10;
 
             fn make_and_read(): u64 {
-                let p = shapes::Point { x: 5, y: 9 };
+                let p = shapes::make_point(5, 9);
                 return shapes::get_x(p);
             }
         "#,

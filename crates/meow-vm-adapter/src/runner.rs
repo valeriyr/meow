@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use meow_types::{address::Address, config, identifier::Identifier};
 use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::config::VmConfig;
 
 use crate::{Module, Value, context::Context, natives};
 
@@ -28,15 +29,27 @@ pub struct RunResult {
 /// Run a compiled module function with a fixed context, real natives, and unlimited gas.
 pub fn run(module: Module, fn_name: &Identifier, args: Vec<Value>) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
-    run_with_gas_meter(module, fn_name, args, &mut gas)
+    let vm_config = config::vm_config();
+
+    run_inner(module, fn_name, args, &mut gas, vm_config)
+}
+
+/// Like [`run`] but uses the privileged VM config, which allows calling private functions.
+/// Use this to test functions that are intentionally private (e.g. `mint`).
+pub fn run_privileged(module: Module, fn_name: &Identifier, args: Vec<Value>) -> Result<RunResult> {
+    let mut gas = GasMeter::unlimited();
+    let vm_config = config::vm_config_privileged();
+
+    run_inner(module, fn_name, args, &mut gas, vm_config)
 }
 
 /// Run a compiled module function with a fixed context, real natives, and the given gas meter.
-pub fn run_with_gas_meter(
+fn run_inner(
     module: Module,
     fn_name: &Identifier,
     args: Vec<Value>,
     gas: &mut GasMeter,
+    vm_config: VmConfig,
 ) -> Result<RunResult> {
     let ctx = Rc::new(RefCell::new(Context::default()));
     let natives = natives::build_natives(ctx.clone());
@@ -45,7 +58,7 @@ pub fn run_with_gas_meter(
         natives,
         GasSchedule::default(),
         HashMap::new(),
-        config::vm_config(),
+        vm_config,
     );
 
     let call_result = vm.call(fn_name.as_ref(), args, gas)?;

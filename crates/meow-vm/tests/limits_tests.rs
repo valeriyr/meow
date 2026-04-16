@@ -23,7 +23,7 @@ fn dep_count_exceeding_limit_returns_error() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -33,7 +33,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -43,7 +43,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             module main;
             use b@0x02;
-            fn run(): u64 { return b::get(); }
+            pub fn run(): u64 { return b::get(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -80,7 +80,7 @@ fn dep_count_at_limit_succeeds() {
     let c_module = Compiler::compile(
         r#"
             module c;
-            fn get(): u64 { return 1; }
+            pub fn get(): u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -90,7 +90,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             module b;
             use c@0x03;
-            fn get(): u64 { return c::get(); }
+            pub fn get(): u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -100,7 +100,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             module main;
             use b@0x02;
-            fn run(): u64 { return b::get(); }
+            pub fn run(): u64 { return b::get(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -134,7 +134,7 @@ fn call_depth_exceeding_limit_returns_error() {
         r#"
         module depth_test;
         fn b(): u64 { return 1; }
-        fn a(): u64 { return b(); }
+        pub fn a(): u64 { return b(); }
     "#,
     );
 
@@ -161,7 +161,7 @@ fn call_depth_at_limit_succeeds() {
         r#"
         module depth_test;
         fn b(): u64 { return 1; }
-        fn a(): u64 { return b(); }
+        pub fn a(): u64 { return b(); }
     "#,
     );
 

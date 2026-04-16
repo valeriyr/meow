@@ -11,6 +11,8 @@ use crate::{
 pub struct Function {
     /// The function name.
     pub name: String,
+    /// True if this function can be called from modules other than the one that declares it.
+    pub is_public: bool,
     /// Parameters in call order (name, type).
     pub params: Vec<(String, Type)>,
     /// Return type, or `None` for void functions.

@@ -1,8 +1,20 @@
 # Contracts
 
-> Writing, publishing, and calling `.meow` smart contracts on MEOW.
+> Writing, publishing, and calling smart contracts on MEOW.
 
-## The `.meow` language
+## The Meow language
+
+### Comments
+
+Use `//` for single-line comments. Everything from `//` to the end of the line is ignored. `//` inside a string literal is not treated as a comment.
+
+```meow
+// This is a top-level comment.
+fn add(a: u64, b: u64): u64 {
+    // add two numbers
+    return a + b; // inline comment
+}
+```
 
 ### Types
 
@@ -89,6 +101,82 @@ meow_vm_abort(meow_vm_timestamp() >= item.last_used + cooldown_ms, 2, "cooldown 
 
 See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and miner behaviour.
 
+## Access control
+
+All functions, structs, objects, and struct fields are **private by default**. The `pub` keyword makes them accessible from other modules.
+
+### Rules at a glance
+
+| Declaration | Effect |
+|-------------|--------|
+| `fn foo(...)` | Private — callable only within this module |
+| `pub fn foo(...)` | Public — callable from any module that imports this one |
+| `struct Foo { ... }` | Private — not nameable from other modules |
+| `pub struct Foo { ... }` | Public — other modules can use `Foo` as a type and receive values of this type |
+| `object Foo { ... }` | Private — not nameable from other modules |
+| `pub object Foo { ... }` | Public — other modules can use `Foo` as a type and receive values of this type |
+| `field: u64` | Private — not readable or writable from other modules |
+| `pub field: u64` | Public readable — readable from other modules; writes are still module-local |
+
+### Construction is always module-local
+
+Struct and object literals (`TypeName { field: value, ... }`) can only appear inside the module that declares the type, regardless of `pub`. Other modules must call a constructor function:
+
+```meow
+// shapes module
+pub struct Point { pub x: u64, pub y: u64 }
+pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+
+// user module
+use shapes@0x...;
+fn run(): u64 {
+    let p = shapes::make_point(3, 7); // ok — uses constructor
+    // let p = shapes::Point { x: 3, y: 7 }; // rejected — cross-module construction
+    return p.x;  // ok — x is pub
+}
+```
+
+### The `id` field is immutable
+
+The `id` field of every object is set at creation time and cannot be reassigned anywhere — even inside the declaring module:
+
+```meow
+object Coin { id: address, balance: u64 }
+fn bad(c: Coin, new_id: address) {
+    c.id = new_id; // compile error: 'id' is immutable
+}
+```
+
+### Transaction entry points
+
+Only `pub fn` functions can be called directly from a transaction. Sending a transaction that targets a private function is rejected by the VM before execution begins.
+
+Native built-in functions (`meow_vm_transfer`, `meow_vm_fresh_id`, etc.) cannot be called directly from a transaction either — they are only available from within contract code.
+
+```meow
+module vault;
+
+fn internal_helper(): u64 { return 1; } // cannot be called from a transaction
+
+pub fn deposit(amount: u64) { ... }     // valid transaction target
+pub fn withdraw(amount: u64) { ... }    // valid transaction target
+```
+
+### Summary of cross-module restrictions
+
+| Operation | Cross-module allowed? |
+|-----------|-----------------------|
+| Call `pub fn` | Yes |
+| Call private `fn` | No |
+| Use `pub struct` / `pub object` as type | Yes |
+| Use private struct / object as type | No |
+| Construct any type with struct literal | No (always module-local) |
+| Destroy object with `meow_vm_destroy` | No (always module-local) |
+| Read `pub` field | Yes |
+| Read private field | No |
+| Write any field | No (always module-local) |
+| Write `id` field | No (immutable everywhere) |
+
 ## Cross-module dependencies
 
 Modules can import functions and types from other published modules using `use` declarations.
@@ -110,8 +198,8 @@ The `@<address>` suffix is the 32-byte on-chain address of the published module.
 
 ### Using imported types and functions
 
-- **Functions**: `module_name::function_name(args)`
-- **Struct/object types**: `module_name::TypeName { field: value }`
+- **Functions**: `module_name::function_name(args)` — only `pub fn` can be called cross-module.
+- **Struct/object types**: receive values via `pub fn` return values or parameters; use `module_name::TypeName` as a type annotation. Direct construction (`module_name::TypeName { ... }`) is always rejected — use a constructor function exported by the dep module.
 
 ### Publishing a module with dependencies
 
@@ -154,7 +242,7 @@ Use `@0x<hex>` when passing an `address`-typed argument (e.g. an owner or recipi
 
 | Module | What it covers |
 |--------|----------------|
-| [MeowCoin](meow-coin.md) | The built-in coin — transfer, split, merge, burn |
+| [Meow Coin](meow-coin.md) | The built-in coin — transfer, split, merge, burn |
 
 ## Examples
 

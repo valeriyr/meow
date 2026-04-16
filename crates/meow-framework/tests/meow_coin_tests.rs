@@ -21,7 +21,7 @@ fn compile_meow_coin() {
 #[test]
 fn mint_creates_coin_transferred_to_owner() {
     let owner = Address::fill(0x01);
-    let result = run("mint", vec![Value::U64(100), Value::Address(owner.into())])
+    let result = run_privileged("mint", vec![Value::U64(100), Value::Address(owner.into())])
         .expect("mint must succeed");
 
     assert_eq!(result.transfers.len(), 1, "one coin must be transferred");
@@ -147,7 +147,7 @@ fn split_and_transfer_to_recipient() {
 
 #[test]
 fn mint_with_zero_balance_succeeds() {
-    let result = run(
+    let result = run_privileged(
         "mint",
         vec![Value::U64(0), Value::Address(Address::fill(0x01).into())],
     )
@@ -217,4 +217,9 @@ fn coin_balance(v: &Value) -> u64 {
 pub fn run(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
     runner::run(meow_coin_module(), &fn_name, args)
+}
+
+pub fn run_privileged(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
+    let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
+    runner::run_privileged(meow_coin_module(), &fn_name, args)
 }

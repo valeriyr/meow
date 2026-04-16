@@ -1,6 +1,6 @@
 use meow_vm_types::{
     address::Address,
-    types::{StructDef, Type, Value},
+    types::{FieldDef, StructDef, Type, Value},
 };
 
 //
@@ -73,11 +73,24 @@ fn struct_def_field_index() {
     let def = StructDef {
         name: "Foo".to_string(),
         fields: vec![
-            ("a".to_string(), Type::U64),
-            ("b".to_string(), Type::Bool),
-            ("c".to_string(), Type::Address),
+            FieldDef {
+                name: "a".to_string(),
+                ty: Type::U64,
+                is_public: false,
+            },
+            FieldDef {
+                name: "b".to_string(),
+                ty: Type::Bool,
+                is_public: false,
+            },
+            FieldDef {
+                name: "c".to_string(),
+                ty: Type::Address,
+                is_public: true,
+            },
         ],
         is_object: false,
+        is_public: true,
     };
     assert_eq!(def.field_index("a"), Some(0));
     assert_eq!(def.field_index("b"), Some(1));
@@ -95,6 +108,7 @@ fn struct_def_name() {
         name: "Bar".to_string(),
         fields: vec![],
         is_object: false,
+        is_public: false,
     };
     assert_eq!(def.name, "Bar");
 }
@@ -103,12 +117,26 @@ fn struct_def_name() {
 fn struct_def_fields() {
     let def = StructDef {
         name: "Baz".to_string(),
-        fields: vec![("x".to_string(), Type::U64), ("y".to_string(), Type::U64)],
+        fields: vec![
+            FieldDef {
+                name: "x".to_string(),
+                ty: Type::U64,
+                is_public: false,
+            },
+            FieldDef {
+                name: "y".to_string(),
+                ty: Type::U64,
+                is_public: true,
+            },
+        ],
         is_object: false,
+        is_public: true,
     };
     assert_eq!(def.fields.len(), 2);
-    assert_eq!(def.fields[0].0, "x");
-    assert_eq!(def.fields[0].1, Type::U64);
-    assert_eq!(def.fields[1].0, "y");
-    assert_eq!(def.fields[1].1, Type::U64);
+    assert_eq!(def.fields[0].name, "x");
+    assert_eq!(def.fields[0].ty, Type::U64);
+    assert!(!def.fields[0].is_public);
+    assert_eq!(def.fields[1].name, "y");
+    assert_eq!(def.fields[1].ty, Type::U64);
+    assert!(def.fields[1].is_public);
 }

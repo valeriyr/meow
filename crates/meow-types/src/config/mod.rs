@@ -74,3 +74,9 @@ pub fn compiler_config() -> CompilerConfig {
 pub fn vm_config() -> VmConfig {
     VmConfig::default()
 }
+
+/// Returns a VM configuration suitable for privileged execution,
+/// which enables calling private functions.
+pub fn vm_config_privileged() -> VmConfig {
+    vm_config().with_enable_call_private_functions(true)
+}
