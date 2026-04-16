@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod call_arg;
 pub mod client;
 pub mod commands;

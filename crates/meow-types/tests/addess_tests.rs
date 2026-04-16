@@ -138,6 +138,29 @@ fn address_from_bytes() {
     assert_eq!(parsed, expected);
 }
 
+#[test]
+fn address_from_vm_address() {
+    let vm_address = meow_vm_types::address::Address::from_str(
+        "0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f",
+    )
+    .unwrap();
+
+    let address = Address::from(vm_address);
+
+    assert_eq!(address.to_string(), vm_address.to_string());
+}
+
+#[test]
+fn vm_address_from_address() {
+    let address =
+        Address::from_str("0xcc2196ee1fa156836daf9bb021d88d648a0023fa387e695d3701667a634a331f")
+            .unwrap();
+
+    let vm_address = meow_vm_types::address::Address::from(address);
+
+    assert_eq!(address.to_string(), vm_address.to_string());
+}
+
 //
 // ─── Address invalid conversion tests ───
 //
@@ -166,7 +189,7 @@ fn address_from_string_too_long_returns_error() {
     let err = Address::from_str(&too_long).expect_err("more than 32 bytes must fail");
     assert!(matches!(
         err,
-        AddressError::InvalidAddressBytesLength {
+        AddressError::InvalidLength {
             actual: 33,
             expected: 32
         }
@@ -179,7 +202,7 @@ fn address_from_bytes_invalid_length_returns_error() {
     let err = Address::try_from(bytes.as_slice()).expect_err("31 bytes must fail");
     assert!(matches!(
         err,
-        AddressError::InvalidAddressBytesLength {
+        AddressError::InvalidLength {
             actual: 31,
             expected: 32
         }

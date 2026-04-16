@@ -19,6 +19,12 @@ pub struct CompilerConfig {
     max_locals: usize,
     /// Maximum number of bytecode instructions in a single function.
     max_fun_code_size: usize,
+    /// Maximum number of `use` (import) declarations in a module.
+    max_imports: usize,
+    /// Maximum total number of dependency modules (direct + transitive) that
+    /// may be provided when compiling a module. Prevents modules from being
+    /// published with a dependency graph that would exceed the runtime limit.
+    max_dep_modules: usize,
     /// Additional function names reserved by the caller (e.g. native functions
     /// registered by the adapter). The compiler rejects any user-defined function
     /// whose name appears in this list.
@@ -61,9 +67,26 @@ impl CompilerConfig {
         self.max_fun_code_size
     }
 
+    /// Returns the maximum number of `use` (import) declarations allowed in a module.
+    pub fn max_imports(&self) -> usize {
+        self.max_imports
+    }
+
+    /// Returns the maximum number of dependency modules (direct + transitive)
+    /// allowed when compiling a module.
+    pub fn max_dep_modules(&self) -> usize {
+        self.max_dep_modules
+    }
+
     /// Returns the caller-supplied reserved function names.
     pub fn reserved_function_names(&self) -> &[String] {
         &self.reserved_function_names
+    }
+
+    /// Returns a new config with the maximum number of dependency modules set.
+    pub fn with_max_dep_modules(mut self, max: usize) -> Self {
+        self.max_dep_modules = max;
+        self
     }
 
     /// Returns a new config with additional reserved function names appended.
@@ -83,6 +106,8 @@ impl Default for CompilerConfig {
             max_params: 16,
             max_locals: 255,
             max_fun_code_size: 65_536,
+            max_imports: 64,
+            max_dep_modules: 64,
             reserved_function_names: Vec::new(),
         }
     }
@@ -97,6 +122,10 @@ impl Default for CompilerConfig {
 pub struct VmConfig {
     /// Maximum VM call stack depth.
     max_call_depth: usize,
+    /// Maximum total number of dependency modules (direct + transitive) that
+    /// may be loaded for a single call. Prevents unbounded memory use from
+    /// deeply nested or wide dependency graphs.
+    max_dep_modules: usize,
 }
 
 impl VmConfig {
@@ -104,12 +133,31 @@ impl VmConfig {
     pub fn max_call_depth(&self) -> usize {
         self.max_call_depth
     }
+
+    /// Returns the maximum number of dependency modules (direct + transitive)
+    /// allowed during a single call.
+    pub fn max_dep_modules(&self) -> usize {
+        self.max_dep_modules
+    }
+
+    /// Returns a new config with the maximum call stack depth set.
+    pub fn with_max_call_depth(mut self, max: usize) -> Self {
+        self.max_call_depth = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of dependency modules set.
+    pub fn with_max_dep_modules(mut self, max: usize) -> Self {
+        self.max_dep_modules = max;
+        self
+    }
 }
 
 impl Default for VmConfig {
     fn default() -> Self {
         Self {
             max_call_depth: 256,
+            max_dep_modules: 64,
         }
     }
 }

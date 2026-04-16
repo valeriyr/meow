@@ -2,9 +2,6 @@ mod utils;
 
 use meow_vm::gas_meter::GasMeter;
 use meow_vm_types::types::Value;
-use utils::{compile, run};
-
-use crate::utils::vm;
 
 //
 // ─── let ───
@@ -13,10 +10,11 @@ use crate::utils::vm;
 #[test]
 fn let_binding() {
     let src = r#"
+        module test;
         fn compute(x: u64): u64 { let a = x + 1; let b = a * 2; return b; }
     "#;
     assert_eq!(
-        run(src, "compute", vec![Value::U64(4)]),
+        utils::run(src, "compute", vec![Value::U64(4)]),
         Some(Value::U64(10))
     );
 }
@@ -28,14 +26,15 @@ fn let_binding() {
 #[test]
 fn if_branch_taken() {
     let src = r#"
+        module test;
         fn max(a: u64, b: u64): u64 { if a > b { return a; } return b; }
     "#;
     assert_eq!(
-        run(src, "max", vec![Value::U64(10), Value::U64(5)]),
+        utils::run(src, "max", vec![Value::U64(10), Value::U64(5)]),
         Some(Value::U64(10))
     );
     assert_eq!(
-        run(src, "max", vec![Value::U64(3), Value::U64(8)]),
+        utils::run(src, "max", vec![Value::U64(3), Value::U64(8)]),
         Some(Value::U64(8))
     );
 }
@@ -43,6 +42,7 @@ fn if_branch_taken() {
 #[test]
 fn if_mutates_local() {
     let src = r#"
+        module test;
         fn clamp(x: u64, max: u64): u64 {
             let result = x;
             if x > max { result = max; }
@@ -50,11 +50,11 @@ fn if_mutates_local() {
         }
     "#;
     assert_eq!(
-        run(src, "clamp", vec![Value::U64(15), Value::U64(10)]),
+        utils::run(src, "clamp", vec![Value::U64(15), Value::U64(10)]),
         Some(Value::U64(10))
     );
     assert_eq!(
-        run(src, "clamp", vec![Value::U64(5), Value::U64(10)]),
+        utils::run(src, "clamp", vec![Value::U64(5), Value::U64(10)]),
         Some(Value::U64(5))
     );
 }
@@ -66,14 +66,15 @@ fn if_mutates_local() {
 #[test]
 fn if_else_branches() {
     let src = r#"
+        module test;
         fn classify(x: u64): u64 { if x > 10 { return 1; } else { return 0; } }
     "#;
     assert_eq!(
-        run(src, "classify", vec![Value::U64(20)]),
+        utils::run(src, "classify", vec![Value::U64(20)]),
         Some(Value::U64(1))
     );
     assert_eq!(
-        run(src, "classify", vec![Value::U64(5)]),
+        utils::run(src, "classify", vec![Value::U64(5)]),
         Some(Value::U64(0))
     );
 }
@@ -81,16 +82,18 @@ fn if_else_branches() {
 #[test]
 fn if_else_with_let_in_both_branches() {
     let src = r#"
+        module test;
+
         fn abs_diff(a: u64, b: u64): u64 {
             if a > b { return a - b; } else { return b - a; }
         }
     "#;
     assert_eq!(
-        run(src, "abs_diff", vec![Value::U64(10), Value::U64(3)]),
+        utils::run(src, "abs_diff", vec![Value::U64(10), Value::U64(3)]),
         Some(Value::U64(7))
     );
     assert_eq!(
-        run(src, "abs_diff", vec![Value::U64(3), Value::U64(10)]),
+        utils::run(src, "abs_diff", vec![Value::U64(3), Value::U64(10)]),
         Some(Value::U64(7))
     );
 }
@@ -102,10 +105,15 @@ fn if_else_with_let_in_both_branches() {
 #[test]
 fn function_call_chain() {
     let src = r#"
+        module test;
+
         fn double(n: u64): u64 { return n * 2; }
         fn quad(n: u64): u64 { return double(double(n)); }
     "#;
-    assert_eq!(run(src, "quad", vec![Value::U64(3)]), Some(Value::U64(12)));
+    assert_eq!(
+        utils::run(src, "quad", vec![Value::U64(3)]),
+        Some(Value::U64(12))
+    );
 }
 
 //
@@ -114,7 +122,11 @@ fn function_call_chain() {
 
 #[test]
 fn void_function_returns_none() {
-    let vm = vm(compile("fn do_nothing() {}"));
+    let src = r#"
+        module test;
+        fn do_nothing() {}
+    "#;
+    let vm = utils::vm(utils::compile(src));
     let mut gas = GasMeter::unlimited();
     let r = vm.call("do_nothing", vec![], &mut gas).unwrap();
     assert_eq!(r.return_value, None);
@@ -124,11 +136,13 @@ fn void_function_returns_none() {
 #[test]
 fn void_call_as_statement_does_not_corrupt_stack() {
     let src = r#"
+        module test;
+    
         fn noop() {}
         fn compute(x: u64): u64 { noop(); return x * 2; }
     "#;
     assert_eq!(
-        run(src, "compute", vec![Value::U64(5)]),
+        utils::run(src, "compute", vec![Value::U64(5)]),
         Some(Value::U64(10))
     );
 }

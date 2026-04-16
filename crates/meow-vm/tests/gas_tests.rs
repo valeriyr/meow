@@ -2,9 +2,6 @@ mod utils;
 
 use meow_vm::{error::VmError, gas_meter::GasMeter};
 use meow_vm_types::types::Value;
-use utils::vm_with_natives;
-
-const SRC: &str = "fn add(a: u64, b: u64): u64 { return a + b; }";
 
 //
 // ─── Gas metering ───
@@ -50,7 +47,7 @@ fn gas_meter_spent_and_remaining() {
 
 #[test]
 fn gas_is_spent_during_execution() {
-    let vm = vm_with_natives(SRC, vec![]);
+    let vm = utils::vm_with_natives(SRC, vec![]);
     let mut gas = GasMeter::new(10_000);
     vm.call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)
         .unwrap();
@@ -59,10 +56,19 @@ fn gas_is_spent_during_execution() {
 
 #[test]
 fn out_of_gas_returns_error() {
-    let vm = vm_with_natives(SRC, vec![]);
+    let vm = utils::vm_with_natives(SRC, vec![]);
     let mut gas = GasMeter::new(1);
     let err = vm
         .call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)
         .unwrap_err();
     assert!(matches!(err, VmError::OutOfGas { limit: 1, spent: 2 }));
 }
+
+//
+// ─── Utilities ───
+//
+
+const SRC: &str = r#"
+        module gas_test;
+        fn add(a: u64, b: u64): u64 { return a + b; }
+    "#;

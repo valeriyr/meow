@@ -1,3 +1,5 @@
+module meow_coin;
+
 object MeowCoin { id: address, balance: u64 }
 
 fn mint(balance: u64, owner: address) {

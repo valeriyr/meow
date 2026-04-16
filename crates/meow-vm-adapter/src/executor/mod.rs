@@ -123,9 +123,17 @@ fn execute_meow_call(
 ) -> ExecutionResult {
     let module_address = call.module();
 
-    // Resolve the module in inputs.
-    let module = match resolvers::resolve_module(inputs) {
+    // Resolve the main module (identified by its on-chain address).
+    let module = match resolvers::resolve_module(inputs, module_address) {
         Ok(m) => m,
+        Err(e) => {
+            return ExecutionResult::failure(e, *tx_digest);
+        }
+    };
+
+    // Resolve dependency modules declared in the main module's imports.
+    let deps = match resolvers::resolve_dep_modules(inputs, &module.imports) {
+        Ok(d) => d,
         Err(e) => {
             return ExecutionResult::failure(e, *tx_digest);
         }
@@ -158,7 +166,13 @@ fn execute_meow_call(
         external_context.timestamp(),
     )));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default(), config::vm_config());
+    let vm = Vm::new(
+        module,
+        natives,
+        GasSchedule::default(),
+        deps,
+        config::vm_config(),
+    );
 
     // Execute the function.
     let call_result = match vm.call(fn_name, vm_args, gas) {

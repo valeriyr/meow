@@ -5,10 +5,10 @@ use std::path::PathBuf;
 use clap::Parser;
 use meow_node_client::NodeClient;
 use meow_types::identifier::Identifier;
-use meow_vm_adapter::{builder, runner};
+use meow_vm_adapter::runner;
 
 use crate::{
-    call_arg::CallArg, output_encoder::OutputEncoder,
+    builder, call_arg::CallArg, output_encoder::OutputEncoder,
     smart_contract::output::SmartContractCommandOutput,
 };
 
@@ -44,8 +44,7 @@ impl SmartContractCommand {
     pub async fn run(self, client: &NodeClient) -> anyhow::Result<SmartContractCommandOutput> {
         Ok(match self {
             SmartContractCommand::Build { path, encoder } => {
-                let module = builder::build_from_file(path)?;
-
+                let module = builder::build_module(client, path).await?;
                 SmartContractCommandOutput::build(module, encoder)?
             }
             SmartContractCommand::Run {
@@ -53,7 +52,8 @@ impl SmartContractCommand {
                 function,
                 args,
             } => {
-                let module = builder::build_from_file(path)?;
+                let module = builder::build_module(client, path).await?;
+
                 let mut values = Vec::new();
                 for arg in args {
                     values.push(arg.into_value(client).await?);

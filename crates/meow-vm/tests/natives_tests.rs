@@ -1,8 +1,7 @@
 mod utils;
 
 use meow_vm::{NativeFnEntry, NativeResult, error::VmError, gas_meter::GasMeter};
-use meow_vm_types::types::Value;
-use utils::{consume_native, vm_with_natives};
+use meow_vm_types::{address::Address, types::Value};
 
 //
 // ─── Native function calls ───
@@ -11,9 +10,10 @@ use utils::{consume_native, vm_with_natives};
 #[test]
 fn native_returns_value() {
     let src = r#"
+        module test;
         fn compute(a: u64, b: u64): u64 { let sum = add_native(a, b); return sum; }
     "#;
-    let vm = vm_with_natives(src, vec![test_add_native()]);
+    let vm = utils::vm_with_natives(src, vec![test_add_native()]);
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("compute", vec![Value::U64(3), Value::U64(4)], &mut gas)
@@ -26,9 +26,10 @@ fn void_native_does_not_leave_stack_garbage() {
     // The compiler emits Pop after expression-statement calls. A void native
     // must push Void (not nothing) or the Pop would underflow the stack.
     let src = r#"
+        module test;
         fn run_side_effect(x: u64): u64 { log_native(x); return x + 1; }
     "#;
-    let vm = vm_with_natives(src, vec![test_log_native()]);
+    let vm = utils::vm_with_natives(src, vec![test_log_native()]);
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("run_side_effect", vec![Value::U64(10)], &mut gas)
@@ -44,9 +45,10 @@ fn void_native_does_not_leave_stack_garbage() {
 fn builtin_abort_triggers_on_false_condition() {
     // meow_vm_abort(condition, code, msg): aborts when condition is FALSE (assert semantics).
     let src = r#"
+        module test;
         fn check(x: u64) { meow_vm_abort(x != 0, 42, "must not be zero"); }
     "#;
-    let vm = vm_with_natives(src, vec![]);
+    let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
 
     // x=0: x!=0 = false → abort
@@ -65,9 +67,10 @@ fn builtin_abort_triggers_on_false_condition() {
 #[test]
 fn abort_can_be_overridden_by_custom_native() {
     let src = r#"
+        module test;
         fn check(x: u64) { meow_vm_abort(x != 0, 99, "overridden"); }
     "#;
-    let vm = vm_with_natives(src, vec![test_doubling_abort_native()]);
+    let vm = utils::vm_with_natives(src, vec![test_doubling_abort_native()]);
     let mut gas = GasMeter::unlimited();
 
     let err = vm.call("check", vec![Value::U64(0)], &mut gas).unwrap_err();
@@ -81,11 +84,12 @@ fn abort_can_be_overridden_by_custom_native() {
 #[test]
 fn use_after_move_is_an_error() {
     let src = r#"
+        module test;
         object Token { id: address, amount: u64 }
 
         fn consume_twice(tok: Token) { consume_native(tok); consume_native(tok); }
     "#;
-    let vm = vm_with_natives(src, vec![consume_native("consume_native")]);
+    let vm = utils::vm_with_natives(src, vec![utils::consume_native("consume_native")]);
     let mut gas = GasMeter::unlimited();
     let err = vm
         .call("consume_twice", vec![test_token(100)], &mut gas)
@@ -101,8 +105,11 @@ fn use_after_move_is_an_error() {
 
 #[test]
 fn final_args_holds_primitives_after_call() {
-    let src = "fn f(a: u64, b: u64): u64 { return a + b; }";
-    let vm = vm_with_natives(src, vec![]);
+    let src = r#"
+        module test;
+        fn f(a: u64, b: u64): u64 { return a + b; }
+    "#;
+    let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("f", vec![Value::U64(3), Value::U64(4)], &mut gas)
@@ -113,11 +120,12 @@ fn final_args_holds_primitives_after_call() {
 #[test]
 fn final_args_is_none_for_consumed_object() {
     let src = r#"
+        module test;
         object Token { id: address, amount: u64 }
 
         fn consume(tok: Token) { consume_native(tok); }
     "#;
-    let vm = vm_with_natives(src, vec![consume_native("consume_native")]);
+    let vm = utils::vm_with_natives(src, vec![utils::consume_native("consume_native")]);
     let mut gas = GasMeter::unlimited();
     let r = vm.call("consume", vec![test_token(50)], &mut gas).unwrap();
     assert_eq!(r.final_args, vec![None]);
@@ -127,11 +135,12 @@ fn final_args_is_none_for_consumed_object() {
 fn final_args_is_some_for_surviving_object() {
     // An object that is neither transferred nor destroyed keeps its slot — final_args holds it.
     let src = r#"
+        module test;
         object Token { id: address, amount: u64 }
 
         fn read_amount(tok: Token): u64 { return tok.amount; }
     "#;
-    let vm = vm_with_natives(src, vec![]);
+    let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("read_amount", vec![test_token(77)], &mut gas)
@@ -144,11 +153,12 @@ fn final_args_is_some_for_surviving_object() {
 fn final_args_reflects_mutations_on_surviving_object() {
     // A mutated-but-not-consumed object surfaces with its updated field values.
     let src = r#"
+        module test;
         object Token { id: address, amount: u64 }
 
         fn double_amount(tok: Token) { tok.amount = tok.amount * 2; }
     "#;
-    let vm = vm_with_natives(src, vec![]);
+    let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
     let r = vm
         .call("double_amount", vec![test_token(30)], &mut gas)
@@ -164,7 +174,7 @@ fn test_token(amount: u64) -> Value {
     Value::Object {
         type_name: "Token".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address([0u8; 32])),
+            ("id".to_string(), Value::Address(Address::ZERO)),
             ("amount".to_string(), Value::U64(amount)),
         ],
     }

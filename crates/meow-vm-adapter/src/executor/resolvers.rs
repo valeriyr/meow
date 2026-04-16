@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use meow_types::{
     address::Address,
     object::{
@@ -8,6 +10,7 @@ use meow_types::{
     transaction::{call::Call, input::Input},
 };
 use meow_vm_types::{
+    address::Address as VmAddress,
     module::{Function, Module},
     types::{Type, Value},
 };
@@ -115,7 +118,7 @@ pub fn resolve_arg(
             Type::Address => {
                 let v: [u8; 32] =
                     bcs::from_bytes(bytes).map_err(|e| format!("address deserialization: {e}"))?;
-                Ok(Value::Address(v))
+                Ok(Value::Address(v.into()))
             }
             Type::Str => {
                 let v: String =
@@ -172,22 +175,116 @@ pub fn resolve_gas_coin_object<'a>(
     Ok(gas_coin)
 }
 
-/// Resolve the module from inputs.
-pub fn resolve_module(inputs: &[Object]) -> std::result::Result<Module, String> {
-    let modules = inputs
+/// Resolve the main module (identified by `module_address`) from inputs.
+///
+/// There must be exactly one `ObjectType::Module` object whose on-chain address
+/// matches `module_address`. Additional module objects in inputs are treated as
+/// dependency modules and resolved separately via [`resolve_dep_modules`].
+pub fn resolve_module(
+    inputs: &[Object],
+    module_address: &Address,
+) -> std::result::Result<Module, String> {
+    let module_obj = inputs
         .iter()
-        .filter(|o| matches!(o.type_(), ObjectType::Module))
-        .collect::<Vec<_>>();
+        .find(|o| o.type_() == &ObjectType::Module && o.address() == module_address)
+        .ok_or_else(|| format!("module object at address {module_address} not found in inputs"))?;
 
-    if modules.len() != 1 {
-        return Err(format!(
-            "expected exactly 1 module object in inputs, found {}",
-            modules.len()
-        ));
+    bcs::from_bytes(module_obj.content())
+        .map_err(|e| format!("failed to deserialize module at {module_address}: {e}"))
+}
+
+/// Resolve the full transitive dependency tree from `inputs`.
+///
+/// Starting from the main module's `imports`, each deserialized dep module's own
+/// `imports` are added to the queue, so the result contains every module that
+/// could be reached during execution — not just direct dependencies.
+///
+/// Diamond dependencies (the same address reachable through two different paths)
+/// are allowed and silently deduplicated. Circular dependencies (a module that
+/// eventually imports itself) are rejected with an error.
+///
+/// Every address in the transitive closure must have a corresponding
+/// `ObjectType::Module` object in `inputs`; returns an error naming the first
+/// missing module.
+pub fn resolve_dep_modules(
+    inputs: &[Object],
+    imports: &[VmAddress],
+) -> std::result::Result<HashMap<VmAddress, Module>, String> {
+    // Index module objects by address for O(1) lookup during BFS.
+    let module_index: HashMap<Address, &Object> = inputs
+        .iter()
+        .filter(|o| o.type_() == &ObjectType::Module)
+        .map(|o| (*o.address(), o))
+        .collect();
+
+    let mut deps: HashMap<VmAddress, Module> = HashMap::new();
+    let mut queue: Vec<VmAddress> = imports.to_vec();
+
+    while let Some(vm_addr) = queue.pop() {
+        if deps.contains_key(&vm_addr) {
+            continue; // already resolved — deduplicate diamond dependencies
+        }
+
+        let addr = Address::from(vm_addr);
+        let dep_obj = module_index
+            .get(&addr)
+            .ok_or_else(|| format!("missing dependency module at address {addr}"))?;
+        let dep: Module = bcs::from_bytes(dep_obj.content())
+            .map_err(|e| format!("failed to deserialize dependency module at {addr}: {e}"))?;
+
+        // Enqueue this dep's own imports for transitive resolution.
+        for &transitive in &dep.imports {
+            if !deps.contains_key(&transitive) {
+                queue.push(transitive);
+            }
+        }
+
+        deps.insert(vm_addr, dep);
     }
 
-    match bcs::from_bytes(modules[0].content()) {
-        Ok(m) => Ok(m),
-        Err(e) => Err(format!("failed to deserialize module: {e}")),
+    // After collecting all deps, check for cycles via DFS.
+    let mut visited: HashSet<VmAddress> = HashSet::new();
+    let mut in_stack: HashSet<VmAddress> = HashSet::new();
+    for &start in deps.keys() {
+        if !visited.contains(&start) {
+            detect_dep_cycle(start, &deps, &mut visited, &mut in_stack)?;
+        }
     }
+
+    Ok(deps)
+}
+
+/// DFS helper: detects cycles in the module dependency graph.
+///
+/// `in_stack` tracks the current DFS path. A back edge (child already in
+/// `in_stack`) means the child is an ancestor of the current node — i.e. a cycle.
+fn detect_dep_cycle(
+    node: VmAddress,
+    deps: &HashMap<VmAddress, Module>,
+    visited: &mut HashSet<VmAddress>,
+    in_stack: &mut HashSet<VmAddress>,
+) -> std::result::Result<(), String> {
+    visited.insert(node);
+    in_stack.insert(node);
+
+    if let Some(module) = deps.get(&node) {
+        for &import in &module.imports {
+            if !deps.contains_key(&import) {
+                continue; // not part of the resolved graph — skip
+            }
+            if in_stack.contains(&import) {
+                let display_addr = Address::from(import);
+                return Err(format!(
+                    "circular dependency detected: module at address {display_addr} \
+                     is part of a recursive import chain",
+                ));
+            }
+            if !visited.contains(&import) {
+                detect_dep_cycle(import, deps, visited, in_stack)?;
+            }
+        }
+    }
+
+    in_stack.remove(&node);
+    Ok(())
 }

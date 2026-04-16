@@ -78,6 +78,12 @@ impl From<Digest> for [u8; DIGEST_LENGTH] {
     }
 }
 
+impl From<[u8; DIGEST_LENGTH]> for Digest {
+    fn from(bytes: [u8; DIGEST_LENGTH]) -> Self {
+        Digest::new(bytes)
+    }
+}
+
 impl AsRef<[u8]> for Digest {
     fn as_ref(&self) -> &[u8] {
         &self.0

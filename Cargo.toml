@@ -22,7 +22,7 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0"
 base64 = "0.22"
-bcs = "0.1"
+bcs = "0.2"
 bs58 = "0.5"
 bip32 = "0.5"
 blake2 = "0.10"
@@ -50,7 +50,7 @@ strum_macros = "0.28"
 tabled = "0.20"
 temp-dir = "0.2"
 thiserror = "2.0"
-tokio = { version = "1.51", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5"

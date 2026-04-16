@@ -11,6 +11,8 @@
 //! ## Quick start
 //!
 //! ```rust
+//! use std::collections::HashMap;
+//!
 //! use meow_vm_compiler::Compiler;
 //! use meow_vm::Vm;
 //! use meow_vm::gas_meter::GasMeter;
@@ -18,13 +20,15 @@
 //! use meow_vm_types::{config::{CompilerConfig, VmConfig}, types::Value};
 //!
 //! let source = r#"
+//!     module math;
+//!
 //!     fn add(a: u64, b: u64): u64 {
 //!         return a + b;
 //!     }
 //! "#;
 //!
-//! let module = Compiler::compile("math", source, CompilerConfig::default()).unwrap();
-//! let vm = Vm::new(module, vec![], GasSchedule::default(), VmConfig::default());
+//! let module = Compiler::compile(source, &[], CompilerConfig::default()).unwrap();
+//! let vm = Vm::new(module, vec![], GasSchedule::default(), HashMap::new(), VmConfig::default());
 //! let mut gas = GasMeter::new(1_000);
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
@@ -37,8 +41,10 @@ pub mod gas_meter;
 pub mod gas_schedule;
 
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::str::FromStr;
 
-use meow_vm_types::{config::VmConfig, types::Value};
+use meow_vm_types::{address::Address, config::VmConfig, types::Value};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
 
@@ -141,9 +147,14 @@ impl Frame {
 /// The virtual machine executor.
 ///
 /// Create a `Vm` from a [`Module`] and a list of native functions, then call
-/// functions by name.
+/// functions by name. For modules with cross-module dependencies, supply dep
+/// modules as a `HashMap<Address, Module>` via [`Vm::new`].
 pub struct Vm {
     module: Module,
+    /// Dependency modules indexed by **address** — the module's unique on-chain identifier.
+    /// Bytecode encodes cross-module calls as `@<hex_address>::fn_name`, so resolution
+    /// is unambiguous even when two dep modules share the same human-readable name.
+    deps: HashMap<Address, Module>,
     natives: HashMap<String, NativeFnEntry>,
     gas_schedule: GasSchedule,
     config: VmConfig,
@@ -151,15 +162,24 @@ pub struct Vm {
 
 impl Vm {
     /// Creates a new VM from a compiled module, native function bindings, a gas schedule, and a config.
+    ///
+    /// `deps` maps each dep module's on-chain address to its compiled [`Module`].
+    /// The address is the key used to resolve `@<address>::fn_name` bytecode references at runtime.
     pub fn new(
         module: Module,
         natives: Vec<NativeFnEntry>,
         gas_schedule: GasSchedule,
+        deps: HashMap<Address, Module>,
         config: VmConfig,
     ) -> Self {
         let mut native_map = HashMap::new();
         for entry in natives {
-            native_map.insert(entry.name.clone(), entry);
+            match native_map.entry(entry.name.clone()) {
+                Entry::Vacant(e) => e.insert(entry),
+                Entry::Occupied(_) => {
+                    panic!("duplicate native function name: {}", entry.name);
+                }
+            };
         }
         // Inject a default meow_vm_abort implementation if the caller didn't supply one.
         native_map
@@ -191,6 +211,7 @@ impl Vm {
             });
         Self {
             module,
+            deps,
             natives: native_map,
             gas_schedule,
             config,
@@ -207,13 +228,18 @@ impl Vm {
         args: Vec<Value>,
         gas: &mut GasMeter,
     ) -> Result<VmCallResult> {
+        let max_dep_modules = self.config.max_dep_modules();
+        if self.deps.len() > max_dep_modules {
+            return Err(VmError::TooManyDepModules(max_dep_modules));
+        }
+
         let func = self
             .module
             .get_function(fn_name)
             .ok_or_else(|| VmError::UndefinedFunction(fn_name.to_string()))?;
         let param_count = func.params.len();
 
-        let (return_value, final_locals) = self.call_inner(fn_name, args, gas, 0)?;
+        let (return_value, final_locals) = self.call_inner(fn_name, &self.module, args, gas, 0)?;
 
         // Expose the final state of each parameter slot as final_args.
         let final_args = final_locals.into_iter().take(param_count).collect();
@@ -224,10 +250,17 @@ impl Vm {
         })
     }
 
-    /// Inner recursive call. Returns `(return_value, final_locals)`.
+    /// Inner recursive call.
+    ///
+    /// `context_module` — the module that owns the function being called. Used to
+    /// resolve unqualified function/struct names within that function's bytecode.
+    /// Cross-module calls (`module::fn`) look up the target in `self.deps`.
+    ///
+    /// Returns `(return_value, final_locals)`.
     fn call_inner(
         &self,
         fn_name: &str,
+        context_module: &Module,
         args: Vec<Value>,
         gas: &mut GasMeter,
         depth: usize,
@@ -237,8 +270,7 @@ impl Vm {
             return Err(VmError::CallStackOverflow(max_call_depth));
         }
 
-        let func = self
-            .module
+        let func = context_module
             .get_function(fn_name)
             .ok_or_else(|| VmError::UndefinedFunction(fn_name.to_string()))?;
 
@@ -252,6 +284,7 @@ impl Vm {
                 // ── Literals ──────────────────────────────────────────────────
                 Instruction::PushBool(v) => frame.push(Value::Bool(v)),
                 Instruction::PushU64(v) => frame.push(Value::U64(v)),
+                Instruction::PushAddress(a) => frame.push(Value::Address(a)),
                 Instruction::PushStr(s) => frame.push(Value::Str(s)),
 
                 // ── Locals ────────────────────────────────────────────────────
@@ -375,6 +408,14 @@ impl Vm {
                     }
                     frame.push(arith_op(l, r, |a, b| a / b)?);
                 }
+                Instruction::Mod => {
+                    let r = frame.pop()?;
+                    let l = frame.pop()?;
+                    if r.as_u64() == Some(0) {
+                        return Err(VmError::DivisionByZero);
+                    }
+                    frame.push(arith_op(l, r, |a, b| a % b)?);
+                }
 
                 // ── Comparison ────────────────────────────────────────────────
                 Instruction::Eq => {
@@ -444,10 +485,16 @@ impl Vm {
                     type_name,
                     field_names,
                 } => {
-                    let def = self
-                        .module
-                        .get_struct(&type_name)
-                        .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
+                    let def = if let Some((dep_addr, struct_name)) = parse_module_ref(&type_name) {
+                        self.deps
+                            .get(&dep_addr)
+                            .and_then(|m| m.get_struct(struct_name))
+                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?
+                    } else {
+                        context_module
+                            .get_struct(&type_name)
+                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?
+                    };
                     let is_object = def.is_object;
 
                     // Pop values in reverse field order.
@@ -524,14 +571,33 @@ impl Vm {
 
                 // ── Functions ─────────────────────────────────────────────────
                 Instruction::Call(name) => {
-                    if let Some(callee) = self.module.get_function(&name) {
+                    if let Some((dep_addr, fn_name_in_dep)) = parse_module_ref(&name) {
+                        // Cross-module call: `@<hex_address>::function_name`.
+                        let dep = self
+                            .deps
+                            .get(&dep_addr)
+                            .ok_or_else(|| VmError::UndefinedFunction(name.clone()))?;
+                        let arg_count = dep
+                            .get_function(fn_name_in_dep)
+                            .ok_or_else(|| VmError::UndefinedFunction(name.clone()))?
+                            .params
+                            .len();
+                        let mut args: Vec<Value> = (0..arg_count)
+                            .map(|_| frame.pop())
+                            .collect::<Result<Vec<_>>>()?;
+                        args.reverse();
+                        let (ret, _) =
+                            self.call_inner(fn_name_in_dep, dep, args, gas, depth + 1)?;
+                        frame.push(ret.unwrap_or(Value::Void));
+                    } else if let Some(callee) = context_module.get_function(&name) {
                         let arg_count = callee.params.len();
                         let mut args: Vec<Value> = (0..arg_count)
                             .map(|_| frame.pop())
                             .collect::<Result<Vec<_>>>()?;
                         args.reverse();
 
-                        let (ret, _) = self.call_inner(&name, args, gas, depth + 1)?;
+                        let (ret, _) =
+                            self.call_inner(&name, context_module, args, gas, depth + 1)?;
                         frame.push(ret.unwrap_or(Value::Void));
                     } else if let Some(native) = self.natives.get(&name) {
                         let param_count = native.param_count;
@@ -572,6 +638,17 @@ impl Vm {
 //
 // ─── Helpers ───
 //
+
+/// Parse a bytecode cross-module reference of the form `@<64-hex-chars>::<name>`.
+///
+/// Returns `(dep_address, name_within_dep)` on success, or `None` if the string
+/// is not a cross-module reference (i.e. it is a plain local name).
+fn parse_module_ref(s: &str) -> Option<(Address, &str)> {
+    let rest = s.strip_prefix('@')?;
+    let (hex_part, name) = rest.split_once("::")?;
+    let address = Address::from_str(hex_part).ok()?;
+    Some((address, name))
+}
 
 fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
     let a = l

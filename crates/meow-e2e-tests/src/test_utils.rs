@@ -6,7 +6,6 @@ use meow_node_client::NodeClient;
 use meow_types::{
     address::Address,
     digest::Digest,
-    identifier::Identifier,
     keypair::{KeyPair, signature_scheme::SignatureScheme},
     object::{Object, object_ref::ObjectRef, object_type::ObjectType},
     transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
@@ -127,8 +126,11 @@ pub async fn submit_and_reject(client: &NodeClient, transaction: &SignedTransact
 /// A simple math module that can be published in tests.
 pub fn module_math() -> Vec<u8> {
     let module = builder::build(
-        &Identifier::new("math").unwrap(),
-        "fn add(a: u64, b: u64): u64 { return a + b; }",
+        r#"
+            module math;
+            fn add(a: u64, b: u64): u64 { return a + b; }
+        "#,
+        &[],
     )
     .unwrap();
     bcs::to_bytes(&module).unwrap()
@@ -136,7 +138,14 @@ pub fn module_math() -> Vec<u8> {
 
 /// A simple noop module that can be published in tests.
 pub fn module_noop() -> Vec<u8> {
-    let module = builder::build(&Identifier::new("noop").unwrap(), "fn noop() {}").unwrap();
+    let module = builder::build(
+        r#"
+            module noop;
+            fn noop() {}
+        "#,
+        &[],
+    )
+    .unwrap();
     bcs::to_bytes(&module).unwrap()
 }
 

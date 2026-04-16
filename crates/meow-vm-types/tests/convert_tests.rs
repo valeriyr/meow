@@ -22,9 +22,9 @@ fn u64_to_rust() {
 
 #[test]
 fn address_to_rust() {
-    let addr = [0xABu8; 32];
-    let val = Value::Address(addr);
-    assert_eq!(value_to_rust::<[u8; 32]>(&val).unwrap(), addr);
+    let raw = [0xABu8; 32];
+    let val = Value::Address(raw.into());
+    assert_eq!(value_to_rust::<[u8; 32]>(&val).unwrap(), raw);
 }
 
 #[test]
@@ -71,7 +71,7 @@ fn object_from_value() {
     let val = Value::Object {
         type_name: "MeowCoin".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(id)),
+            ("id".to_string(), Value::Address(id.into())),
             ("balance".to_string(), Value::U64(100)),
         ],
     };
@@ -85,13 +85,14 @@ fn object_from_value() {
 // ─── Newtype address wrapper (mirrors meow_types::Address) ───
 //
 
-/// Mimics `meow_types::Address` — a newtype over `[u8; 32]`.
+/// Mimics `meow_types::Address` — a newtype over `[u8; 32]`, used to test
+/// `serialize_newtype_struct` transparent unwrapping.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct Address([u8; 32]);
+struct AddressWrapper([u8; 32]);
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Coin {
-    id: Address,
+    id: AddressWrapper,
     balance: u64,
 }
 
@@ -99,7 +100,7 @@ struct Coin {
 fn object_from_rust_with_address_newtype() {
     let id = [0x42u8; 32];
     let coin = Coin {
-        id: Address(id),
+        id: AddressWrapper(id),
         balance: 100,
     };
     assert_eq!(
@@ -107,7 +108,7 @@ fn object_from_rust_with_address_newtype() {
         Value::Object {
             type_name: "Coin".to_string(),
             fields: vec![
-                ("id".to_string(), Value::Address(id)),
+                ("id".to_string(), Value::Address(id.into())),
                 ("balance".to_string(), Value::U64(100)),
             ],
         }
@@ -118,7 +119,7 @@ fn object_from_rust_with_address_newtype() {
 fn round_trip_with_address_newtype() {
     let id = [0x42u8; 32];
     let original = Coin {
-        id: Address(id),
+        id: AddressWrapper(id),
         balance: 77,
     };
     let value = object_from_rust(&original).unwrap();
@@ -153,7 +154,7 @@ fn object_from_rust_produces_object_value() {
         Value::Object {
             type_name: "MeowCoin".to_string(),
             fields: vec![
-                ("id".to_string(), Value::Address(id)),
+                ("id".to_string(), Value::Address(id.into())),
                 ("balance".to_string(), Value::U64(50)),
             ],
         }

@@ -15,7 +15,8 @@ use meow_types::{
 };
 
 use crate::{
-    call_arg::CallArg, output_encoder::OutputEncoder, transaction::output::TransactionCommandOutput,
+    builder, call_arg::CallArg, output_encoder::OutputEncoder,
+    transaction::output::TransactionCommandOutput,
 };
 
 /// Commands for MEOW transactions creation and signing.
@@ -85,7 +86,7 @@ impl TransactionCommand {
                     .ok_or_else(|| anyhow::anyhow!("gas coin {gas_coin} not found"))?
                     .object_ref();
 
-                let module = meow_vm_adapter::builder::build_from_file(path)?;
+                let module = builder::build_module(client, path).await?;
                 let module_bytes = bcs::to_bytes(&module)?;
 
                 let transaction = Transaction::new(

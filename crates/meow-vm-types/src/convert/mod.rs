@@ -333,7 +333,7 @@ impl SerializeTuple for TupleSerializer {
                     }
                 }
             }
-            Ok(Value::Address(addr))
+            Ok(Value::Address(addr.into()))
         } else {
             Err(ConversionError::UnsupportedType(format!(
                 "tuple of length {}; only [u8; 32] tuples are supported",

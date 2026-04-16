@@ -1,7 +1,8 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use meow_nakamoto_types::block::Block;
 use meow_types::{
+    address::Address,
     digest::Digest,
     object::Object,
     transaction::{
@@ -9,7 +10,7 @@ use meow_types::{
         transaction_type::TransactionType,
     },
 };
-use meow_vm_adapter::{executor, external_context::ExternalContext};
+use meow_vm_adapter::{Module, executor, external_context::ExternalContext};
 
 use crate::{store::Store, utils};
 
@@ -298,8 +299,12 @@ fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
     }
 
     if let TransactionType::MeowCall(call) = tx.type_() {
-        if let Some(module) = store.get_object(call.module()) {
-            inputs.push(module.clone());
+        if let Some(module_obj) = store.get_object(call.module()) {
+            // Collect all transitive dependency modules before the main module.
+            let mut seen = HashSet::new();
+            seen.insert(*call.module());
+            collect_dep_modules(module_obj, store, &mut inputs, &mut seen);
+            inputs.push(module_obj.clone());
         }
         for arg in call.arguments() {
             if let Input::Object(obj_ref) = arg
@@ -311,6 +316,31 @@ fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
     }
 
     inputs
+}
+
+/// Recursively collect all transitive dependency module objects from the store.
+///
+/// `seen` deduplicates diamond dependencies and prevents revisiting nodes. The
+/// recursion depth is bounded by the compiler-enforced `max_dep_modules` limit
+/// (default 64), so stack overflow is not a concern.
+fn collect_dep_modules(
+    root_obj: &Object,
+    store: &Store,
+    inputs: &mut Vec<Object>,
+    seen: &mut HashSet<Address>,
+) {
+    let Ok(module) = bcs::from_bytes::<Module>(root_obj.content()) else {
+        return;
+    };
+    for vm_addr in &module.imports {
+        let addr: Address = (*vm_addr).into();
+        if seen.insert(addr)
+            && let Some(dep_obj) = store.get_object(&addr)
+        {
+            collect_dep_modules(dep_obj, store, inputs, seen);
+            inputs.push(dep_obj.clone());
+        }
+    }
 }
 
 /// Deterministic hash of the object store's current state.

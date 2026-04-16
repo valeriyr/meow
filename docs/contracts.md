@@ -36,7 +36,7 @@ Struct and object fields must be primitive (`bool`, `u64`, `address`, `string`).
 
 ### Operators
 
-Arithmetic: `+` `-` `*` `/`  
+Arithmetic: `+` `-` `*` `/` `%`  
 Comparison: `==` `!=` `<` `<=` `>` `>=`  
 Logical: `&&` `||`
 
@@ -88,6 +88,55 @@ meow_vm_abort(meow_vm_timestamp() >= item.last_used + cooldown_ms, 2, "cooldown 
 ```
 
 See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and miner behaviour.
+
+## Cross-module dependencies
+
+Modules can import functions and types from other published modules using `use` declarations.
+
+### Declaring a dependency
+
+```meow
+module my_game;
+
+use math@0x1a2b3c...;   // import the module named "math" at the given on-chain address
+use utils@0x9f8e7d...;
+
+fn level_up(hero: Hero): u64 {
+    return math::scale(hero.xp, 2);
+}
+```
+
+The `@<address>` suffix is the 32-byte on-chain address of the published module. The human-readable name before `@` is how you reference it in source (`math::fn_name`, `math::TypeName`).
+
+### Using imported types and functions
+
+- **Functions**: `module_name::function_name(args)`
+- **Struct/object types**: `module_name::TypeName { field: value }`
+
+### Publishing a module with dependencies
+
+Before publishing, declare dependencies via `use` in source. The CLI resolves and fetches all transitive deps from the node automatically:
+
+```bash
+meow transaction publish my_game.meow --sender <ADDRESS> --gas-coin <OBJECT_ADDRESS>
+```
+
+### Limits
+
+| Limit | Default |
+|-------|---------|
+| `use` declarations per module (`max_imports`) | 64 |
+| Total transitive dependency modules (`max_dep_modules`) | 64 |
+
+The compiler enforces both limits at publish time. A module cannot be published if its transitive dependency graph exceeds `max_dep_modules`. Circular dependencies are also rejected.
+
+### Running locally with dependencies
+
+`meow smart-contract run` fetches all transitive deps from the node automatically before executing:
+
+```bash
+meow smart-contract run my_game.meow level_up 0x<hero_object>
+```
 
 ## Call argument format
 

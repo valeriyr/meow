@@ -183,7 +183,7 @@ mod tests {
         Value::Object {
             type_name: "MeowCoin".to_string(),
             fields: vec![
-                ("id".to_string(), Value::Address([1; 32])),
+                ("id".to_string(), Value::Address(Address::fill(1).into())),
                 ("balance".to_string(), Value::U64(100)),
             ],
         }

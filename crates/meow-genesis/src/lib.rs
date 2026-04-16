@@ -34,7 +34,7 @@ pub struct Genesis {
 impl Genesis {
     /// Builds the genesis state.
     pub fn build(allocations: &[(Address, u64)]) -> Result<Self> {
-        let meow_module = create_meow_framework_module()?;
+        let meow_module = build_meow_framework_module()?;
         let meow_coins = mint_meow_coins(meow_module.clone(), allocations)?;
 
         let mut objects = vec![meow_module];
@@ -49,9 +49,9 @@ impl Genesis {
     }
 }
 
-/// Creates a MEOW framework module object.
-fn create_meow_framework_module() -> Result<Object> {
-    let module = builder::build_from_file(MEOW_COIN_MODULE_PATH)?;
+/// Builds a MEOW framework module object.
+fn build_meow_framework_module() -> Result<Object> {
+    let module = builder::build_from_file(MEOW_COIN_MODULE_PATH, &[])?;
     let module_bytes = bcs::to_bytes(&module)?;
 
     Ok(Object::fresh_module(

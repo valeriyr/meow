@@ -1,10 +1,12 @@
-use meow_vm_types::types::Type;
+use meow_vm_types::{address::Address, types::Type};
 
 #[derive(Debug, Clone)]
 pub enum Expr {
     Bool(bool),
     /// All integer literals are stored as u64.
     Int(u64),
+    /// An address literal written as `@0x...` in source.
+    Address(Address),
     /// A string literal (for native function arguments).
     Str(String),
     Ident(String),
@@ -33,6 +35,7 @@ pub enum BinOp {
     Sub,
     Mul,
     Div,
+    Mod,
     Eq,
     Ne,
     Lt,
@@ -88,6 +91,13 @@ pub struct AstStruct {
 
 #[derive(Debug, Clone)]
 pub enum AstItem {
+    /// `module NAME;` — declares the module's name. Must be the first item in source.
+    ModuleDecl(String),
+    /// `use module_name@0x...;` — declares a dependency on a module at a specific address.
+    Use {
+        name: String,
+        address: Address,
+    },
     Struct(AstStruct),
     Fn(AstFunction),
 }

@@ -28,6 +28,9 @@ pub enum VmError {
     #[error("call stack overflow (max depth {0})")]
     CallStackOverflow(usize),
 
+    #[error("too many dependency modules (max {0})")]
+    TooManyDepModules(usize),
+
     /// Attempted to use a variable whose Object value was already moved out.
     #[error("use after move: {0}")]
     UseAfterMove(String),

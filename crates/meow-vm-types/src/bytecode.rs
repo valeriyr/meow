@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::address::Address;
+
 /// A single VM instruction.
 ///
 /// The VM is stack-based. Local variables occupy numbered slots; slot indices
@@ -9,6 +11,8 @@ pub enum Instruction {
     // ── Literals ──────────────────────────────────────────────────────────────
     PushBool(bool),
     PushU64(u64),
+    /// Push an address literal written as `@0x...` in source.
+    PushAddress(Address),
     /// Push a string literal (only for native call arguments like meow_vm_abort).
     PushStr(String),
 
@@ -29,6 +33,8 @@ pub enum Instruction {
     Mul,
     /// Integer division; errors on division by zero.
     Div,
+    /// Integer modulo; errors on division by zero.
+    Mod,
 
     // ── Comparison ────────────────────────────────────────────────────────────
     Eq,

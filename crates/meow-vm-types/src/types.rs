@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::address::Address;
+
 /// All types supported by the VM.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Type {
@@ -45,9 +47,9 @@ impl Type {
     }
 
     /// Returns true if this type can be used as a struct/object field type.
-    /// Only primitives are allowed as field types.
+    /// Primitives and (non-object) structs are allowed; objects are not.
     pub fn is_valid_field_type(&self) -> bool {
-        self.is_primitive()
+        self.is_primitive() || matches!(self, Self::Struct(_))
     }
 }
 
@@ -56,8 +58,8 @@ impl Type {
 pub enum Value {
     Bool(bool),
     U64(u64),
-    /// An address (32-byte array), freely copyable.
-    Address([u8; 32]),
+    /// An address (32-byte value), freely copyable.
+    Address(Address),
     /// A UTF-8 string value.
     Str(String),
     /// Returned by void functions to keep the stack balanced.
@@ -106,8 +108,8 @@ impl Value {
         }
     }
 
-    /// Returns the address bytes if this is an `Address` value, or `None` otherwise.
-    pub fn as_address(&self) -> Option<[u8; 32]> {
+    /// Returns the address if this is an `Address` value, or `None` otherwise.
+    pub fn as_address(&self) -> Option<Address> {
         match self {
             Self::Address(a) => Some(*a),
             _ => None,
@@ -131,7 +133,7 @@ impl Value {
     }
 
     /// Returns the `id` field value from an Object.
-    pub fn object_id(&self) -> Option<[u8; 32]> {
+    pub fn object_id(&self) -> Option<Address> {
         match self {
             Self::Object { fields, .. } => fields
                 .iter()
@@ -157,7 +159,7 @@ impl std::fmt::Display for Value {
         match self {
             Self::Bool(v) => write!(f, "{}", v),
             Self::U64(v) => write!(f, "{}", v),
-            Self::Address(a) => write!(f, "0x{}", hex::encode(a)),
+            Self::Address(a) => write!(f, "{}", a),
             Self::Str(s) => write!(f, "\"{}\"", s),
             Self::Void => write!(f, "void"),
             Self::Struct { type_name, fields } | Self::Object { type_name, fields } => {

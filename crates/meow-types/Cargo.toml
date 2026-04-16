@@ -7,10 +7,10 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "Core MEOW blockchain types — transactions, objects, addresses, and keys"
 
 [dependencies]
-ed25519-consensus = "2.1.0"
-slip10_ed25519 = "0.1.3"
-tiny-bip39 = "2.0.0"
-zeroize = { version = "1.8.1", features = ["derive"] }
+ed25519-consensus = "2.1"
+slip10_ed25519 = "0.1"
+tiny-bip39 = "2.0"
+zeroize = { version = "1.8", features = ["derive"] }
 
 base64.workspace = true
 bcs.workspace = true

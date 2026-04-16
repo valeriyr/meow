@@ -60,10 +60,17 @@ fn digest_from_string() {
 }
 
 #[test]
-fn digest_from_bytes() {
+fn digest_from_slice() {
     let digest = Digest::compute(b"hello").unwrap();
     let parsed = Digest::try_from(digest.as_ref()).unwrap();
     assert_eq!(digest, parsed);
+}
+
+#[test]
+fn digest_from_bytes() {
+    let bytes = [2; DIGEST_LENGTH];
+    let parsed: [u8; DIGEST_LENGTH] = Digest::from(bytes).into();
+    assert_eq!(bytes, parsed);
 }
 
 #[test]

@@ -15,8 +15,7 @@ use meow_vm_types::{
 
 #[test]
 fn compile_meow_coin() {
-    let module_name = Identifier::new("meow_coin").expect("module name must be a valid identifier");
-    builder::build(&module_name, MEOW_COIN_SRC).expect("compilation must succeed");
+    builder::build(MEOW_COIN_SRC, &[]).expect("compilation must succeed");
 }
 
 #[test]
@@ -148,8 +147,11 @@ fn split_and_transfer_to_recipient() {
 
 #[test]
 fn mint_with_zero_balance_succeeds() {
-    let result = run("mint", vec![Value::U64(0), Value::Address([0x01u8; 32])])
-        .expect("mint with zero balance must succeed");
+    let result = run(
+        "mint",
+        vec![Value::U64(0), Value::Address(Address::fill(0x01).into())],
+    )
+    .expect("mint with zero balance must succeed");
 
     assert_eq!(result.transfers.len(), 1);
     assert_eq!(coin_balance(&result.transfers[0].0), 0);
@@ -199,8 +201,7 @@ fn split_with_exact_balance_zeroes_from() {
 const MEOW_COIN_SRC: &str = include_str!("../modules/meow_coin.meow");
 
 fn meow_coin_module() -> Module {
-    let module_name = Identifier::new("meow_coin").expect("module name must be a valid identifier");
-    builder::build(&module_name, MEOW_COIN_SRC).expect("meow_coin.meow must compile")
+    builder::build(MEOW_COIN_SRC, &[]).expect("meow_coin.meow must compile")
 }
 
 fn make_coin(id: Address, balance: u64) -> Value {

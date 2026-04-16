@@ -8,6 +8,6 @@ description = "Shared types for the MEOW VM — values, types, config, and BCS u
 
 [dependencies]
 bcs.workspace = true
-hex.workspace = true
+prefix-hex.workspace = true
 thiserror.workspace = true
 serde.workspace = true

@@ -1,4 +1,7 @@
-use meow_vm_types::types::{StructDef, Type, Value};
+use meow_vm_types::{
+    address::Address,
+    types::{StructDef, Type, Value},
+};
 
 //
 // ─── Value::type_name — primitives ───
@@ -8,7 +11,7 @@ use meow_vm_types::types::{StructDef, Type, Value};
 fn value_type_name_primitives() {
     assert_eq!(Value::Bool(false).type_name(), "bool");
     assert_eq!(Value::U64(0).type_name(), "u64");
-    assert_eq!(Value::Address([0u8; 32]).type_name(), "address");
+    assert_eq!(Value::Address(Address::ZERO).type_name(), "address");
     assert_eq!(Value::Str("hello".to_string()).type_name(), "str");
     assert_eq!(Value::Void.type_name(), "void");
 }
@@ -44,7 +47,7 @@ fn value_as_bool() {
 
 #[test]
 fn value_as_address() {
-    let addr = [0xABu8; 32];
+    let addr = Address::fill(0xAB);
     assert_eq!(Value::Address(addr).as_address(), Some(addr));
     assert_eq!(Value::U64(0).as_address(), None);
     assert_eq!(Value::Bool(true).as_address(), None);

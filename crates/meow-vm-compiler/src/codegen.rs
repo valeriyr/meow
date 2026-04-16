@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use meow_vm_types::{
+    address::Address,
     bytecode::Instruction,
     config::CompilerConfig,
     module::Function,
@@ -17,6 +18,9 @@ use crate::{
 pub struct Codegen<'m> {
     config: &'m CompilerConfig,
     structs: &'m [StructDef],
+    /// Maps a dep module's human-readable name to its on-chain address.
+    /// Used to translate `module_name::something` → `@<hex>::something` in bytecode.
+    dep_addresses: &'m HashMap<String, Address>,
     locals: HashMap<String, u8>,
     next_slot: u8,
     code: Vec<Instruction>,
@@ -25,6 +29,7 @@ pub struct Codegen<'m> {
 impl<'m> Codegen<'m> {
     pub fn compile_function(
         structs: &'m [StructDef],
+        dep_addresses: &'m HashMap<String, Address>,
         ast_fn: AstFunction,
         config: &'m CompilerConfig,
     ) -> Result<Function> {
@@ -40,7 +45,7 @@ impl<'m> Codegen<'m> {
             )));
         }
 
-        let mut cg = Codegen::new(structs, config);
+        let mut cg = Codegen::new(structs, dep_addresses, config);
 
         // Validate return type: functions may not return an Object.
         // Note: the parser maps all named types to Type::Struct, so we also check
@@ -102,10 +107,15 @@ impl<'m> Codegen<'m> {
         })
     }
 
-    fn new(structs: &'m [StructDef], config: &'m CompilerConfig) -> Self {
+    fn new(
+        structs: &'m [StructDef],
+        dep_addresses: &'m HashMap<String, Address>,
+        config: &'m CompilerConfig,
+    ) -> Self {
         Self {
             config,
             structs,
+            dep_addresses,
             locals: HashMap::new(),
             next_slot: 0,
             code: Vec::new(),
@@ -131,10 +141,31 @@ impl<'m> Codegen<'m> {
         self.code.push(instr);
     }
 
+    /// Translate a potentially-qualified name to its address-qualified bytecode form.
+    ///
+    /// `"module_name::something"` → `"@<hex_address>::something"`
+    /// `"plain_name"` → `"plain_name"` (unchanged)
+    ///
+    /// Returns an error if `module_name` is used but not found in `dep_addresses`
+    /// (i.e. the module was not declared via `use module_name;`).
+    fn translate_name(&self, name: &str) -> Result<String> {
+        if let Some((mod_name, rest)) = name.split_once("::") {
+            match self.dep_addresses.get(mod_name) {
+                Some(addr) => Ok(format!("@{addr}::{rest}")),
+                None => Err(CompilerError::Message(format!(
+                    "reference to undeclared module '{mod_name}' — add `use {mod_name};` at the top of the file",
+                ))),
+            }
+        } else {
+            Ok(name.to_string())
+        }
+    }
+
     fn compile_expr(&mut self, expr: Expr) -> Result<()> {
         match expr {
             Expr::Bool(v) => self.emit(Instruction::PushBool(v)),
             Expr::Int(v) => self.emit(Instruction::PushU64(v)),
+            Expr::Address(addr) => self.emit(Instruction::PushAddress(addr)),
             Expr::Str(s) => self.emit(Instruction::PushStr(s)),
 
             Expr::Ident(name) => {
@@ -152,6 +183,7 @@ impl<'m> Codegen<'m> {
                     BinOp::Sub => Instruction::Sub,
                     BinOp::Mul => Instruction::Mul,
                     BinOp::Div => Instruction::Div,
+                    BinOp::Mod => Instruction::Mod,
                     BinOp::Eq => Instruction::Eq,
                     BinOp::Ne => Instruction::Ne,
                     BinOp::Lt => Instruction::Lt,
@@ -179,6 +211,7 @@ impl<'m> Codegen<'m> {
             }
 
             Expr::StructLit { name, fields } => {
+                // Look up the struct def using the source-level name (may be `module::Type`).
                 let def = self
                     .structs
                     .iter()
@@ -214,8 +247,10 @@ impl<'m> Codegen<'m> {
                     self.compile_expr(expr)?;
                 }
 
+                // Emit NewStruct with the address-qualified type name.
+                let type_name = self.translate_name(&name)?;
                 self.emit(Instruction::NewStruct {
-                    type_name: name,
+                    type_name,
                     field_names,
                 });
             }
@@ -224,7 +259,8 @@ impl<'m> Codegen<'m> {
                 for arg in args {
                     self.compile_expr(arg)?;
                 }
-                self.emit(Instruction::Call(name));
+                let translated = self.translate_name(&name)?;
+                self.emit(Instruction::Call(translated));
             }
         }
         Ok(())

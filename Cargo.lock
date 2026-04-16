@@ -362,12 +362,11 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bcs"
-version = "0.1.6"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85b6598a2f5d564fb7855dc6b06fd1c38cff5a72bd8b863a4d021938497b440a"
+checksum = "302fd2afb39688efc82f6138a68861b8f04f95be5faab2a06805a8a49f28deb6"
 dependencies = [
- "serde",
- "thiserror 1.0.69",
+ "serde_core",
 ]
 
 [[package]]
@@ -2465,7 +2464,7 @@ name = "meow-vm-types"
 version = "0.1.0"
 dependencies = [
  "bcs",
- "hex",
+ "prefix-hex",
  "serde",
  "thiserror 2.0.18",
 ]
@@ -4091,9 +4090,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.51.0"
+version = "1.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2bd1c4c0fc4a7ab90fc15ef6daaa3ec3b893f004f915f2392557ed23237820cd"
+checksum = "a91135f59b1cbf38c91e73cf3386fca9bb77915c45ce2771460c9d92f0f3d776"
 dependencies = [
  "bytes",
  "libc",

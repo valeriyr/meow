@@ -2,22 +2,18 @@ pub mod error;
 
 use std::str::FromStr;
 
-use blake2::{Blake2b, digest::consts::U32};
 use error::AddressError;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    digest::Digest,
-    keypair::{KeyPair, public_key::PublicKey},
-};
 
 /// The result type related to addresses.
 pub type Result<T> = std::result::Result<T, AddressError>;
 
-/// The address length.
+/// The address length in bytes.
 pub const ADDRESS_LENGTH: usize = 32;
 
-/// The meow account address type.
+/// A 32-byte VM address — the unique identifier for a module or object.
+///
+/// Freely copyable and comparable. Serializes as a raw `[u8; 32]` (no discriminant).
 #[derive(Serialize, Deserialize, Clone, Copy, Hash, PartialEq, Eq, Ord, PartialOrd)]
 pub struct Address([u8; ADDRESS_LENGTH]);
 
@@ -25,31 +21,14 @@ impl Address {
     /// The zero address constant.
     pub const ZERO: Self = Self([0; ADDRESS_LENGTH]);
 
-    /// Creates a new address.
+    /// Creates a new address from raw bytes.
     pub const fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
         Self(bytes)
     }
 
-    /// Creates an address filled with the given byte.
+    /// Creates an address with every byte set to `byte`.
     pub const fn fill(byte: u8) -> Self {
         Self([byte; ADDRESS_LENGTH])
-    }
-
-    /// Derives a new address from the given digest, tag, and counter.
-    ///
-    /// Constructs a 33-byte input buffer as `[tag, digest_bytes...]`, appends the
-    /// 8-byte little-endian encoding of `number`, then Blake2b-256 hashes the
-    /// result to produce the 32-byte address.
-    pub fn derive(digest: Digest, tag: u8, number: u64) -> Self {
-        use blake2::Digest;
-
-        let mut hasher = Blake2b::<U32>::default();
-
-        hasher.update([tag]);
-        hasher.update(digest);
-        hasher.update(number.to_le_bytes());
-
-        Address::new(hasher.finalize().into())
     }
 }
 
@@ -68,6 +47,9 @@ impl std::fmt::Debug for Address {
 impl FromStr for Address {
     type Err = AddressError;
 
+    /// Parse a hex address with or without a `0x` prefix.
+    ///
+    /// Short forms like `0x42` are accepted and left-padded with zeros.
     fn from_str(s: &str) -> Result<Self> {
         let bytes: Vec<u8> = prefix_hex::decode(s)?;
 
@@ -79,39 +61,6 @@ impl FromStr for Address {
         }
 
         Address::try_from(bytes.as_slice())
-    }
-}
-
-impl From<&KeyPair> for Address {
-    fn from(keypair: &KeyPair) -> Self {
-        Address::from(keypair.public())
-    }
-}
-
-impl From<PublicKey> for Address {
-    fn from(public_key: PublicKey) -> Self {
-        use blake2::Digest;
-
-        let mut hasher = Blake2b::<U32>::default();
-
-        hasher.update([public_key.scheme().flag()]);
-        hasher.update(&public_key);
-
-        Address::new(hasher.finalize().into())
-    }
-}
-
-impl From<meow_vm_types::address::Address> for Address {
-    fn from(address: meow_vm_types::address::Address) -> Self {
-        let bytes: [u8; ADDRESS_LENGTH] = address.into();
-        Address::from(bytes)
-    }
-}
-
-impl From<Address> for meow_vm_types::address::Address {
-    fn from(address: Address) -> Self {
-        let bytes: [u8; ADDRESS_LENGTH] = address.into();
-        meow_vm_types::address::Address::from(bytes)
     }
 }
 

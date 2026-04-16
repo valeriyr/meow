@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use meow_types::{
     address::Address,
     config::{MAX_BCS_SERIALIZED_MODULE_SIZE, NATIVE_FUNCTION_NAMES},
@@ -322,7 +324,7 @@ fn execute_meow_call_without_module_returns_failure() {
     let result = execute(&tx, vec![gas_obj]).unwrap();
 
     assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("expected exactly 1 module object in inputs, found 0")),
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found in inputs")),
         "missing module must produce Failure, got: {:?}",
         result.status()
     );
@@ -334,21 +336,233 @@ fn execute_meow_call_without_module_returns_failure() {
 }
 
 #[test]
-fn execute_meow_call_with_multiple_modules_returns_failure() {
-    let module1 = make_default_module_object();
-    // Second module object at a different address.
-    let module2 = make_module_object(Address::fill(0x02), module1.content().to_vec());
+fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
+    // An unrelated module object in inputs (not declared in main module's imports)
+    // must be silently ignored and must not prevent successful execution.
+    let module_obj = make_default_module_object();
+    let unrelated_bytes = compile_to_bytes(
+        r#"
+            module unrelated;
+            fn noop() {}
+        "#,
+    );
+    let unrelated_obj = make_module_object(Address::fill(0x02), unrelated_bytes);
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_call_transaction(
         "mint",
         vec![Input::raw(&10u64).unwrap(), Input::raw(&SENDER).unwrap()],
     );
 
-    let result = execute(&tx, vec![module1, module2, gas_obj]).unwrap();
+    let result = execute(&tx, vec![module_obj, unrelated_obj, gas_obj]).unwrap();
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "unrelated module in inputs must not prevent successful execution"
+    );
+}
+
+#[test]
+fn execute_meow_call_with_missing_dep_returns_failure() {
+    // Module declares a dependency via `use`, but the dep object is not in inputs.
+    // The executor must reject the transaction before entering the VM.
+    let (_, _, main_module) = make_dep_chain();
+
+    let main_addr = Address::ZERO;
+    let main_bytes = bcs::to_bytes(&main_module).unwrap();
+    let module_obj = make_module_object(main_addr, main_bytes);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(main_addr, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    // Dep module object is intentionally absent from inputs.
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("expected exactly 1 module object in inputs, found 2")),
-        "multiple modules must produce Failure, got: {:?}",
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("missing dependency")),
+        "missing dep must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_meow_call_with_dep_present_succeeds() {
+    // Module declares a dependency and the dep object is in inputs — must succeed.
+    let (dep_addr, dep_module, main_module) = make_dep_chain();
+
+    let dep_bytes = bcs::to_bytes(&dep_module).unwrap();
+    let dep_obj = make_module_object(Address::from(<[u8; 32]>::from(dep_addr)), dep_bytes);
+
+    let main_addr = Address::ZERO;
+    let main_bytes = bcs::to_bytes(&main_module).unwrap();
+    let module_obj = make_module_object(main_addr, main_bytes);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(main_addr, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![module_obj, dep_obj, gas_obj]).unwrap();
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "dep in inputs must allow successful execution, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn execute_meow_call_transitive_dep_missing_returns_failure() {
+    // A → B → C: B is absent from inputs; transitive resolution must fail.
+    let (_, c_addr, _, c_module, a_module) = make_three_module_chain();
+
+    let c_bytes = bcs::to_bytes(&c_module).unwrap();
+    let c_obj = make_module_object(Address::from(<[u8; 32]>::from(c_addr)), c_bytes);
+
+    let a_addr = Address::ZERO;
+    let a_bytes = bcs::to_bytes(&a_module).unwrap();
+    let a_obj = make_module_object(a_addr, a_bytes);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(a_addr, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    // B is absent; only A, C, and gas are in inputs.
+    let result = execute(&tx, vec![a_obj, c_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("missing dependency")),
+        "missing transitive dep must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_meow_call_transitive_dep_present_succeeds() {
+    // A → B → C: all three module objects are in inputs; execution must succeed.
+    let (b_addr, c_addr, b_module, c_module, a_module) = make_three_module_chain();
+
+    let b_bytes = bcs::to_bytes(&b_module).unwrap();
+    let b_obj = make_module_object(Address::from(<[u8; 32]>::from(b_addr)), b_bytes);
+    let c_bytes = bcs::to_bytes(&c_module).unwrap();
+    let c_obj = make_module_object(Address::from(<[u8; 32]>::from(c_addr)), c_bytes);
+
+    let a_addr = Address::ZERO;
+    let a_bytes = bcs::to_bytes(&a_module).unwrap();
+    let a_obj = make_module_object(a_addr, a_bytes);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(a_addr, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![a_obj, b_obj, c_obj, gas_obj]).unwrap();
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "full transitive dep tree in inputs must succeed, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn execute_meow_call_diamond_dep_succeeds() {
+    // Diamond dep: A → {B, C}, B → D, C → D.
+    // D is reachable through two paths but is the same module — must succeed.
+    let (b_addr, c_addr, d_addr, b_module, c_module, d_module, a_module) = make_diamond_dep_chain();
+
+    let a_bytes = bcs::to_bytes(&a_module).unwrap();
+    let b_bytes = bcs::to_bytes(&b_module).unwrap();
+    let c_bytes = bcs::to_bytes(&c_module).unwrap();
+    let d_bytes = bcs::to_bytes(&d_module).unwrap();
+
+    let a_obj = make_module_object(Address::ZERO, a_bytes);
+    let b_obj = make_module_object(Address::from(<[u8; 32]>::from(b_addr)), b_bytes);
+    let c_obj = make_module_object(Address::from(<[u8; 32]>::from(c_addr)), c_bytes);
+    let d_obj = make_module_object(Address::from(<[u8; 32]>::from(d_addr)), d_bytes);
+    let gas_obj = make_gas_coin_object();
+
+    let call = Call::new(Address::ZERO, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![a_obj, b_obj, c_obj, d_obj, gas_obj]).unwrap();
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "diamond dep must succeed, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn execute_meow_call_cyclic_dep_returns_failure() {
+    // Cycle: A → B → C → B.
+    // B and C form a cycle; the executor must detect and reject it.
+    // These modules are hand-crafted (the compiler prevents cyclic imports).
+    let b_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
+    let c_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
+
+    // Hand-craft modules with a cycle: B imports C, C imports B.
+    let mut b_module = meow_vm_types::module::Module::new("b");
+    b_module.imports = vec![c_addr];
+    let mut c_module = meow_vm_types::module::Module::new("c");
+    c_module.imports = vec![b_addr];
+
+    // A is a normal module that imports B (which pulls in the cycle).
+    let mut a_module = meow_vm_types::module::Module::new("a");
+    a_module.imports = vec![b_addr];
+
+    let a_obj = make_module_object(Address::ZERO, bcs::to_bytes(&a_module).unwrap());
+    let b_obj = make_module_object(
+        Address::from(<[u8; 32]>::from(b_addr)),
+        bcs::to_bytes(&b_module).unwrap(),
+    );
+    let c_obj = make_module_object(
+        Address::from(<[u8; 32]>::from(c_addr)),
+        bcs::to_bytes(&c_module).unwrap(),
+    );
+    let gas_obj = make_gas_coin_object();
+
+    let call = Call::new(Address::ZERO, Identifier::new("run").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![a_obj, b_obj, c_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("circular")),
+        "cyclic dep must produce Failure, got: {:?}",
         result.status()
     );
     assert_eq!(
@@ -517,10 +731,19 @@ fn execute_with_argument_count_mismatch_returns_failure() {
 #[test]
 fn execute_vm_abort_returns_failure() {
     // meow_vm_abort(condition: bool, code: u64, message: str) — aborts when condition is false.
-    let src = r#"fn do_abort() { meow_vm_abort(false, 1, "abort message"); }"#;
-    let module_obj = make_module_object_from_src("abort_test", src);
+    let src = r#"
+        module abort_test;
+        fn do_abort() { meow_vm_abort(false, 1, "abort message"); }
+    "#;
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(src);
     let gas_obj = make_gas_coin_object();
-    let tx = make_meow_call_transaction("do_abort", vec![]);
+    let call = Call::new(module_addr, Identifier::new("do_abort").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
 
     let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
@@ -574,10 +797,19 @@ fn split_with_insufficient_balance_returns_failure() {
 fn fresh_object_not_consumed_returns_failure() {
     // A function that calls meow_vm_fresh_id() but never transfers or destroys
     // the generated object — effects.rs requires all fresh IDs to be consumed.
-    let src = "fn generate_id() { let id = meow_vm_fresh_id(); }";
-    let module_obj = make_module_object_from_src("leak_test", src);
+    let src = r#"
+        module leak_test;
+        fn generate_id() { let id = meow_vm_fresh_id(); }
+    "#;
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(src);
     let gas_obj = make_gas_coin_object();
-    let tx = make_meow_call_transaction("generate_id", vec![]);
+    let call = Call::new(module_addr, Identifier::new("generate_id").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
 
     let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
@@ -640,7 +872,12 @@ fn exhausted_gas_coin_goes_to_changed() {
 
 #[test]
 fn execute_module_publish_succeeds() {
-    let module_bytes = make_module("publish_test", "fn noop() {}");
+    let module_bytes = compile_to_bytes(
+        r#"
+            module publish_test;
+            fn noop() {}
+        "#,
+    );
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(module_bytes);
 
@@ -668,7 +905,12 @@ fn execute_module_publish_succeeds() {
 
 #[test]
 fn execute_module_publish_charges_gas_per_byte() {
-    let module_bytes = make_module("charge_test", "fn noop() {}");
+    let module_bytes = compile_to_bytes(
+        r#"
+            module charge_test;
+            fn noop() {}
+        "#,
+    );
     let module_size = module_bytes.len() as u64;
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(module_bytes);
@@ -723,7 +965,12 @@ fn execute_module_publish_fails_when_module_not_deserializable() {
 
 #[test]
 fn execute_module_publish_derives_address_from_tx_digest() {
-    let module_bytes = make_module("addr_test", "fn noop() {}");
+    let module_bytes = compile_to_bytes(
+        r#"
+            module addr_test;
+            fn noop() {}
+        "#,
+    );
     let gas_obj = make_gas_coin_object();
     let tx = make_meow_module_publish_transaction(module_bytes);
     let tx_digest = tx.digest();
@@ -751,22 +998,181 @@ const GAS_ADDR: Address = Address::fill(0xBB);
 /// Initial gas coin balance (more than enough for any test).
 const GAS_BALANCE: u64 = 1_000_000;
 
-fn make_default_module_object() -> Object {
-    make_module_object_from_src("meow_coin", MEOW_COIN_SRC)
+/// Build a two-module dep chain for use in dependency resolution tests.
+///
+/// Returns `(dep_addr, dep_module, main_module)` where:
+/// - `dep_module` is compiled at `dep_addr` (0x42) and exports `fn get(): u64`
+/// - `main_module` imports `dep_module` and exports `fn run(): u64` (delegates to dep)
+/// - `main_module` is intended to be deployed at `Address::ZERO`
+fn make_dep_chain() -> (
+    meow_vm_types::address::Address,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+) {
+    let dep_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
+    let dep_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module helper;
+            fn get(): u64 { return 42; }
+        "#,
+        &[],
+        meow_vm_types::config::CompilerConfig::default(),
+    )
+    .expect("dep must compile");
+    let main_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module main_mod;
+            use helper@0x42;
+            fn run(): u64 { return helper::get(); }
+        "#,
+        &[(dep_addr, &dep_module)],
+        meow_vm_types::config::CompilerConfig::default(),
+    )
+    .expect("main must compile");
+    (dep_addr, dep_module, main_module)
 }
 
-fn make_module_object_from_src(name: &str, src: &str) -> Object {
-    let content = make_module(name, src);
-    make_module_object(Address::ZERO, content)
+/// Build a three-module chain for transitive dep resolution tests: A → B → C.
+///
+/// Returns `(b_addr, c_addr, b_module, c_module, a_module)` where:
+/// - c_module: `module c`, exports `fn get(): u64` (address 0x42)
+/// - b_module: `module b`, imports c, exports `fn run(): u64` (address 0x43)
+/// - a_module: `module a`, imports b, exports `fn run(): u64` (address ZERO)
+fn make_three_module_chain() -> (
+    meow_vm_types::address::Address,
+    meow_vm_types::address::Address,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+) {
+    let cfg = meow_vm_types::config::CompilerConfig::default();
+    let c_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
+    let b_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
+    let c_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module c;
+            fn get(): u64 { return 42; }
+        "#,
+        &[],
+        cfg.clone(),
+    )
+    .expect("c must compile");
+    let b_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module b;
+            use c@0x42;
+            fn run(): u64 { return c::get(); }
+        "#,
+        &[(c_addr, &c_module)],
+        cfg.clone(),
+    )
+    .expect("b must compile");
+    let a_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module a;
+            use b@0x43;
+            fn run(): u64 { return b::run(); }
+        "#,
+        &[(b_addr, &b_module), (c_addr, &c_module)],
+        cfg,
+    )
+    .expect("a must compile");
+    (b_addr, c_addr, b_module, c_module, a_module)
+}
+
+/// Build a diamond dep chain for dep resolution tests: A → {B, C}, B → D, C → D.
+///
+/// Returns `(b_addr, c_addr, d_addr, b_module, c_module, d_module, a_module)` where:
+/// - d_module: `module d`, exports `fn get(): u64` (address 0x44)
+/// - b_module: `module b`, imports d, exports `fn run(): u64` (address 0x42)
+/// - c_module: `module c`, imports d, exports `fn run(): u64` (address 0x43)
+/// - a_module: `module a`, imports b and c, exports `fn run(): u64` (address ZERO)
+#[allow(clippy::type_complexity)]
+fn make_diamond_dep_chain() -> (
+    meow_vm_types::address::Address,
+    meow_vm_types::address::Address,
+    meow_vm_types::address::Address,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+    meow_vm_types::module::Module,
+) {
+    let cfg = meow_vm_types::config::CompilerConfig::default();
+    let d_addr = meow_vm_types::address::Address::from_str("0x44").unwrap();
+    let b_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
+    let c_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
+    let d_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module d;
+            fn get(): u64 { return 42; }
+        "#,
+        &[],
+        cfg.clone(),
+    )
+    .expect("d must compile");
+    let b_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module b;
+            use d@0x44;
+            fn run(): u64 { return d::get(); }
+        "#,
+        &[(d_addr, &d_module)],
+        cfg.clone(),
+    )
+    .expect("b must compile");
+    let c_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module c;
+            use d@0x44;
+            fn run(): u64 { return d::get(); }
+        "#,
+        &[(d_addr, &d_module)],
+        cfg.clone(),
+    )
+    .expect("c must compile");
+    let a_module = meow_vm_compiler::Compiler::compile(
+        r#"
+            module a;
+            use b@0x42;
+            use c@0x43;
+            fn run(): u64 { return b::run(); }
+        "#,
+        &[
+            (b_addr, &b_module),
+            (c_addr, &c_module),
+            (d_addr, &d_module),
+        ],
+        cfg,
+    )
+    .expect("a must compile");
+    (
+        b_addr, c_addr, d_addr, b_module, c_module, d_module, a_module,
+    )
+}
+
+fn make_default_module_object() -> Object {
+    // The meow_coin module is always placed at MEOW_COIN_MODULE_ADDRESS so that
+    // transactions targeting that address can resolve it.
+    let bytes = compile_to_bytes(MEOW_COIN_SRC);
+    make_module_object(MEOW_COIN_MODULE_ADDRESS, bytes)
+}
+
+/// Compile a complete .meow source string (must include `module NAME;`) into a
+/// module object at `Address::ZERO`. Use this for ad-hoc modules in tests where
+/// the call is constructed with a matching `Address::ZERO` module address.
+fn make_module_object_from_src(src: &str) -> Object {
+    let bytes = compile_to_bytes(src);
+    make_module_object(Address::ZERO, bytes)
 }
 
 fn make_module_object(address: Address, content: Vec<u8>) -> Object {
     Object::fresh_module(address, Digest::ZERO, content)
 }
 
-fn make_module(name: &str, src: &str) -> Vec<u8> {
-    let module_name = Identifier::new(name).expect("module name must be a valid identifier");
-    let module = builder::build(&module_name, src).expect("must compile");
+/// Compile a complete .meow source string and return the BCS-serialized bytes.
+/// The source must start with a `module NAME;` declaration.
+fn compile_to_bytes(src: &str) -> Vec<u8> {
+    let module = builder::build(src, &[]).expect("must compile");
     bcs::to_bytes(&module).expect("module must serialize")
 }
 
@@ -880,14 +1286,17 @@ fn execute_with_timestamp(
 /// Execute the `roll()` function with the given seed.
 fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
     const RAND_MODULE_SRC: &str = r#"
+        module rand_test;
+
         object RandBox { id: address, value: u64 }
+
         fn roll() {
             let box = RandBox { id: meow_vm_fresh_id(), value: meow_vm_rand() };
             meow_vm_transfer(box, meow_vm_sender());
         }
         "#;
 
-    let module_obj = make_module_object_from_src("rand_test", RAND_MODULE_SRC);
+    let module_obj = make_module_object_from_src(RAND_MODULE_SRC);
     let gas_obj = make_gas_coin_object();
     let call = Call::new(Address::ZERO, Identifier::new("roll").unwrap(), vec![]);
     let tx = Transaction::new(
@@ -903,14 +1312,17 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
 /// Execute the `capture()` function with the given block timestamp.
 fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
     const TIMESTAMP_MODULE_SRC: &str = r#"
+        module timestamp_test;
+
         object TimestampBox { id: address, value: u64 }
+
         fn capture() {
             let box = TimestampBox { id: meow_vm_fresh_id(), value: meow_vm_timestamp() };
             meow_vm_transfer(box, meow_vm_sender());
         }
         "#;
 
-    let module_obj = make_module_object_from_src("timestamp_test", TIMESTAMP_MODULE_SRC);
+    let module_obj = make_module_object_from_src(TIMESTAMP_MODULE_SRC);
     let gas_obj = make_gas_coin_object();
     let call = Call::new(Address::ZERO, Identifier::new("capture").unwrap(), vec![]);
     let tx = Transaction::new(

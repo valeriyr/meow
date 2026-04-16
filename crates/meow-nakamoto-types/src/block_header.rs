@@ -49,14 +49,49 @@ impl BlockHeader {
     /// Returns true if the `mining_hash` has at least `difficulty` leading zero bits.
     pub fn meets_difficulty(&self, difficulty: u32) -> bool {
         let hash = self.mining_hash();
-        let mut leading_zeros = 0u32;
-        for byte in hash.as_ref() {
-            let lz = byte.leading_zeros();
-            leading_zeros += lz;
-            if lz < 8 {
-                break;
-            }
+        leading_zeros(&hash) >= difficulty
+    }
+}
+
+/// Counts the number of leading zero bits in the digest.
+fn leading_zeros(digest: &Digest) -> u32 {
+    let mut leading_zeros = 0u32;
+
+    for byte in digest.as_ref() {
+        let lz = byte.leading_zeros();
+
+        leading_zeros += lz;
+
+        if lz < 8 {
+            break;
         }
-        leading_zeros >= difficulty
+    }
+
+    leading_zeros
+}
+
+#[cfg(test)]
+mod tests {
+
+    use meow_types::digest::{DIGEST_LENGTH, Digest};
+
+    use super::leading_zeros;
+
+    #[test]
+    fn zero_digest_leading_zeros() {
+        let digest = Digest::ZERO;
+        assert_eq!(leading_zeros(&digest), 256);
+    }
+
+    #[test]
+    fn digest_with_one_leading_zero() {
+        let digest = Digest::from([0x7F; DIGEST_LENGTH]);
+        assert_eq!(leading_zeros(&digest), 1);
+    }
+
+    #[test]
+    fn digest_without_leading_zeros() {
+        let digest = Digest::from([0xFF; DIGEST_LENGTH]);
+        assert_eq!(leading_zeros(&digest), 0);
     }
 }

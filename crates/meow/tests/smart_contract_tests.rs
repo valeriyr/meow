@@ -10,9 +10,6 @@ use meow_node_client::NodeClient;
 use meow_types::identifier::Identifier;
 use temp_dir::TempDir;
 
-const ADD_SRC: &str = "fn add(a: u64, b: u64): u64 { return a + b; }";
-const NOOP_SRC: &str = "fn noop() {}";
-
 //
 // ─── Build tests ───
 //
@@ -20,7 +17,7 @@ const NOOP_SRC: &str = "fn noop() {}";
 #[tokio::test]
 async fn build_valid_source_succeeds() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "example", ADD_SRC);
+    let path = write_source(&tmp, ADD_SRC);
 
     let output = SmartContractCommand::Build {
         path,
@@ -34,9 +31,9 @@ async fn build_valid_source_succeeds() {
 }
 
 #[tokio::test]
-async fn build_uses_file_stem_as_module_name() {
+async fn build_module_name_comes_from_source_declaration() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "mymodule", ADD_SRC);
+    let path = write_source(&tmp, ADD_SRC);
 
     let output = SmartContractCommand::Build {
         path,
@@ -50,13 +47,13 @@ async fn build_uses_file_stem_as_module_name() {
         SmartContractCommandOutput::Build(m) => m.name,
         _ => panic!("expected Build output"),
     };
-    assert_eq!(name, "mymodule");
+    assert_eq!(name, "math");
 }
 
 #[tokio::test]
 async fn build_invalid_source_returns_compiler_error() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "bad", "this is not valid meow source !!!");
+    let path = write_source(&tmp, "this is not valid meow source !!!");
 
     let err = SmartContractCommand::Build {
         path,
@@ -80,7 +77,7 @@ async fn build_invalid_source_returns_compiler_error() {
 #[tokio::test]
 async fn run_returns_computed_return_value() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "math", ADD_SRC);
+    let path = write_source(&tmp, ADD_SRC);
 
     let output = SmartContractCommand::Run {
         path,
@@ -102,7 +99,7 @@ async fn run_returns_computed_return_value() {
 #[tokio::test]
 async fn run_void_function_produces_no_return_value() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "util", NOOP_SRC);
+    let path = write_source(&tmp, NOOP_SRC);
 
     let output = SmartContractCommand::Run {
         path,
@@ -124,7 +121,7 @@ async fn run_void_function_produces_no_return_value() {
 #[tokio::test]
 async fn run_unknown_function_returns_error() {
     let tmp = TempDir::new().unwrap();
-    let path = write_source(&tmp, "math", ADD_SRC);
+    let path = write_source(&tmp, ADD_SRC);
 
     let err = SmartContractCommand::Run {
         path,
@@ -145,12 +142,21 @@ async fn run_unknown_function_returns_error() {
 // ─── Utility functions ───
 //
 
+const ADD_SRC: &str = r#"
+        module math;
+        fn add(a: u64, b: u64): u64 { return a + b; }
+    "#;
+const NOOP_SRC: &str = r#"
+        module utils;
+        fn noop() {}
+    "#;
+
 fn fake_client() -> NodeClient {
     NodeClient::with_url(DEFAULT_NODE_URL.parse().unwrap())
 }
 
-fn write_source(tmp: &TempDir, name: &str, src: &str) -> PathBuf {
-    let path = tmp.path().join(format!("{name}.meow"));
+fn write_source(tmp: &TempDir, src: &str) -> PathBuf {
+    let path = tmp.path().join("test.meow");
     std::fs::write(&path, src).expect("source write must succeed");
     path
 }

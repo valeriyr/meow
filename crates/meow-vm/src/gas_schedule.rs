@@ -17,6 +17,8 @@ pub struct GasSchedule {
     add_sub_mul: u64,
     /// Cost of integer division (`Div`), which is more expensive due to the divide-by-zero check.
     div: u64,
+    /// Cost of integer modulo (`Mod`), same expense as division.
+    mod_: u64,
     /// Cost of any comparison operation (`Eq`, `Ne`, `Lt`, `Le`, `Gt`, `Ge`).
     compare: u64,
     /// Cost of boolean logic operations (`Not`, `And`, `Or`).
@@ -47,6 +49,7 @@ impl Default for GasSchedule {
             store_field: 5,
             add_sub_mul: 2,
             div: 5,
+            mod_: 5,
             compare: 2,
             logic: 1,
             new_struct_base: 10,
@@ -64,7 +67,9 @@ impl GasSchedule {
     /// Returns the gas cost for a single instruction.
     pub fn cost_of(&self, instr: &Instruction) -> u64 {
         match instr {
-            Instruction::PushBool(_) | Instruction::PushU64(_) => self.push_primitive,
+            Instruction::PushBool(_) | Instruction::PushU64(_) | Instruction::PushAddress(_) => {
+                self.push_primitive
+            }
             Instruction::PushStr(_) => self.push_str,
 
             Instruction::Load(_) | Instruction::Store(_) => self.load_store,
@@ -73,6 +78,7 @@ impl GasSchedule {
 
             Instruction::Add | Instruction::Sub | Instruction::Mul => self.add_sub_mul,
             Instruction::Div => self.div,
+            Instruction::Mod => self.mod_,
 
             Instruction::Eq
             | Instruction::Ne

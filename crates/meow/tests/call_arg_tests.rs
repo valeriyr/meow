@@ -119,7 +119,7 @@ async fn into_value_address_preserves_bytes() {
         .await
         .unwrap();
 
-    assert!(matches!(v, Value::Address(bytes) if bytes == addr.as_ref()));
+    assert!(matches!(v, Value::Address(a) if a == addr.into()));
 }
 
 #[tokio::test]
