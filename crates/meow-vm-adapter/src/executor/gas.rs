@@ -39,4 +39,5 @@ pub fn apply_gas_spending(
         changed,
         result.destroyed_objects().to_vec(),
     )
+    .with_gas_used(gas_spent)
 }

@@ -13,7 +13,7 @@ fn generate_key_is_added_to_keystore() {
 
     let output = generate(&mut keystore);
 
-    assert!(matches!(output, KeyToolCommandOutput::Generate(_)));
+    assert!(matches!(output, KeyToolCommandOutput::Generate { .. }));
     assert_eq!(keystore.iter().count(), 1);
 }
 
@@ -24,7 +24,7 @@ fn generate_key_output_contains_address_and_scheme() {
     let output = generate(&mut keystore);
 
     let key = match output {
-        KeyToolCommandOutput::Generate(key) => key,
+        KeyToolCommandOutput::Generate { key, .. } => key,
         _ => panic!("expected Generate output"),
     };
     assert!(!key.address.is_empty());
@@ -138,7 +138,9 @@ fn generate(keystore: &mut Keystore) -> KeyToolCommandOutput {
 
 fn generate_key(keystore: &mut Keystore) -> Address {
     match generate(keystore) {
-        KeyToolCommandOutput::Generate(key) => key.address.parse().expect("address must be valid"),
+        KeyToolCommandOutput::Generate { key, .. } => {
+            key.address.parse().expect("address must be valid")
+        }
         _ => panic!("expected Generate output"),
     }
 }

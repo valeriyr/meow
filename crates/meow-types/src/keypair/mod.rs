@@ -49,12 +49,12 @@ impl KeyPair {
         scheme: SignatureScheme,
         path: Option<DerivationPath>,
         mnemonic_type: Option<MnemonicType>,
-    ) -> Result<Self> {
+    ) -> Result<(Self, String)> {
         match scheme {
-            SignatureScheme::Ed25519 => Ok(KeyPair::Ed25519(Ed25519KeyPair::generate(
-                path,
-                mnemonic_type,
-            )?)),
+            SignatureScheme::Ed25519 => {
+                let (keypair, words) = Ed25519KeyPair::generate(path, mnemonic_type)?;
+                Ok((KeyPair::Ed25519(keypair), words))
+            }
         }
     }
 

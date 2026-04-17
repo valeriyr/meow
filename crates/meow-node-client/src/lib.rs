@@ -10,7 +10,7 @@ use meow_types::{
     address::Address,
     digest::Digest,
     object::Object,
-    transaction::{SignedTransaction, execution_result::ExecutionResult},
+    transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
 };
 
 use crate::error::NodeClientError;
@@ -58,6 +58,19 @@ impl NodeClient {
 
         if response.status().is_success() {
             return Ok(());
+        }
+
+        Err(Self::node_error(response).await)
+    }
+
+    /// POST /simulate-transaction — simulate an unsigned transaction without committing it.
+    pub async fn simulate_transaction(&self, transaction: &Transaction) -> Result<ExecutionResult> {
+        let url = self.base_url.join("simulate-transaction")?;
+
+        let response = self.inner.post(url).json(transaction).send().await?;
+
+        if response.status().is_success() {
+            return Ok(response.json().await?);
         }
 
         Err(Self::node_error(response).await)

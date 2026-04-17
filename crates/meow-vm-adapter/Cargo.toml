@@ -16,3 +16,6 @@ meow-types.workspace = true
 meow-vm.workspace = true
 meow-vm-compiler.workspace = true
 meow-vm-types.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

@@ -16,6 +16,8 @@ This produces two binaries: `meow` (CLI) and `meow-node` (full node).
 meow keytool generate ed25519
 ```
 
+The command prints the new address, public key, and a **mnemonic seed phrase**. Back up the seed phrase now — it is the only way to recover the key if the keystore file is lost. It will not be shown again.
+
 Inspect the keystore:
 
 ```bash
@@ -127,9 +129,42 @@ meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ## 7. Run a Contract Locally
 
 ```bash
-meow smart-contract run path/to/module.meow add 3 5
+meow contract run path/to/module.meow add 3 5
 ```
 
 > This executes locally through the CLI. No transaction is submitted.
+
+To call a private function (e.g. during development), use `run-privileged`:
+
+```bash
+meow contract run-privileged path/to/module.meow mint 1000 0xaa
+```
+
+## 8. Simulate a Transaction
+
+Simulate an unsigned transaction on the node without committing it. The node validates object references and runs the VM against its current state:
+
+```bash
+meow transaction simulate <BASE64_TRANSACTION>
+```
+
+> **Note:** if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()`, the result of simulation may differ from the result of the actual committed transaction because the block hash and timestamp are unknown until the block is mined.
+
+## 9. Execute a Transaction Locally
+
+Execute an unsigned transaction locally — objects are fetched from the node but the transaction is not submitted:
+
+```bash
+meow transaction execute-locally <BASE64_TRANSACTION>
+```
+
+Optional flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--seed` | zero digest | Block hash used as the randomness seed (base58 digest) |
+| `--timestamp` | current system time | Execution timestamp in Unix milliseconds |
+
+> **Note:** the actual committed transaction may produce different results if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()` — the real block hash and miner timestamp are unknown until the block is mined.
 
 For a full worked example — writing a module, publishing it, calling its functions, and sending coins — see [Contracts](contracts.md).

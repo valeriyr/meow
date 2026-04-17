@@ -1,18 +1,15 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use meow_nakamoto_types::block::Block;
 use meow_types::{
-    address::Address,
     digest::Digest,
     object::Object,
-    transaction::{
-        self, SignedTransaction, Transaction, execution_result::ExecutionResult, input::Input,
-        transaction_type::TransactionType,
-    },
+    time,
+    transaction::{SignedTransaction, execution_result::ExecutionResult, validator},
 };
-use meow_vm_adapter::{Module, executor, external_context::ExternalContext};
+use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolver};
 
-use crate::{store::Store, utils};
+use crate::store::Store;
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
 ///
@@ -200,7 +197,7 @@ impl ChainState {
 
         // Reject blocks stamped too far in the future to prevent miners from
         // manipulating the clock to unlock time-sensitive contract logic early.
-        let now = utils::current_timestamp();
+        let now = time::current_timestamp();
         if timestamp > now + MAX_BLOCK_FUTURE_DRIFT_MS {
             tracing::warn!(
                 height,
@@ -218,8 +215,8 @@ impl ChainState {
             return false;
         }
 
-        for tx in &block.transactions {
-            if let Err(e) = transaction::validator::validate_signed_transaction(tx) {
+        for signed_transaction in &block.transactions {
+            if let Err(e) = validator::validate_signed_transaction(signed_transaction) {
                 tracing::warn!(height, error = %e, "block has invalid transaction signature");
                 return false;
             }
@@ -235,10 +232,12 @@ impl ChainState {
         let external_executor_context =
             ExternalContext::new(block.header.mining_hash().into(), timestamp);
 
-        for signed_tx in &block.transactions {
-            let tx = signed_tx.transaction();
-            let inputs = resolve_inputs(tx, &new_store);
-            let result = match executor::execute(tx, inputs, &external_executor_context) {
+        for signed_transaction in &block.transactions {
+            let transaction = signed_transaction.transaction();
+            let inputs = inputs_resolver::collect_inputs(transaction, |addr| {
+                new_store.get_object(addr).cloned()
+            });
+            let result = match executor::execute(transaction, inputs, &external_executor_context) {
                 Ok(result) => result,
                 Err(e) => {
                     tracing::warn!(height, error = %e, "block execution failed during verification");
@@ -287,59 +286,6 @@ impl ChainState {
             .filter(|b| b.header.height >= height)
             .cloned()
             .collect()
-    }
-}
-
-/// Collect all objects the transaction needs from the store.
-fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
-    let mut inputs = Vec::new();
-
-    if let Some(coin) = store.get_object(tx.gas_coin().address()) {
-        inputs.push(coin.clone());
-    }
-
-    if let TransactionType::MeowCall(call) = tx.type_() {
-        if let Some(module_obj) = store.get_object(call.module()) {
-            // Collect all transitive dependency modules before the main module.
-            let mut seen = HashSet::new();
-            seen.insert(*call.module());
-            collect_dep_modules(module_obj, store, &mut inputs, &mut seen);
-            inputs.push(module_obj.clone());
-        }
-        for arg in call.arguments() {
-            if let Input::Object(obj_ref) = arg
-                && let Some(obj) = store.get_object(obj_ref.address())
-            {
-                inputs.push(obj.clone());
-            }
-        }
-    }
-
-    inputs
-}
-
-/// Recursively collect all transitive dependency module objects from the store.
-///
-/// `seen` deduplicates diamond dependencies and prevents revisiting nodes. The
-/// recursion depth is bounded by the compiler-enforced `max_dep_modules` limit
-/// (default 64), so stack overflow is not a concern.
-fn collect_dep_modules(
-    root_obj: &Object,
-    store: &Store,
-    inputs: &mut Vec<Object>,
-    seen: &mut HashSet<Address>,
-) {
-    let Ok(module) = bcs::from_bytes::<Module>(root_obj.content()) else {
-        return;
-    };
-    for vm_addr in &module.imports {
-        let addr: Address = (*vm_addr).into();
-        if seen.insert(addr)
-            && let Some(dep_obj) = store.get_object(&addr)
-        {
-            collect_dep_modules(dep_obj, store, inputs, seen);
-            inputs.push(dep_obj.clone());
-        }
     }
 }
 

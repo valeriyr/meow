@@ -9,6 +9,7 @@ mod natives;
 pub mod builder;
 pub mod executor;
 pub mod external_context;
+pub mod inputs_resolver;
 pub mod runner;
 
 // Re-export commonly used types and functions for external use.

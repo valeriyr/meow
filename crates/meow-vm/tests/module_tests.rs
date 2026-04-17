@@ -331,6 +331,82 @@ fn cross_module_nested_structs() {
 }
 
 //
+// ─── Deeply nested structs across three modules ───
+//
+
+#[test]
+fn cross_module_deeply_nested_structs() {
+    let a10 = Address::from_str("0x10").unwrap();
+    let a20 = Address::from_str("0x20").unwrap();
+
+    let point = utils::compile(
+        r#"
+            module point;
+
+            pub struct Point { pub x: u64, pub y: u64 }
+        "#,
+    );
+
+    let shapes = utils::compile_with_deps(
+        &format!(
+            r#"
+                module shapes;
+
+                use point@{};
+
+                pub struct Line {{ pub a: point::Point, pub b: point::Point }}
+            "#,
+            a10
+        ),
+        &[(a10, &point)],
+    );
+
+    let geometry = utils::compile_with_deps(
+        &format!(
+            r#"
+                module geometry;
+
+                use point@{a10};
+                use shapes@{a20};
+
+                pub struct Rect {{ pub l1: shapes::Line, pub l2: shapes::Line }}
+
+                pub fn left_top_x(rect: Rect): u64 {{
+                    return rect.l1.a.x;
+                }}
+            "#,
+            a10 = a10,
+            a20 = a20,
+        ),
+        &[(a10, &point), (a20, &shapes)],
+    );
+
+    let mk_point = |x: u64, y: u64| Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(x)),
+            ("y".to_string(), Value::U64(y)),
+        ],
+    };
+    let mk_line = |a, b| Value::Struct {
+        type_name: "Line".to_string(),
+        fields: vec![("a".to_string(), a), ("b".to_string(), b)],
+    };
+    let rect = Value::Struct {
+        type_name: "Rect".to_string(),
+        fields: vec![
+            ("l1".to_string(), mk_line(mk_point(3, 0), mk_point(9, 0))),
+            ("l2".to_string(), mk_line(mk_point(0, 0), mk_point(0, 0))),
+        ],
+    };
+
+    let vm = utils::vm_with_deps(geometry, HashMap::from([(a10, point), (a20, shapes)]));
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let result = vm.call("left_top_x", vec![rect], &mut gas).unwrap();
+    assert_eq!(result.return_value, Some(Value::U64(3)));
+}
+
+//
 // ─── Chained calls: caller → dep A → dep B ───
 //
 

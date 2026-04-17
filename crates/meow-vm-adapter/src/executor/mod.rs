@@ -98,7 +98,7 @@ pub fn execute_genesis_transaction(
 
     let mut gas_meter = GasMeter::unlimited();
 
-    Ok(match transaction.type_() {
+    let result = match transaction.type_() {
         TransactionType::MeowCall(call) => execute_meow_call(
             sender,
             &tx_digest,
@@ -111,7 +111,9 @@ pub fn execute_genesis_transaction(
         TransactionType::MeowModulePublish(module) => {
             execute_meow_module_publish(&tx_digest, module, &mut gas_meter)
         }
-    })
+    };
+
+    Ok(result.with_gas_used(gas_meter.spent()))
 }
 
 /// Execute a `meow_call` transaction.

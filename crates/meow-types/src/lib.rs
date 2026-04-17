@@ -11,4 +11,5 @@ pub mod keypair;
 pub mod keystore;
 pub mod object;
 pub mod system_framework;
+pub mod time;
 pub mod transaction;

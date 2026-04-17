@@ -29,22 +29,22 @@ pub struct RunResultOutput {
     pub gas_spent: u64,
 }
 
-/// The smart contract command outputs.
+/// The contract command outputs.
 #[derive(Serialize, Debug)]
 #[serde(untagged)]
-pub enum SmartContractCommandOutput {
+pub enum ContractCommandOutput {
     /// The build command output.
     Build(ModuleOutput),
     /// The run command output.
     Run(RunResultOutput),
 }
 
-impl SmartContractCommandOutput {
+impl ContractCommandOutput {
     /// Builds the Build command output using the specified encoder.
     pub fn build(module: Module, encoder: OutputEncoder) -> anyhow::Result<Self> {
         let encoded_module = encoder.encode(&module)?;
 
-        Ok(SmartContractCommandOutput::Build(ModuleOutput {
+        Ok(ContractCommandOutput::Build(ModuleOutput {
             name: module.name,
             content: encoded_module,
         }))

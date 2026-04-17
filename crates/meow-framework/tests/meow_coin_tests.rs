@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use meow_types::{address::Address, identifier::Identifier, system_framework::meow_coin::MeowCoin};
 use meow_vm_adapter::{
     builder,
@@ -216,10 +218,10 @@ fn coin_balance(v: &Value) -> u64 {
 
 pub fn run(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
-    runner::run(meow_coin_module(), &fn_name, args)
+    runner::run(meow_coin_module(), &fn_name, args, HashMap::new())
 }
 
 pub fn run_privileged(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
-    runner::run_privileged(meow_coin_module(), &fn_name, args)
+    runner::run_privileged(meow_coin_module(), &fn_name, args, HashMap::new())
 }

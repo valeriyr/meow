@@ -15,6 +15,7 @@ The `meow client` CLI commands and the `meow-node-client` library crate are both
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | [`/submit-transaction`](#post-submit-transaction) | Add a signed transaction to the mempool |
+| `POST` | [`/simulate-transaction`](#post-simulate-transaction) | Simulate an unsigned transaction without committing it |
 | `GET` | [`/object/{addr}`](#get-objectaddr) | Fetch a single object by address |
 | `GET` | [`/objects/{owner}`](#get-objectsowner) | Fetch all objects owned by an address |
 | `GET` | [`/transaction/{digest}`](#get-transactiondigest) | Fetch a committed transaction |
@@ -76,6 +77,38 @@ Each entry in `arguments` is also a tagged union:
 | `400` | `invalid_object_reference` | Referenced object not found, wrong version, or wrong digest |
 | `409` | `duplicate_transaction` | Digest already in mempool |
 | `500` | `internal_error` | Unexpected error |
+
+## POST /simulate-transaction
+
+Simulate an unsigned transaction against the node's current state without committing it. Useful for dry-runs, estimating gas, and testing contract logic.
+
+**Request body** — `Transaction` (same shape as the `transaction` field inside `SignedTransaction`, but without a signature):
+
+```json
+{
+  "sender":   "<Address>",
+  "gas_coin": { "address": "<Address>", "version": 0, "digest": "<Digest>" },
+  "type_": {
+    "MeowCall": {
+      "module":    "<Address>",
+      "function":  "<function_name>",
+      "arguments": [ ... ]
+    }
+  }
+}
+```
+
+**Success (`200`):** `ExecutionResult` (same shape as [`/transaction-result/{digest}`](#get-transaction-resultdigest)).
+
+> **Note:** if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()`, the result may differ from the actual committed transaction because the block hash and timestamp are unknown until the block is mined.
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `400` | `invalid_transaction` | Transaction failed structural validation |
+| `400` | `invalid_object_reference` | Referenced object not found, wrong version, or wrong digest |
+| `400` | `simulation_error` | Transaction failed during execution (VM error, abort, etc.) |
 
 ## GET /object/{addr}
 
@@ -149,15 +182,17 @@ Fetch the execution result of a committed transaction.
 
 ```json
 {
-  "status": "Success",
+  "status":             "Success",
   "transaction_digest": "<Digest>",
-  "created_objects":   [ ... ],
-  "changed_objects":   [ ... ],
-  "destroyed_objects": [ ... ]
+  "gas_used":           42,
+  "created_objects":    [ ... ],
+  "changed_objects":    [ ... ],
+  "destroyed_objects":  [ ... ]
 }
 ```
 
 `status` is either `"Success"` or `{ "Failure": "<error message>" }`.  
+`gas_used` is the number of gas units consumed by the transaction.  
 Each objects array contains `Object` entries (same shape as `/object/{addr}`).
 
 **Errors:** same codes as `GET /transaction/{digest}`.

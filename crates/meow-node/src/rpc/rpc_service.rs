@@ -6,7 +6,11 @@ use axum::{
     routing::{get, post},
 };
 use meow_nakamoto::{mempool::error::MempoolError, miner::error::MinerError};
-use meow_types::{address::Address, digest::Digest, transaction::SignedTransaction};
+use meow_types::{
+    address::Address,
+    digest::Digest,
+    transaction::{SignedTransaction, Transaction},
+};
 use serde::Serialize;
 use tokio::{net::TcpListener, sync::watch};
 
@@ -67,6 +71,7 @@ pub async fn run(
 ///
 /// Registered routes:
 /// - `POST /submit-transaction` to submit a signed transaction.
+/// - `POST /simulate-transaction` to simulate an unsigned transaction without committing it.
 /// - `GET /object/{addr}` to fetch the latest live object by address.
 /// - `GET /objects/{owner}` to fetch all the live objects owned by an address.
 /// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
@@ -74,7 +79,8 @@ pub async fn run(
 /// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards (for sync).
 pub fn router(state: RpcState) -> Router {
     Router::new()
-        .route("/submit-transaction", post(submit_tx))
+        .route("/submit-transaction", post(submit_transaction))
+        .route("/simulate-transaction", post(simulate_transaction))
         .route("/object/{addr}", get(get_object))
         .route("/objects/{owner}", get(get_objects))
         .route("/transaction/{digest}", get(get_transaction))
@@ -89,11 +95,11 @@ pub fn router(state: RpcState) -> Router {
 /// structured `4xx` responses.
 ///
 /// This handler only submits locally; network propagation is handled outside the RPC layer.
-async fn submit_tx(
+async fn submit_transaction(
     State(state): State<RpcState>,
-    Json(tx): Json<SignedTransaction>,
+    Json(signed_transaction): Json<SignedTransaction>,
 ) -> impl IntoResponse {
-    match state.handler.submit_tx(tx).await {
+    match state.handler.submit_transaction(signed_transaction).await {
         Ok(()) => StatusCode::ACCEPTED.into_response(),
         Err(RpcHandlerError::MinerError(err)) => match err {
             MinerError::MempoolError(err) => match err {
@@ -135,6 +141,72 @@ async fn submit_tx(
                     ),
                 ),
             },
+            MinerError::SimulationError(err) => error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal_error",
+                format!("internal error: {err}"),
+            ),
+        },
+    }
+}
+
+/// POST /simulate-transaction — simulate a `Transaction` (JSON-encoded, unsigned) without committing it.
+///
+/// Returns `200 OK` on success. Validation, mempool, and simulation errors are mapped to
+/// structured `4xx` responses.
+///
+/// This handler only simulates locally; network propagation is handled outside the RPC layer.
+async fn simulate_transaction(
+    State(state): State<RpcState>,
+    Json(transaction): Json<Transaction>,
+) -> impl IntoResponse {
+    match state.handler.simulate_transaction(transaction).await {
+        Ok(result) => (StatusCode::OK, Json(result)).into_response(),
+        Err(RpcHandlerError::MinerError(err)) => match err {
+            MinerError::MempoolError(err) => match err {
+                MempoolError::TransactionValidationError(err) => error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_transaction",
+                    format!("invalid transaction: {err}"),
+                ),
+                MempoolError::DuplicateTransaction(digest) => error_response(
+                    StatusCode::CONFLICT,
+                    "duplicate_transaction",
+                    format!("duplicate transaction: {digest}"),
+                ),
+                MempoolError::ObjectNotFound(addr) => error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_object_reference",
+                    format!("invalid object reference: object not found: {addr}"),
+                ),
+                MempoolError::InvalidObjectVersion {
+                    address,
+                    expected,
+                    found,
+                } => error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_object_reference",
+                    format!(
+                        "invalid object reference: object {address} has invalid version: expected {expected}, found {found}"
+                    ),
+                ),
+                MempoolError::InvalidObjectDigest {
+                    address,
+                    expected,
+                    found,
+                } => error_response(
+                    StatusCode::BAD_REQUEST,
+                    "invalid_object_reference",
+                    format!(
+                        "invalid object reference: object {address} has invalid digest: expected {expected}, found {found}"
+                    ),
+                ),
+            },
+            MinerError::SimulationError(err) => error_response(
+                StatusCode::BAD_REQUEST,
+                "simulation_error",
+                format!("transaction simulation failed: {err}"),
+            ),
         },
     }
 }
@@ -142,23 +214,26 @@ async fn submit_tx(
 /// GET /object/:addr — returns the live `Object` at the given address.
 ///
 /// Returns `400` for invalid address format and `404` when not found.
-async fn get_object(State(state): State<RpcState>, Path(addr): Path<String>) -> impl IntoResponse {
-    let addr: Address = match addr.parse() {
+async fn get_object(
+    State(state): State<RpcState>,
+    Path(address): Path<String>,
+) -> impl IntoResponse {
+    let address: Address = match address.parse() {
         Ok(a) => a,
         Err(_) => {
             return error_response(
                 StatusCode::BAD_REQUEST,
                 "invalid_address",
-                format!("invalid address: {addr} (expected 0x-prefixed hex address)"),
+                format!("invalid address: {address} (expected 0x-prefixed hex address)"),
             );
         }
     };
-    match state.handler.get_object(&addr).await {
+    match state.handler.get_object(&address).await {
         Ok(Some(obj)) => Json(obj).into_response(),
         Ok(None) => error_response(
             StatusCode::NOT_FOUND,
             "object_not_found",
-            format!("object not found: {addr}"),
+            format!("object not found: {address}"),
         ),
         Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
     }

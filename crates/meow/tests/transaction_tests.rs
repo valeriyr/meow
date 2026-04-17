@@ -4,7 +4,10 @@ use base64::{Engine, engine::general_purpose};
 use meow::{
     commands::DEFAULT_NODE_URL,
     output_encoder::OutputEncoder,
-    transaction::{TransactionCommand, output::TransactionCommandOutput},
+    transaction::{
+        TransactionCommand,
+        output::{EncodedTransactionOutput, TransactionCommandOutput},
+    },
 };
 use meow_node_client::NodeClient;
 use meow_types::{
@@ -15,7 +18,7 @@ use meow_types::{
     keystore::Keystore,
     object::{object_ref::ObjectRef, object_version::ObjectVersion},
     transaction::{
-        self, SignedTransaction, Transaction, call::Call, transaction_type::TransactionType,
+        SignedTransaction, Transaction, call::Call, transaction_type::TransactionType, validator,
     },
 };
 use rand::{SeedableRng, rngs::StdRng};
@@ -34,11 +37,12 @@ async fn sign_produces_a_valid_signed_transaction() {
 
     let output = sign(&tmp, make_call_transaction(sender)).await.unwrap();
 
-    let bytes = general_purpose::STANDARD
-        .decode(&output.transaction)
-        .unwrap();
+    let TransactionCommandOutput::Encoded(EncodedTransactionOutput { transaction }) = output else {
+        panic!("expected Encoded output");
+    };
+    let bytes = general_purpose::STANDARD.decode(&transaction).unwrap();
     let signed: SignedTransaction = bcs::from_bytes(&bytes).unwrap();
-    assert!(transaction::validator::validate_signed_transaction(&signed).is_ok());
+    assert!(validator::validate_signed_transaction(&signed).is_ok());
 }
 
 #[tokio::test]
@@ -83,6 +87,80 @@ async fn sign_valid_base64_but_invalid_bcs_returns_error() {
     let err = TransactionCommand::Sign {
         keystore_path: Some(keystore_path(&tmp)),
         transaction: junk,
+    }
+    .run(&fake_client(), OutputEncoder::Base64)
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("unexpected end of input"),
+        "unexpected error: {err}"
+    );
+}
+
+//
+// ─── Simulate tests ───
+//
+
+#[tokio::test]
+async fn simulate_invalid_base64_returns_error() {
+    let err = TransactionCommand::Simulate {
+        transaction: "not valid base64 !!!".to_string(),
+    }
+    .run(&fake_client(), OutputEncoder::Base64)
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("Invalid symbol"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn simulate_valid_base64_but_invalid_bcs_returns_error() {
+    let junk = general_purpose::STANDARD.encode(b"this is not a BCS-encoded Transaction");
+
+    let err = TransactionCommand::Simulate { transaction: junk }
+        .run(&fake_client(), OutputEncoder::Base64)
+        .await
+        .unwrap_err();
+
+    assert!(
+        err.to_string().contains("unexpected end of input"),
+        "unexpected error: {err}"
+    );
+}
+
+//
+// ─── ExecuteLocally tests ───
+//
+
+#[tokio::test]
+async fn execute_locally_invalid_base64_returns_error() {
+    let err = TransactionCommand::ExecuteLocally {
+        transaction: "not valid base64 !!!".to_string(),
+        seed: Digest::ZERO,
+        timestamp: None,
+    }
+    .run(&fake_client(), OutputEncoder::Base64)
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("Invalid symbol"),
+        "unexpected error: {err}"
+    );
+}
+
+#[tokio::test]
+async fn execute_locally_valid_base64_but_invalid_bcs_returns_error() {
+    let junk = general_purpose::STANDARD.encode(b"this is not a BCS-encoded Transaction");
+
+    let err = TransactionCommand::ExecuteLocally {
+        transaction: junk,
+        seed: Digest::ZERO,
+        timestamp: None,
     }
     .run(&fake_client(), OutputEncoder::Base64)
     .await

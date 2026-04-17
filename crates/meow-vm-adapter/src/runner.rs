@@ -27,20 +27,30 @@ pub struct RunResult {
 }
 
 /// Run a compiled module function with a fixed context, real natives, and unlimited gas.
-pub fn run(module: Module, fn_name: &Identifier, args: Vec<Value>) -> Result<RunResult> {
+pub fn run(
+    module: Module,
+    fn_name: &Identifier,
+    args: Vec<Value>,
+    deps: HashMap<Address, Module>,
+) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
     let vm_config = config::vm_config();
 
-    run_inner(module, fn_name, args, &mut gas, vm_config)
+    run_inner(module, fn_name, args, deps, &mut gas, vm_config)
 }
 
 /// Like [`run`] but uses the privileged VM config, which allows calling private functions.
 /// Use this to test functions that are intentionally private (e.g. `mint`).
-pub fn run_privileged(module: Module, fn_name: &Identifier, args: Vec<Value>) -> Result<RunResult> {
+pub fn run_privileged(
+    module: Module,
+    fn_name: &Identifier,
+    args: Vec<Value>,
+    deps: HashMap<Address, Module>,
+) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
     let vm_config = config::vm_config_privileged();
 
-    run_inner(module, fn_name, args, &mut gas, vm_config)
+    run_inner(module, fn_name, args, deps, &mut gas, vm_config)
 }
 
 /// Run a compiled module function with a fixed context, real natives, and the given gas meter.
@@ -48,18 +58,18 @@ fn run_inner(
     module: Module,
     fn_name: &Identifier,
     args: Vec<Value>,
+    deps: HashMap<Address, Module>,
     gas: &mut GasMeter,
     vm_config: VmConfig,
 ) -> Result<RunResult> {
     let ctx = Rc::new(RefCell::new(Context::default()));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(
-        module,
-        natives,
-        GasSchedule::default(),
-        HashMap::new(),
-        vm_config,
-    );
+    let deps = deps
+        .into_iter()
+        .map(|(addr, module)| (addr.into(), module))
+        .collect();
+
+    let vm = Vm::new(module, natives, GasSchedule::default(), deps, vm_config);
 
     let call_result = vm.call(fn_name.as_ref(), args, gas)?;
 

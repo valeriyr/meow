@@ -117,8 +117,8 @@ impl GossipService {
                             match message {
                                 NetworkEvent::Message { topic, data, .. } if topic == TOPIC_TRANSACTIONS => {
                                     match bcs::from_bytes::<SignedTransaction>(&data) {
-                                        Ok(tx) => {
-                                            if let Err(e) = self.miner.lock().await.submit_tx(tx) {
+                                        Ok(signed_transaction) => {
+                                            if let Err(e) = self.miner.lock().await.submit_transaction(signed_transaction) {
                                                 tracing::debug!(error = %e, "incoming transaction rejected");
                                             }
                                         }
@@ -225,10 +225,10 @@ impl GossipService {
                         }
                     }
                 }
-                tx = self.transactions_rx.recv() => {
-                    match tx {
-                        Some(tx) => {
-                            if let Err(e) = gossip.publish(TOPIC_TRANSACTIONS, tx) {
+                signed_transaction_bytes = self.transactions_rx.recv() => {
+                    match signed_transaction_bytes {
+                        Some(signed_transaction_bytes) => {
+                            if let Err(e) = gossip.publish(TOPIC_TRANSACTIONS, signed_transaction_bytes) {
                                 tracing::warn!(error = %e, "failed to publish transaction");
                             }
                         }

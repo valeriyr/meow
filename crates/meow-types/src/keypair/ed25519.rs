@@ -58,13 +58,16 @@ impl Ed25519KeyPair {
     pub fn generate(
         path: Option<DerivationPath>,
         mnemonic_type: Option<MnemonicType>,
-    ) -> Result<Self> {
+    ) -> Result<(Self, String)> {
         let mnemonic_type = mnemonic_type.unwrap_or(MnemonicType::Words24);
 
         let mnemonic = bip39::Mnemonic::new(mnemonic_type.into(), bip39::Language::English);
         let seed = bip39::Seed::new(&mnemonic, "");
 
-        Self::derive(seed.as_bytes(), path)
+        Ok((
+            Self::derive(seed.as_bytes(), path)?,
+            mnemonic.phrase().to_string(),
+        ))
     }
 
     /// Generates a random Ed25519 keypair.

@@ -220,10 +220,10 @@ The compiler enforces both limits at publish time. A module cannot be published 
 
 ### Running locally with dependencies
 
-`meow smart-contract run` fetches all transitive deps from the node automatically before executing:
+`meow contract run` fetches all transitive deps from the node automatically before executing:
 
 ```bash
-meow smart-contract run my_game.meow level_up 0x<hero_object>
+meow contract run my_game.meow level_up 0x<hero_object>
 ```
 
 ## Call argument format

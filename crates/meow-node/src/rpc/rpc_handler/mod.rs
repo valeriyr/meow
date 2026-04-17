@@ -6,8 +6,9 @@ use meow_nakamoto::miner::Miner;
 use meow_nakamoto_types::block::Block;
 use meow_types::{
     address::Address,
+    digest::Digest,
     object::Object,
-    transaction::{SignedTransaction, execution_result::ExecutionResult},
+    transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
 };
 use tokio::sync::{Mutex, mpsc};
 
@@ -38,33 +39,44 @@ impl RpcHandler {
     }
 
     /// Submits a transaction to local mempool and broadcasts it to gossip.
-    pub async fn submit_tx(&self, tx: SignedTransaction) -> Result<()> {
-        let tx_digest = tx.transaction().digest();
+    pub async fn submit_transaction(&self, signed_transaction: SignedTransaction) -> Result<()> {
+        let digest = signed_transaction.transaction().digest();
         let mut miner = self.miner.lock().await;
 
-        miner.submit_tx(tx.clone())?;
-        tracing::debug!(%tx_digest, "accepted transaction in local mempool");
+        miner.submit_transaction(signed_transaction.clone())?;
+        tracing::debug!(%digest, "accepted transaction in local mempool");
 
         // Serialize for gossip; local submission has already succeeded.
-        match bcs::to_bytes(&tx) {
+        match bcs::to_bytes(&signed_transaction) {
             Ok(data) => {
                 if let Err(e) = self.publish_transactions_tx.send(data) {
-                    tracing::warn!(%tx_digest, error = %e, "failed to publish accepted transaction to gossip");
+                    tracing::warn!(%digest, error = %e, "failed to publish accepted transaction to gossip");
                 }
             }
             Err(e) => {
-                tracing::warn!(%tx_digest, error = %e, "failed to serialize accepted transaction for gossip");
+                tracing::warn!(%digest, error = %e, "failed to serialize accepted transaction for gossip");
             }
         }
 
         Ok(())
     }
 
+    /// Simulates a transaction locally without committing it.
+    pub async fn simulate_transaction(&self, transaction: Transaction) -> Result<ExecutionResult> {
+        let digest = transaction.digest();
+        let mut miner = self.miner.lock().await;
+
+        let result = miner.simulate_transaction(transaction)?;
+        tracing::debug!(%digest, "simulated transaction");
+
+        Ok(result)
+    }
+
     /// Returns the latest live object at address.
-    pub async fn get_object(&self, addr: &Address) -> Result<Option<Object>> {
+    pub async fn get_object(&self, address: &Address) -> Result<Option<Object>> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.head_store().get_object(addr).cloned())
+        Ok(miner.head_store().get_object(address).cloned())
     }
 
     /// Returns the latest live objects owned by the given address.
@@ -75,20 +87,14 @@ impl RpcHandler {
     }
 
     /// Returns a committed transaction by digest.
-    pub async fn get_transaction(
-        &self,
-        digest: &meow_types::digest::Digest,
-    ) -> Result<Option<SignedTransaction>> {
+    pub async fn get_transaction(&self, digest: &Digest) -> Result<Option<SignedTransaction>> {
         let miner = self.miner.lock().await;
 
         Ok(miner.get_transaction(digest).cloned())
     }
 
     /// Returns the execution result for a transaction digest if committed.
-    pub async fn get_transaction_result(
-        &self,
-        digest: &meow_types::digest::Digest,
-    ) -> Result<Option<ExecutionResult>> {
+    pub async fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
         let miner = self.miner.lock().await;
 
         Ok(miner.get_transaction_result(digest).cloned())

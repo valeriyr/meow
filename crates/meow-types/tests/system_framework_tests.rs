@@ -7,7 +7,7 @@ use meow_types::{
         object_version::ObjectVersion,
     },
     system_framework::{
-        MEOW_SYSTEM_ADDRESS,
+        self, MEOW_SYSTEM_ADDRESS,
         meow_coin::{
             MEOW_COIN_MODULE_ADDRESS, MEOW_COIN_MODULE_NAME, MEOW_COIN_OBJECT_NAME, MeowCoin,
             deduct_gas_coin_balance, gas_meow_coin_balance, is_meow_coin, is_meow_coin_object,
@@ -180,4 +180,25 @@ fn test_other_object_decl_ref() -> ObjectDeclRef {
         MEOW_COIN_MODULE_ADDRESS,
         Identifier::try_from("Coin").unwrap(),
     )
+}
+
+//
+// ─── extract_human_readable_content tests ───
+//
+
+#[test]
+fn extract_human_readable_content_returns_balance_for_meow_coin() {
+    let object = test_meow_coin_object();
+
+    let content = system_framework::extract_human_readable_content(&object)
+        .expect("MeowCoin must produce content");
+
+    assert_eq!(content.get("balance").map(String::as_str), Some("100"));
+}
+
+#[test]
+fn extract_human_readable_content_returns_none_for_non_meow_coin() {
+    let object = test_other_object();
+
+    assert!(system_framework::extract_human_readable_content(&object).is_none());
 }

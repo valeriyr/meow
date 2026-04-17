@@ -60,7 +60,7 @@ fn ed25519_keypair_derive_with_invalid_derivation_path() {
 
 #[test]
 fn ed25519_keypair_generate() {
-    let keypair = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    let (keypair, _phrase) = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
     assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
 }
 

@@ -42,13 +42,13 @@ impl KeyToolCommand {
                 derivation_path,
                 word_length,
             } => {
-                let keypair = KeyPair::generate(scheme, derivation_path, word_length)?;
+                let (keypair, phrase) = KeyPair::generate(scheme, derivation_path, word_length)?;
 
                 let key = KeyOutput::from(&keypair);
 
                 keystore.add_key(keypair)?;
 
-                KeyToolCommandOutput::Generate(key)
+                KeyToolCommandOutput::Generate { key, phrase }
             }
             KeyToolCommand::List => {
                 let keys = keystore

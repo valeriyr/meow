@@ -4,20 +4,16 @@ use meow_genesis::Genesis;
 use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
 use meow_types::{
     digest::Digest,
-    object::Object,
-    transaction::{
-        SignedTransaction, Transaction, execution_result::ExecutionResult, input::Input,
-        transaction_type::TransactionType,
-    },
+    time,
+    transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
 };
-use meow_vm_adapter::{executor, external_context::ExternalContext};
+use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolver};
 
 use crate::{
     chain::{ChainState, compute_state_root, compute_transactions_root},
-    mempool::Mempool,
+    mempool::{self, Mempool},
     miner::error::MinerError,
     store::Store,
-    utils,
 };
 
 /// The result type related to the miner.
@@ -81,9 +77,28 @@ impl Miner {
     /// Validate and enqueue a transaction. Internally clones the head store
     /// so that the immutable borrow on `chain` and the mutable borrow on
     /// `mempool` do not overlap.
-    pub fn submit_tx(&mut self, tx: SignedTransaction) -> Result<()> {
+    pub fn submit_transaction(&mut self, signed_transaction: SignedTransaction) -> Result<()> {
         let store = self.chain.head_store().clone();
-        Ok(self.mempool.submit(tx, &store)?)
+        Ok(self.mempool.submit(signed_transaction, &store)?)
+    }
+
+    /// Validate object refs and execute a transaction without committing it.
+    /// Accepts an unsigned transaction — no signature required for simulation.
+    pub fn simulate_transaction(&mut self, transaction: Transaction) -> Result<ExecutionResult> {
+        let store = self.chain.head_store().clone();
+        let header = self.chain.head_block().header.clone();
+
+        mempool::validate_against_store(&transaction, &store)?;
+
+        let execution_context = ExternalContext::new(header.mining_hash().into(), header.timestamp);
+
+        let inputs = inputs_resolver::collect_inputs(&transaction, |address| {
+            store.get_object(address).cloned()
+        });
+
+        let result = executor::execute(&transaction, inputs, &execution_context)?;
+
+        Ok(result)
     }
 
     /// Apply a block received from a peer. Returns `true` if the head changed.
@@ -125,8 +140,8 @@ impl Miner {
                 parent_hash,
                 transactions_root,
                 // State root is unknown until after execution, so set to ZERO for now.
-                state_root: meow_types::digest::Digest::ZERO,
-                timestamp: utils::current_timestamp(),
+                state_root: Digest::ZERO,
+                timestamp: time::current_timestamp(),
                 nonce: 0,
             },
             batch,
@@ -191,17 +206,19 @@ impl MiningWork {
         let mut executed_txs: Vec<SignedTransaction> = Vec::new();
         let mut results = Vec::new();
 
-        for signed_tx in self.batch {
-            let tx = signed_tx.transaction();
-            let inputs = resolve_inputs(tx, &new_store);
-            match executor::execute(tx, inputs, &execution_context) {
+        for signed_transaction in self.batch {
+            let transaction = signed_transaction.transaction();
+            let inputs = inputs_resolver::collect_inputs(transaction, |addr| {
+                new_store.get_object(addr).cloned()
+            });
+            match executor::execute(transaction, inputs, &execution_context) {
                 Ok(result) => {
                     new_store.apply_execution_result(&result);
                     results.push(result);
-                    executed_txs.push(signed_tx);
+                    executed_txs.push(signed_transaction);
                 }
                 Err(e) => {
-                    tracing::warn!(digest = ?signed_tx.transaction().digest(), error = %e, "transaction dropped during execution");
+                    tracing::warn!(digest = ?signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
                 }
             }
         }
@@ -217,28 +234,4 @@ impl MiningWork {
         };
         (block, new_store)
     }
-}
-
-/// Collect all objects the transaction needs from the store.
-fn resolve_inputs(tx: &Transaction, store: &Store) -> Vec<Object> {
-    let mut inputs = Vec::new();
-
-    if let Some(coin) = store.get_object(tx.gas_coin().address()) {
-        inputs.push(coin.clone());
-    }
-
-    if let TransactionType::MeowCall(call) = tx.type_() {
-        if let Some(module) = store.get_object(call.module()) {
-            inputs.push(module.clone());
-        }
-        for arg in call.arguments() {
-            if let Input::Object(obj_ref) = arg
-                && let Some(obj) = store.get_object(obj_ref.address())
-            {
-                inputs.push(obj.clone());
-            }
-        }
-    }
-
-    inputs
 }

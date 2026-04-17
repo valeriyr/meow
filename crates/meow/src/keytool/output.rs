@@ -18,7 +18,7 @@ pub struct KeyOutput {
 #[serde(untagged)]
 pub enum KeyToolCommandOutput {
     /// The generate command output.
-    Generate(KeyOutput),
+    Generate { key: KeyOutput, phrase: String },
     /// The list command output.
     List(Vec<KeyOutput>),
     /// The remove command output.

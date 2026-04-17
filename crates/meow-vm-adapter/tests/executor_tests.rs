@@ -54,6 +54,7 @@ fn mint_succeeds_and_creates_object() {
     let created = &result.created_objects()[0];
     assert_eq!(meow_coin::gas_meow_coin_balance(created).unwrap(), 100);
     assert_eq!(created.owner().address(), Some(&SENDER));
+    assert_eq!(result.gas_used(), 91);
 }
 
 #[test]
@@ -74,6 +75,7 @@ fn burn_succeeds_and_destroys_object() {
     assert_eq!(result.created_objects().len(), 0);
     assert_eq!(result.changed_objects().len(), 1);
     assert_eq!(result.changed_objects()[0].address(), &GAS_ADDR);
+    assert_eq!(result.gas_used(), 1034);
 }
 
 #[test]
@@ -104,6 +106,7 @@ fn transfer_changes_owner() {
         .unwrap();
     assert_eq!(transferred.owner().address(), Some(&new_owner));
     assert_eq!(meow_coin::gas_meow_coin_balance(transferred).unwrap(), 75);
+    assert_eq!(result.gas_used(), 1045);
 }
 
 #[test]
@@ -145,6 +148,7 @@ fn split_with_sufficient_balance() {
             .any(|o| o.address() == &GAS_ADDR),
         "gas coin must appear as changed"
     );
+    assert_eq!(result.gas_used(), 1150);
 }
 
 //

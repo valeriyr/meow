@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use meow::{
     call_arg::CallArg,
     commands::DEFAULT_NODE_URL,
+    contract::{ContractCommand, output::ContractCommandOutput},
     output_encoder::OutputEncoder,
-    smart_contract::{SmartContractCommand, output::SmartContractCommandOutput},
 };
 use meow_node_client::NodeClient;
 use meow_types::identifier::Identifier;
@@ -19,7 +19,7 @@ async fn build_valid_source_succeeds() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, ADD_SRC);
 
-    let output = SmartContractCommand::Build {
+    let output = ContractCommand::Build {
         path,
         encoder: OutputEncoder::Base64,
     }
@@ -27,7 +27,7 @@ async fn build_valid_source_succeeds() {
     .await
     .unwrap();
 
-    assert!(matches!(output, SmartContractCommandOutput::Build(_)));
+    assert!(matches!(output, ContractCommandOutput::Build(_)));
 }
 
 #[tokio::test]
@@ -35,7 +35,7 @@ async fn build_module_name_comes_from_source_declaration() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, ADD_SRC);
 
-    let output = SmartContractCommand::Build {
+    let output = ContractCommand::Build {
         path,
         encoder: OutputEncoder::Base64,
     }
@@ -44,7 +44,7 @@ async fn build_module_name_comes_from_source_declaration() {
     .unwrap();
 
     let name = match output {
-        SmartContractCommandOutput::Build(m) => m.name,
+        ContractCommandOutput::Build(m) => m.name,
         _ => panic!("expected Build output"),
     };
     assert_eq!(name, "math");
@@ -55,7 +55,7 @@ async fn build_invalid_source_returns_compiler_error() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, "this is not valid meow source !!!");
 
-    let err = SmartContractCommand::Build {
+    let err = ContractCommand::Build {
         path,
         encoder: OutputEncoder::Base64,
     }
@@ -79,7 +79,7 @@ async fn run_returns_computed_return_value() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, ADD_SRC);
 
-    let output = SmartContractCommand::Run {
+    let output = ContractCommand::Run {
         path,
         function: Identifier::new("add").unwrap(),
         args: vec![CallArg::U64(3), CallArg::U64(5)],
@@ -89,7 +89,7 @@ async fn run_returns_computed_return_value() {
     .unwrap();
 
     let result = match output {
-        SmartContractCommandOutput::Run(r) => r,
+        ContractCommandOutput::Run(r) => r,
         _ => panic!("expected Run output"),
     };
     assert_eq!(result.return_value, Some("8".to_string()));
@@ -101,7 +101,7 @@ async fn run_void_function_produces_no_return_value() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, NOOP_SRC);
 
-    let output = SmartContractCommand::Run {
+    let output = ContractCommand::Run {
         path,
         function: Identifier::new("noop").unwrap(),
         args: vec![],
@@ -111,7 +111,7 @@ async fn run_void_function_produces_no_return_value() {
     .unwrap();
 
     let result = match output {
-        SmartContractCommandOutput::Run(r) => r,
+        ContractCommandOutput::Run(r) => r,
         _ => panic!("expected Run output"),
     };
     assert_eq!(result.return_value, None);
@@ -123,7 +123,7 @@ async fn run_unknown_function_returns_error() {
     let tmp = TempDir::new().unwrap();
     let path = write_source(&tmp, ADD_SRC);
 
-    let err = SmartContractCommand::Run {
+    let err = ContractCommand::Run {
         path,
         function: Identifier::new("missing").unwrap(),
         args: vec![],
@@ -138,6 +138,51 @@ async fn run_unknown_function_returns_error() {
     );
 }
 
+#[tokio::test]
+async fn run_rejects_private_function() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, PRIVATE_SRC);
+
+    let err = ContractCommand::Run {
+        path,
+        function: Identifier::new("secret").unwrap(),
+        args: vec![],
+    }
+    .run(&fake_client())
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string().contains("function 'secret' is private"),
+        "unexpected error: {err}"
+    );
+}
+
+//
+// ─── RunPrivileged tests ───
+//
+
+#[tokio::test]
+async fn run_privileged_can_call_private_function() {
+    let tmp = TempDir::new().unwrap();
+    let path = write_source(&tmp, PRIVATE_SRC);
+
+    let output = ContractCommand::RunPrivileged {
+        path,
+        function: Identifier::new("secret").unwrap(),
+        args: vec![],
+    }
+    .run(&fake_client())
+    .await
+    .unwrap();
+
+    let result = match output {
+        ContractCommandOutput::Run(r) => r,
+        _ => panic!("expected Run output"),
+    };
+    assert_eq!(result.return_value, Some("42".to_string()));
+}
+
 //
 // ─── Utility functions ───
 //
@@ -149,6 +194,10 @@ const ADD_SRC: &str = r#"
 const NOOP_SRC: &str = r#"
         module utils;
         pub fn noop() {}
+    "#;
+const PRIVATE_SRC: &str = r#"
+        module secrets;
+        fn secret(): u64 { return 42; }
     "#;
 
 fn fake_client() -> NodeClient {

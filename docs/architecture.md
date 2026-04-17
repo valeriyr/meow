@@ -27,7 +27,7 @@
 ```text
    User                CLI               Node              Chain
     │                   │                  │                  │
-    │  sign tx          │                  │                  │
+    │  sign transaction │                  │                  │
     │──────────────────►│                  │                  │
     │                   │  POST /submit-transaction           │
     │                   │─────────────────►│                  │

@@ -24,6 +24,8 @@ pub struct ExecutionResult {
     changed_objects: Vec<Object>,
     /// The destroyed objects.
     destroyed_objects: Vec<Object>,
+    /// Gas units consumed by this transaction.
+    gas_used: u64,
 }
 
 impl ExecutionResult {
@@ -41,6 +43,7 @@ impl ExecutionResult {
             created_objects,
             changed_objects,
             destroyed_objects,
+            gas_used: 0,
         }
     }
 
@@ -53,6 +56,12 @@ impl ExecutionResult {
             vec![],
             vec![],
         )
+    }
+
+    /// Sets the gas consumed and returns `self` for chaining.
+    pub fn with_gas_used(mut self, gas_used: u64) -> Self {
+        self.gas_used = gas_used;
+        self
     }
 
     /// Returns the execution status.
@@ -78,5 +87,10 @@ impl ExecutionResult {
     /// Returns the destroyed objects.
     pub fn destroyed_objects(&self) -> &[Object] {
         &self.destroyed_objects
+    }
+
+    /// Returns the gas units consumed by this transaction.
+    pub fn gas_used(&self) -> u64 {
+        self.gas_used
     }
 }

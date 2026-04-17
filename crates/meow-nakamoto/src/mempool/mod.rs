@@ -5,7 +5,9 @@ use std::collections::{BTreeSet, VecDeque};
 use meow_types::{
     digest::Digest,
     object::object_ref::ObjectRef,
-    transaction::{self, SignedTransaction, input::Input, transaction_type::TransactionType},
+    transaction::{
+        SignedTransaction, Transaction, input::Input, transaction_type::TransactionType, validator,
+    },
 };
 
 use crate::{mempool::error::MempoolError, store::Store};
@@ -42,18 +44,19 @@ impl Mempool {
     /// 1. Signature is valid
     /// 2. Not already in the queue
     /// 3. Referenced objects match the provided store snapshot
-    pub fn submit(&mut self, tx: SignedTransaction, store: &Store) -> Result<()> {
-        transaction::validator::validate_signed_transaction(&tx)?;
+    pub fn submit(&mut self, signed_transaction: SignedTransaction, store: &Store) -> Result<()> {
+        validator::validate_signed_transaction(&signed_transaction)?;
 
-        let digest = tx.transaction().digest();
+        let digest = signed_transaction.transaction().digest();
+
         if self.seen.contains(&digest) {
             return Err(MempoolError::DuplicateTransaction(digest));
         }
 
-        validate_against_store(&tx, store)?;
+        validate_against_store(signed_transaction.transaction(), store)?;
 
         self.seen.insert(digest);
-        self.pending.push_back(tx);
+        self.pending.push_back(signed_transaction);
         Ok(())
     }
 
@@ -64,11 +67,14 @@ impl Mempool {
         let mut valid: VecDeque<SignedTransaction> = VecDeque::new();
         let mut valid_seen: BTreeSet<Digest> = BTreeSet::new();
 
-        for tx in self.pending.drain(..) {
-            if validate_against_store(&tx, store).is_ok() {
-                let digest = tx.transaction().digest();
+        for signed_transaction in self.pending.drain(..) {
+            let transaction = signed_transaction.transaction();
+
+            if validate_against_store(transaction, store).is_ok() {
+                let digest = transaction.digest();
+
                 valid_seen.insert(digest);
-                valid.push_back(tx);
+                valid.push_back(signed_transaction);
             }
         }
 
@@ -80,19 +86,19 @@ impl Mempool {
     pub fn drain_batch(&mut self, limit: usize) -> Vec<SignedTransaction> {
         let count = limit.min(self.pending.len());
         let batch: Vec<_> = self.pending.drain(..count).collect();
-        for tx in &batch {
-            self.seen.remove(&tx.transaction().digest());
+        for signed_transaction in &batch {
+            let digest = signed_transaction.transaction().digest();
+            self.seen.remove(&digest);
         }
         batch
     }
 }
 
 /// Validates that all object references in the transaction match the latest version and digest in the store.
-fn validate_against_store(tx: &SignedTransaction, store: &Store) -> Result<()> {
-    let gas_coin = tx.transaction().gas_coin();
-    validate_object_ref(gas_coin, store)?;
+pub(crate) fn validate_against_store(transaction: &Transaction, store: &Store) -> Result<()> {
+    validate_object_ref(transaction.gas_coin(), store)?;
 
-    if let TransactionType::MeowCall(call) = tx.transaction().type_() {
+    if let TransactionType::MeowCall(call) = transaction.type_() {
         for argument in call.arguments() {
             if let Input::Object(object_ref) = argument {
                 validate_object_ref(object_ref, store)?;

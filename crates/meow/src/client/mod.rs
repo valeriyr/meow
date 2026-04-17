@@ -6,7 +6,7 @@ use meow_node_client::NodeClient;
 use meow_types::{
     address::Address,
     digest::Digest,
-    transaction::{self, SignedTransaction},
+    transaction::{SignedTransaction, validator},
 };
 
 use crate::client::output::ClientCommandOutput;
@@ -69,7 +69,7 @@ impl ClientCommand {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;
                 let signed_transaction: SignedTransaction = bcs::from_bytes(&bytes)?;
 
-                transaction::validator::validate_signed_transaction(&signed_transaction)?;
+                validator::validate_signed_transaction(&signed_transaction)?;
 
                 let digest = signed_transaction.transaction().digest();
 

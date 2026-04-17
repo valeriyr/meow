@@ -5,9 +5,9 @@ use meow_node_client::NodeClient;
 use url::Url;
 
 use crate::{
-    client::ClientCommand, genesis::GenesisCommand, keytool::KeyToolCommand,
-    output_encoder::OutputEncoder, output_formatter::OutputFormatter,
-    smart_contract::SmartContractCommand, transaction::TransactionCommand,
+    client::ClientCommand, contract::ContractCommand, genesis::GenesisCommand,
+    keytool::KeyToolCommand, output_encoder::OutputEncoder, output_formatter::OutputFormatter,
+    transaction::TransactionCommand,
 };
 
 use meow_types::{config::meow_keystore_path, keystore::Keystore};
@@ -38,7 +38,7 @@ pub enum Command {
         cmd: KeyToolCommand,
     },
     /// MEOW smart contract tools.
-    SmartContract {
+    Contract {
         /// MEOW node RPC URL.
         /// Example: http://127.0.0.1:8600
         #[arg(long, global = true, default_value = DEFAULT_NODE_URL)]
@@ -48,7 +48,7 @@ pub enum Command {
         formatter: OutputFormatter,
         /// Subcommands.
         #[command(subcommand)]
-        cmd: SmartContractCommand,
+        cmd: ContractCommand,
     },
     /// MEOW transaction tools.
     Transaction {
@@ -109,7 +109,7 @@ impl Command {
 
                 println!("{}", formatter.format(&output)?);
             }
-            Command::SmartContract {
+            Command::Contract {
                 node,
                 formatter,
                 cmd,

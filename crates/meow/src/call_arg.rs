@@ -39,7 +39,7 @@ impl CallArg {
         })
     }
 
-    /// Convert a [`CallArg`] to a VM [`Value`] for the offline smart-contract runner.
+    /// Convert a [`CallArg`] to a VM [`Value`] for the offline contract runner.
     pub async fn into_value(self, client: &NodeClient) -> anyhow::Result<Value> {
         Ok(match self {
             CallArg::Bool(b) => Value::Bool(b),

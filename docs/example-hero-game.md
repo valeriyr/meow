@@ -98,7 +98,7 @@ pub fn retire(hero: Hero) {
 
 ## Test locally
 
-`meow smart-contract run` compiles and runs a function in a local VM without submitting a transaction. It still connects to the node to resolve any `0x<hex>` object arguments, so:
+`meow contract run` compiles and runs a function in a local VM without submitting a transaction. It still connects to the node to resolve any `0x<hex>` object arguments, so:
 
 - **Primitive arguments** (`bool`, `u64`, `address`, `string`) — work without a running node.
 - **Object arguments** (`0x<hex>`) — require a running node and the object to already exist on-chain.
@@ -107,16 +107,16 @@ pub fn retire(hero: Hero) {
 
 ```bash
 # Check that the module compiles cleanly
-meow smart-contract build hero.meow
+meow contract build hero.meow
 
 # Run spawn locally — no node needed
-meow smart-contract run hero.meow spawn Thorin
+meow contract run hero.meow spawn Thorin
 ```
 
 To test `duel` or `retire` locally, the `Hero` objects must already be on-chain. Use the `0x<hex>` form (no `@`) so the CLI fetches them from the node:
 
 ```bash
-meow smart-contract run hero.meow duel <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
+meow contract run hero.meow duel <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
 ```
 
 ## Publish on-chain

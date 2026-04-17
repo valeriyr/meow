@@ -80,7 +80,7 @@ When `open` executes, `meow_vm_timestamp()` is the block time of the block that 
 
 ## Test locally
 
-`meow smart-contract run` compiles and runs a function in a local VM without submitting a transaction. It still connects to the node to resolve any `0x<hex>` object arguments, so:
+`meow contract run` compiles and runs a function in a local VM without submitting a transaction. It still connects to the node to resolve any `0x<hex>` object arguments, so:
 
 - **Primitive arguments** (`bool`, `u64`, `address`, `string`) — work without a running node.
 - **Object arguments** (`0x<hex>`) — require a running node and the object to already exist on-chain.
@@ -89,11 +89,11 @@ When `open` executes, `meow_vm_timestamp()` is the block time of the block that 
 
 ```bash
 # Check that the module compiles cleanly
-meow smart-contract build time-capsule.meow
+meow contract build time-capsule.meow
 
 # Run seal locally — no node needed
 # Seals a message with a 1-minute delay (60 000 ms)
-meow smart-contract run time-capsule.meow seal "Hello from the past" 60000
+meow contract run time-capsule.meow seal "Hello from the past" 60000
 ```
 
 ## Publish on-chain

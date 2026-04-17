@@ -1,57 +1,28 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 use meow_node_client::NodeClient;
 use meow_types::address::Address;
-use meow_vm_adapter::{Module, builder};
+use meow_vm_adapter::{Module, builder, inputs_resolver};
 
-/// High-level helper for building a module from a source file,
-/// including loading all declared dependencies from the node.
-pub async fn build_module(client: &NodeClient, path: PathBuf) -> anyhow::Result<Module> {
+/// Build a module from a source file, loading all transitive dependency modules
+/// from the node. Returns both the compiled module and the loaded deps map so
+/// callers (e.g. the runner) can reuse the deps without a second fetch.
+pub async fn build_module(
+    client: &NodeClient,
+    path: PathBuf,
+) -> anyhow::Result<(Module, HashMap<Address, Module>)> {
     let source = builder::read_source_file(path)?;
     let dep_decl = builder::extract_module_deps(&source)?;
 
-    let deps = load_dependencies(client, &dep_decl).await?;
-    let deps = deps
-        .iter()
-        .map(|(addr, module)| (*addr, module))
-        .collect::<Vec<_>>();
+    let deps = inputs_resolver::load_deps_async(&dep_decl, |addr| async move {
+        let obj = client.get_object(&addr).await.ok().flatten()?;
+        bcs::from_bytes::<Module>(obj.content()).ok()
+    })
+    .await;
 
-    Ok(builder::build(&source, &deps)?)
-}
+    let deps_for_build = deps.iter().map(|(addr, m)| (*addr, m)).collect::<Vec<_>>();
+    let module = builder::build(&source, &deps_for_build)?;
 
-/// Load dependency modules from the node, including all transitive dependencies.
-///
-/// Uses BFS starting from `deps_decl`. Each loaded module's own `.imports` are
-/// enqueued so their modules are fetched too. Diamond deps are deduplicated.
-async fn load_dependencies(
-    client: &NodeClient,
-    deps_decl: &[(String, Address)],
-) -> anyhow::Result<Vec<(Address, Module)>> {
-    let mut loaded: HashMap<Address, Module> = HashMap::new();
-    let mut queue: Vec<Address> = deps_decl.iter().map(|(_, addr)| *addr).collect();
-
-    while let Some(addr) = queue.pop() {
-        if loaded.contains_key(&addr) {
-            continue;
-        }
-
-        let dep_obj = client
-            .get_object(&addr)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("dependency module at {addr} not found on-chain"))?;
-        let module: Module = bcs::from_bytes(dep_obj.content())
-            .map_err(|e| anyhow::anyhow!("failed to deserialize module at {addr}: {e}"))?;
-
-        // Enqueue this module's own imports for transitive resolution.
-        for import in &module.imports {
-            let import_addr = (*import).into();
-            if !loaded.contains_key(&import_addr) {
-                queue.push(import_addr);
-            }
-        }
-
-        loaded.insert(addr, module);
-    }
-
-    Ok(loaded.into_iter().collect())
+    Ok((module, deps))
 }
