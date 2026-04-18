@@ -188,16 +188,16 @@ async fn run_privileged_can_call_private_function() {
 //
 
 const ADD_SRC: &str = r#"
-        module math;
-        pub fn add(a: u64, b: u64): u64 { return a + b; }
+        mod math;
+        pub fn add(a: u64, b: u64) -> u64 { return a + b; }
     "#;
 const NOOP_SRC: &str = r#"
-        module utils;
+        mod utils;
         pub fn noop() {}
     "#;
 const PRIVATE_SRC: &str = r#"
-        module secrets;
-        fn secret(): u64 { return 42; }
+        mod secrets;
+        fn secret() -> u64 { return 42; }
     "#;
 
 fn fake_client() -> NodeClient {

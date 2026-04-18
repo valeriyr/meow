@@ -97,7 +97,7 @@ pub struct AstStruct {
 
 #[derive(Debug, Clone)]
 pub enum AstItem {
-    /// `module NAME;` — declares the module's name. Must be the first item in source.
+    /// `mod NAME;` — declares the module's name. Must be the first item in source.
     ModuleDecl(String),
     /// `use module_name@0x...;` — declares a dependency on a module at a specific address.
     Use {

@@ -20,9 +20,9 @@
 //! use meow_vm_types::{config::{CompilerConfig, VmConfig}, types::Value};
 //!
 //! let source = r#"
-//!     module math;
+//!     mod math;
 //!
-//!     pub fn add(a: u64, b: u64): u64 {
+//!     pub fn add(a: u64, b: u64) -> u64 {
 //!         return a + b;
 //!     }
 //! "#;

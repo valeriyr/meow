@@ -12,7 +12,7 @@ fn too_many_functions_rejected() {
         .join("\n");
     let src = format!(
         r#"
-            module test;
+            mod test;
             {fns}
         "#
     );
@@ -31,7 +31,7 @@ fn too_many_structs_rejected() {
         .join("\n");
     let src = format!(
         r#"
-            module test;
+            mod test;
             {structs}
         "#
     );
@@ -50,7 +50,7 @@ fn too_many_params_rejected() {
         .join(", ");
     let src = format!(
         r#"
-            module test;
+            mod test;
             fn f({params}) {{}}
         "#
     );
@@ -69,7 +69,7 @@ fn too_many_fields_rejected() {
         .join(", ");
     let src = format!(
         r#"
-            module test;
+            mod test;
             struct Big {{ {fields} }} fn noop() {{}}
         "#
     );
@@ -92,7 +92,7 @@ fn too_many_imports_rejected() {
         let module = Compiler::compile(
             &format!(
                 r#"
-                module dep{i};
+                mod dep{i};
                 fn noop() {{}}
             "#
             ),
@@ -106,7 +106,7 @@ fn too_many_imports_rejected() {
 
     let src = format!(
         r#"
-            module main;
+            mod main;
             {}
             fn noop() {{}}
         "#,
@@ -130,8 +130,8 @@ fn too_many_dep_modules_rejected() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -139,9 +139,9 @@ fn too_many_dep_modules_rejected() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg,
@@ -153,9 +153,9 @@ fn too_many_dep_modules_rejected() {
     assert!(matches!(
         Compiler::compile(
             r#"
-                module main;
+                mod main;
                 use b@0x02;
-                fn run(): u64 { return b::get(); }
+                fn run() -> u64 { return b::get(); }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             strict
@@ -174,8 +174,8 @@ fn dep_modules_at_limit_succeeds() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -183,9 +183,9 @@ fn dep_modules_at_limit_succeeds() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg,
@@ -196,9 +196,9 @@ fn dep_modules_at_limit_succeeds() {
     assert!(
         Compiler::compile(
             r#"
-                module main;
+                mod main;
                 use b@0x02;
-                fn run(): u64 { return b::get(); }
+                fn run() -> u64 { return b::get(); }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             at_limit
@@ -214,7 +214,7 @@ fn module_name_too_long_rejected() {
 
     let src = format!(
         r#"
-            module {long};
+            mod {long};
             fn f() {{}}
         "#
     );

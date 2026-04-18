@@ -12,12 +12,12 @@ use meow_vm_types::{address::Address, config::CompilerConfig, module::Module};
 #[test]
 fn extract_deps_returns_declared_imports() {
     let src = r#"
-        module main;
+        mod main;
 
         use math@0x01;
         use util@0x02;
 
-        fn run(): u64 { return 0; }
+        fn run() -> u64 { return 0; }
     "#;
     let deps = Compiler::extract_deps(src).unwrap();
     assert_eq!(deps.len(), 2);
@@ -34,8 +34,8 @@ fn extract_deps_returns_declared_imports() {
 #[test]
 fn extract_deps_no_imports_returns_empty() {
     let src = r#"
-        module main;
-        fn run(): u64 { return 0; }
+        mod main;
+        fn run() -> u64 { return 0; }
     "#;
     let deps = Compiler::extract_deps(src).unwrap();
     assert!(deps.is_empty());
@@ -44,7 +44,7 @@ fn extract_deps_no_imports_returns_empty() {
 #[test]
 fn extract_deps_duplicate_use_is_rejected() {
     let src = r#"
-        module main;
+        mod main;
 
         use helper@0x42;
         use helper@0x42;
@@ -59,19 +59,19 @@ fn extract_deps_duplicate_use_is_rejected() {
 fn extract_deps_missing_module_decl_is_rejected() {
     assert!(matches!(
         Compiler::extract_deps("use helper@0x01;").unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("module NAME;")
+        CompilerError::Message(msg) if msg.contains("mod NAME;")
     ));
 }
 
 #[test]
 fn extract_deps_duplicate_module_decl_is_rejected() {
     let src = r#"
-        module a;
-        module b;
+        mod a;
+        mod b;
     "#;
     assert!(matches!(
         Compiler::extract_deps(src).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("duplicate 'module NAME;'")
+        CompilerError::Message(msg) if msg.contains("duplicate 'mod NAME;'")
     ));
 }
 
@@ -84,18 +84,18 @@ fn duplicate_dep_address_is_rejected() {
     let addr = Address::from_str("0x42").unwrap();
     let dep = utils::compile(
         r#"
-            module helper;
-            fn get(): u64 { return 1; }
+            mod helper;
+            fn get() -> u64 { return 1; }
         "#,
     )
     .expect("dep must compile");
 
     let src = r#"
-        module main;
+        mod main;
 
         use helper@0x42;
 
-        fn run(): u64 { return helper::get(); }
+        fn run() -> u64 { return helper::get(); }
     "#;
     assert!(matches!(
         utils::compile_with_deps(src, &[(addr, &dep), (addr, &dep)]).unwrap_err(),
@@ -107,19 +107,19 @@ fn duplicate_dep_address_is_rejected() {
 fn duplicate_use_declaration_is_rejected() {
     let dep = utils::compile(
         r#"
-            module helper;
-            fn get(): u64 { return 1; }
+            mod helper;
+            fn get() -> u64 { return 1; }
         "#,
     )
     .expect("dep must compile");
 
     let src = r#"
-        module main;
+        mod main;
 
         use helper@0x42;
         use helper@0x42;
 
-        fn run(): u64 { return helper::get(); }
+        fn run() -> u64 { return helper::get(); }
     "#;
     assert!(matches!(
         utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
@@ -130,7 +130,7 @@ fn duplicate_use_declaration_is_rejected() {
 #[test]
 fn use_unknown_dep_is_compile_error() {
     let src = r#"
-        module bad;
+        mod bad;
         use nonexistent@0x99;
     "#;
     assert!(matches!(
@@ -142,8 +142,8 @@ fn use_unknown_dep_is_compile_error() {
 #[test]
 fn undeclared_module_reference_is_compile_error() {
     let src = r#"
-        module bad;
-        fn run(a: u64, b: u64): u64 { return math::add(a, b); }
+        mod bad;
+        fn run(a: u64, b: u64) -> u64 { return math::add(a, b); }
     "#;
     assert!(matches!(
         utils::compile(src).unwrap_err(),
@@ -159,7 +159,7 @@ fn undeclared_module_reference_is_compile_error() {
 fn cross_module_object_as_field_type_rejected() {
     let coin_mod = utils::compile(
         r#"
-            module coin;
+            mod coin;
 
             pub object Coin { id: address, balance: u64 }
         "#,
@@ -167,7 +167,7 @@ fn cross_module_object_as_field_type_rejected() {
     .expect("coin must compile");
 
     let src = r#"
-            module wrapper;
+            mod wrapper;
 
             use coin@0x40;
 
@@ -193,8 +193,8 @@ fn missing_transitive_dep_is_rejected() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -202,9 +202,9 @@ fn missing_transitive_dep_is_rejected() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -215,9 +215,9 @@ fn missing_transitive_dep_is_rejected() {
     assert!(matches!(
         Compiler::compile(
             r#"
-                module main;
+                mod main;
                 use b@0x02;
-                fn run(): u64 { return b::get(); }
+                fn run() -> u64 { return b::get(); }
             "#,
             &[(b_addr, &b_module)],
             cfg,
@@ -236,8 +236,8 @@ fn complete_transitive_closure_is_accepted() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -245,9 +245,9 @@ fn complete_transitive_closure_is_accepted() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -257,9 +257,9 @@ fn complete_transitive_closure_is_accepted() {
     assert!(
         Compiler::compile(
             r#"
-                module main;
+                mod main;
                 use b@0x02;
-                fn run(): u64 { return b::get(); }
+                fn run() -> u64 { return b::get(); }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             cfg,
@@ -286,7 +286,7 @@ fn circular_module_dep_is_compile_error() {
 
     assert!(matches!(
         Compiler::compile(
-            "module top;",
+            "mod top;",
             &[(addr1, &mod_a), (addr2, &mod_b)],
             CompilerConfig::default(),
         )

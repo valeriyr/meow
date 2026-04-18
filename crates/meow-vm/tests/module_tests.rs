@@ -14,20 +14,20 @@ fn cross_module_function_call() {
     let a1 = Address::from_str("0x01").unwrap();
     let math = utils::compile(
         r#"
-            module math;
+            mod math;
 
-            pub fn add(a: u64, b: u64): u64 { return a + b; }
+            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
         "#,
     );
 
     let caller = utils::compile_with_deps(
         &format!(
             r#"
-                module caller;
+                mod caller;
 
                 use math@{};
 
-                pub fn double_add(a: u64, b: u64): u64 {{
+                pub fn double_add(a: u64, b: u64) -> u64 {{
                     return math::add(a, b) + math::add(a, b);
                 }}
             "#,
@@ -56,23 +56,23 @@ fn cross_module_struct_via_constructor_and_field_access() {
     let a10 = Address::from_str("0x10").unwrap();
     let shapes = utils::compile(
         r#"
-            module shapes;
+            mod shapes;
 
             pub struct Point { pub x: u64, pub y: u64 }
 
-            pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
-            pub fn get_x(p: Point): u64 { return p.x; }
+            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub fn get_x(p: Point) -> u64 { return p.x; }
         "#,
     );
 
     let user = utils::compile_with_deps(
         &format!(
             r#"
-                module user;
+                mod user;
 
                 use shapes@{};
 
-                pub fn make_and_read(): u64 {{
+                pub fn make_and_read() -> u64 {{
                     let p = shapes::make_point(5, 9);
                     return shapes::get_x(p);
                 }}
@@ -97,22 +97,22 @@ fn cross_module_pub_field_read() {
     let a10 = Address::from_str("0x10").unwrap();
     let shapes = utils::compile(
         r#"
-            module shapes;
+            mod shapes;
 
             pub struct Point { pub x: u64, pub y: u64 }
 
-            pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
         "#,
     );
 
     let user = utils::compile_with_deps(
         &format!(
             r#"
-                module user;
+                mod user;
 
                 use shapes@{};
 
-                pub fn read_x_directly(): u64 {{
+                pub fn read_x_directly() -> u64 {{
                     let p = shapes::make_point(7, 3);
                     return p.x;
                 }}
@@ -139,34 +139,34 @@ fn same_struct_name_in_different_modules_are_distinct() {
 
     let mod_a = utils::compile(
         r#"
-            module mod_a;
+            mod mod_a;
 
             pub struct Token { pub amount: u64 }
 
-            pub fn make_token(amount: u64): Token { return Token { amount: amount }; }
-            pub fn get_amount(t: Token): u64 { return t.amount; }
+            pub fn make_token(amount: u64) -> Token { return Token { amount: amount }; }
+            pub fn get_amount(t: Token) -> u64 { return t.amount; }
         "#,
     );
     let mod_b = utils::compile(
         r#"
-            module mod_b;
+            mod mod_b;
 
             pub struct Token { pub points: u64 }
 
-            pub fn make_token(points: u64): Token { return Token { points: points }; }
-            pub fn get_points(t: Token): u64 { return t.points; }
+            pub fn make_token(points: u64) -> Token { return Token { points: points }; }
+            pub fn get_points(t: Token) -> u64 { return t.points; }
         "#,
     );
 
     let main = utils::compile_with_deps(
         &format!(
             r#"
-                module main;
+                mod main;
 
                 use mod_a@{};
                 use mod_b@{};
 
-                pub fn run(): u64 {{
+                pub fn run() -> u64 {{
                     let ta = mod_a::make_token(100);
                     let tb = mod_b::make_token(42);
                     return mod_a::get_amount(ta) + mod_b::get_points(tb);
@@ -193,16 +193,16 @@ fn same_module_name_different_address_are_distinct() {
     let a02 = Address::from_str("0x02").unwrap();
     let lib_v1 = utils::compile(
         r#"
-            module lib;
+            mod lib;
 
-            pub fn version(): u64 { return 1; }
+            pub fn version() -> u64 { return 1; }
         "#,
     );
     let lib_v2 = utils::compile(
         r#"
-            module lib;
+            mod lib;
 
-            pub fn version(): u64 { return 2; }
+            pub fn version() -> u64 { return 2; }
         "#,
     );
 
@@ -210,11 +210,11 @@ fn same_module_name_different_address_are_distinct() {
     let caller_v1 = utils::compile_with_deps(
         &format!(
             r#"
-                module caller;
+                mod caller;
 
                 use lib@{};
 
-                pub fn get(): u64 {{ return lib::version(); }}
+                pub fn get() -> u64 {{ return lib::version(); }}
             "#,
             a01
         ),
@@ -247,21 +247,21 @@ fn dep_module_internal_calls_stay_in_dep_context() {
     let a20 = Address::from_str("0x20").unwrap();
     let math = utils::compile(
         r#"
-            module math;
+            mod math;
 
-            fn square(x: u64): u64 { return x * x; }
-            pub fn sum_of_squares(a: u64, b: u64): u64 { return square(a) + square(b); }
+            fn square(x: u64) -> u64 { return x * x; }
+            pub fn sum_of_squares(a: u64, b: u64) -> u64 { return square(a) + square(b); }
         "#,
     );
 
     let caller = utils::compile_with_deps(
         &format!(
             r#"
-                module caller;
+                mod caller;
 
                 use math@{};
 
-                pub fn run(a: u64, b: u64): u64 {{ return math::sum_of_squares(a, b); }}
+                pub fn run(a: u64, b: u64) -> u64 {{ return math::sum_of_squares(a, b); }}
             "#,
             a20
         ),
@@ -285,7 +285,7 @@ fn cross_module_nested_structs() {
     let a30 = Address::from_str("0x30").unwrap();
     let geometry = utils::compile(
         r#"
-            module geometry;
+            mod geometry;
 
             pub struct Point { pub x: u64, pub y: u64 }
         "#,
@@ -294,13 +294,13 @@ fn cross_module_nested_structs() {
     let shapes = utils::compile_with_deps(
         &format!(
             r#"
-                module shapes;
+                mod shapes;
 
                 use geometry@{};
 
                 pub struct Line {{ a: geometry::Point, b: geometry::Point }}
 
-                pub fn x_distance(line: Line): u64 {{
+                pub fn x_distance(line: Line) -> u64 {{
                     return line.b.x - line.a.x;
                 }}
             "#,
@@ -341,7 +341,7 @@ fn cross_module_deeply_nested_structs() {
 
     let point = utils::compile(
         r#"
-            module point;
+            mod point;
 
             pub struct Point { pub x: u64, pub y: u64 }
         "#,
@@ -350,7 +350,7 @@ fn cross_module_deeply_nested_structs() {
     let shapes = utils::compile_with_deps(
         &format!(
             r#"
-                module shapes;
+                mod shapes;
 
                 use point@{};
 
@@ -364,14 +364,14 @@ fn cross_module_deeply_nested_structs() {
     let geometry = utils::compile_with_deps(
         &format!(
             r#"
-                module geometry;
+                mod geometry;
 
                 use point@{a10};
                 use shapes@{a20};
 
                 pub struct Rect {{ pub l1: shapes::Line, pub l2: shapes::Line }}
 
-                pub fn left_top_x(rect: Rect): u64 {{
+                pub fn left_top_x(rect: Rect) -> u64 {{
                     return rect.l1.a.x;
                 }}
             "#,
@@ -415,9 +415,9 @@ fn chained_cross_module_calls() {
     let a60 = Address::from_str("0x60").unwrap();
     let base = utils::compile(
         r#"
-            module base;
+            mod base;
 
-            pub fn one(): u64 { return 1; }
+            pub fn one() -> u64 { return 1; }
         "#,
     );
 
@@ -425,11 +425,11 @@ fn chained_cross_module_calls() {
     let mid = utils::compile_with_deps(
         &format!(
             r#"
-                module mid;
+                mod mid;
 
                 use base@{};
 
-                pub fn two(): u64 {{ return base::one() + base::one(); }}
+                pub fn two() -> u64 {{ return base::one() + base::one(); }}
             "#,
             a60
         ),
@@ -439,11 +439,11 @@ fn chained_cross_module_calls() {
     let top = utils::compile_with_deps(
         &format!(
             r#"
-                module top;
+                mod top;
 
                 use mid@{};
 
-                pub fn four(): u64 {{ return mid::two() + mid::two(); }}
+                pub fn four() -> u64 {{ return mid::two() + mid::two(); }}
             "#,
             a61
         ),

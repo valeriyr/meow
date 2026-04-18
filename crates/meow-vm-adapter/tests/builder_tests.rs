@@ -14,12 +14,12 @@ use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
 #[test]
 fn build_module_successful() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Point { x: u64, y: u64 }
         object Token { id: address, amount: u64 }
 
-        fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+        fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
     "#;
 
     let module = builder::build(src, &[]).unwrap();
@@ -41,7 +41,7 @@ fn build_module_successful() {
 #[test]
 fn build_module_name_comes_from_source_declaration() {
     let src = r#"
-        module my_module;
+        mod my_module;
         fn noop() {}
     "#;
     let module = builder::build(src, &[]).unwrap();
@@ -61,8 +61,8 @@ fn build_from_file_with_dep_successful() {
     let dep_addr = Address::from_str("0x42").unwrap();
     let dep = builder::build(
         r#"
-            module math;
-            pub fn add(a: u64, b: u64): u64 { return a + b; }
+            mod math;
+            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
         "#,
         &[],
     )
@@ -72,9 +72,9 @@ fn build_from_file_with_dep_successful() {
     std::fs::write(
         &path,
         r#"
-            module main;
+            mod main;
             use math@0x42;
-            fn run(): u64 { return math::add(1, 2); }
+            fn run() -> u64 { return math::add(1, 2); }
         "#,
     )
     .unwrap();
@@ -124,7 +124,7 @@ fn build_source_size_limit() {
 #[test]
 fn extract_module_deps_returns_empty_for_no_deps() {
     let src = r#"
-        module main;
+        mod main;
         fn noop() {}
     "#;
     let deps = builder::extract_module_deps(src).unwrap();
@@ -134,7 +134,7 @@ fn extract_module_deps_returns_empty_for_no_deps() {
 #[test]
 fn extract_module_deps_returns_declared_imports_in_order() {
     let src = r#"
-        module main;
+        mod main;
 
         use math@0x01;
         use util@0x02;
@@ -173,7 +173,7 @@ fn extract_module_deps_missing_module_decl_returns_error() {
 #[test]
 fn extract_module_deps_duplicate_use_returns_error() {
     let src = r#"
-        module main;
+        mod main;
 
         use helper@0x42;
         use helper@0x42;
@@ -192,7 +192,7 @@ fn extract_module_deps_duplicate_use_returns_error() {
 fn read_source_file_returns_content() {
     let content = builder::read_source_file(MEOW_COIN_MODULE_PATH).unwrap();
     assert!(!content.is_empty());
-    assert!(content.contains("module meow_coin"));
+    assert!(content.contains("mod meow_coin"));
 }
 
 #[test]
@@ -212,8 +212,8 @@ fn build_with_dep_cross_module_function_call() {
     let dep_addr = Address::from_str("0x01").unwrap();
     let math = builder::build(
         r#"
-            module math;
-            pub fn add(a: u64, b: u64): u64 { return a + b; }
+            mod math;
+            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
         "#,
         &[],
     )
@@ -221,11 +221,11 @@ fn build_with_dep_cross_module_function_call() {
 
     let caller = builder::build(
         r#"
-            module caller;
+            mod caller;
 
             use math@0x01;
 
-            fn double_add(a: u64, b: u64): u64 {
+            fn double_add(a: u64, b: u64) -> u64 {
                 return math::add(a, b) + math::add(a, b);
             }
         "#,
@@ -242,12 +242,12 @@ fn build_with_dep_cross_module_struct() {
     let dep_addr = Address::from_str("0x10").unwrap();
     let shapes = builder::build(
         r#"
-            module shapes;
+            mod shapes;
 
             pub struct Point { pub x: u64, y: u64 }
 
-            pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
-            pub fn get_x(p: Point): u64 { return p.x; }
+            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub fn get_x(p: Point) -> u64 { return p.x; }
         "#,
         &[],
     )
@@ -255,11 +255,11 @@ fn build_with_dep_cross_module_struct() {
 
     let user = builder::build(
         r#"
-            module user;
+            mod user;
 
             use shapes@0x10;
 
-            fn make_and_read(): u64 {
+            fn make_and_read() -> u64 {
                 let p = shapes::make_point(5, 9);
                 return shapes::get_x(p);
             }
@@ -275,9 +275,9 @@ fn build_with_dep_cross_module_struct() {
 fn build_with_declared_dep_not_provided_returns_error() {
     // Source declares `use math@0x01` but no dep module is provided.
     let src = r#"
-        module main;
+        mod main;
         use math@0x01;
-        fn run(): u64 { return math::add(1, 2); }
+        fn run() -> u64 { return math::add(1, 2); }
     "#;
     assert!(matches!(
         builder::build(src, &[]).unwrap_err(),
@@ -291,7 +291,7 @@ fn build_with_extra_undeclared_dep_is_accepted() {
     let dep_addr = Address::from_str("0x99").unwrap();
     let extra = builder::build(
         r#"
-            module extra;
+            mod extra;
             fn noop() {}
         "#,
         &[],
@@ -300,8 +300,8 @@ fn build_with_extra_undeclared_dep_is_accepted() {
 
     let module = builder::build(
         r#"
-            module main;
-            fn run(): u64 { return 1; }
+            mod main;
+            fn run() -> u64 { return 1; }
         "#,
         &[(dep_addr, &extra)],
     )
@@ -322,7 +322,7 @@ fn defining_adapter_native_function_name_is_rejected() {
     for name in native_functions {
         let src = format!(
             r#"
-                module test;
+                mod test;
                 fn {name}() {{}}
             "#
         );

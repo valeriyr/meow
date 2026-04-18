@@ -10,8 +10,8 @@ use meow_vm_types::{address::Address, types::Value};
 #[test]
 fn native_returns_value() {
     let src = r#"
-        module test;
-        pub fn compute(a: u64, b: u64): u64 { let sum = add_native(a, b); return sum; }
+        mod test;
+        pub fn compute(a: u64, b: u64) -> u64 { let sum = add_native(a, b); return sum; }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_add_native()]);
     let mut gas = GasMeter::unlimited();
@@ -26,8 +26,8 @@ fn void_native_does_not_leave_stack_garbage() {
     // The compiler emits Pop after expression-statement calls. A void native
     // must push Void (not nothing) or the Pop would underflow the stack.
     let src = r#"
-        module test;
-        pub fn run_side_effect(x: u64): u64 { log_native(x); return x + 1; }
+        mod test;
+        pub fn run_side_effect(x: u64) -> u64 { log_native(x); return x + 1; }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_log_native()]);
     let mut gas = GasMeter::unlimited();
@@ -45,7 +45,7 @@ fn void_native_does_not_leave_stack_garbage() {
 fn builtin_abort_triggers_on_false_condition() {
     // meow_vm_abort(condition, code, msg): aborts when condition is FALSE (assert semantics).
     let src = r#"
-        module test;
+        mod test;
         pub fn check(x: u64) { meow_vm_abort(x != 0, 42, "must not be zero"); }
     "#;
     let vm = utils::vm_with_natives(src, vec![]);
@@ -67,7 +67,7 @@ fn builtin_abort_triggers_on_false_condition() {
 #[test]
 fn abort_can_be_overridden_by_custom_native() {
     let src = r#"
-        module test;
+        mod test;
         pub fn check(x: u64) { meow_vm_abort(x != 0, 99, "overridden"); }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_doubling_abort_native()]);
@@ -84,7 +84,7 @@ fn abort_can_be_overridden_by_custom_native() {
 #[test]
 fn use_after_move_is_an_error() {
     let src = r#"
-        module test;
+        mod test;
         object Token { id: address, amount: u64 }
 
         pub fn consume_twice(tok: Token) { consume_native(tok); consume_native(tok); }
@@ -106,8 +106,8 @@ fn use_after_move_is_an_error() {
 #[test]
 fn final_args_holds_primitives_after_call() {
     let src = r#"
-        module test;
-        pub fn f(a: u64, b: u64): u64 { return a + b; }
+        mod test;
+        pub fn f(a: u64, b: u64) -> u64 { return a + b; }
     "#;
     let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
@@ -120,7 +120,7 @@ fn final_args_holds_primitives_after_call() {
 #[test]
 fn final_args_is_none_for_consumed_object() {
     let src = r#"
-        module test;
+        mod test;
         object Token { id: address, amount: u64 }
 
         pub fn consume(tok: Token) { consume_native(tok); }
@@ -135,10 +135,10 @@ fn final_args_is_none_for_consumed_object() {
 fn final_args_is_some_for_surviving_object() {
     // An object that is neither transferred nor destroyed keeps its slot — final_args holds it.
     let src = r#"
-        module test;
+        mod test;
         object Token { id: address, amount: u64 }
 
-        pub fn read_amount(tok: Token): u64 { return tok.amount; }
+        pub fn read_amount(tok: Token) -> u64 { return tok.amount; }
     "#;
     let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
@@ -153,7 +153,7 @@ fn final_args_is_some_for_surviving_object() {
 fn final_args_reflects_mutations_on_surviving_object() {
     // A mutated-but-not-consumed object surfaces with its updated field values.
     let src = r#"
-        module test;
+        mod test;
         object Token { id: address, amount: u64 }
 
         pub fn double_amount(tok: Token) { tok.amount = tok.amount * 2; }

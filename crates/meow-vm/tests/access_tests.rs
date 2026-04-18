@@ -15,8 +15,8 @@ use meow_vm_types::{config::VmConfig, types::Value};
 fn calling_private_fn_returns_private_function_error() {
     let module = utils::compile(
         r#"
-            module test;
-            fn secret(): u64 { return 42; }
+            mod test;
+            fn secret() -> u64 { return 42; }
         "#,
     );
     let vm = utils::vm(module);
@@ -32,8 +32,8 @@ fn calling_private_fn_returns_private_function_error() {
 fn calling_pub_fn_succeeds() {
     let module = utils::compile(
         r#"
-            module test;
-            pub fn answer(): u64 { return 42; }
+            mod test;
+            pub fn answer() -> u64 { return 42; }
         "#,
     );
     let vm = utils::vm(module);
@@ -47,9 +47,9 @@ fn private_fn_callable_internally() {
     // Private functions must still be callable from within the same module.
     let module = utils::compile(
         r#"
-            module test;
-            fn helper(): u64 { return 7; }
-            pub fn run(): u64 { return helper(); }
+            mod test;
+            fn helper() -> u64 { return 7; }
+            pub fn run() -> u64 { return helper(); }
         "#,
     );
     let vm = utils::vm(module);
@@ -68,7 +68,7 @@ fn calling_native_fn_directly_returns_native_function_call_direct_error() {
     // must return NativeFunctionCallDirect, not UndefinedFunction.
     let module = utils::compile(
         r#"
-            module test;
+            mod test;
             pub fn noop() {}
         "#,
     );
@@ -87,7 +87,7 @@ fn calling_registered_native_fn_directly_is_rejected() {
     // called directly via vm.call, not only the built-in meow_vm_abort.
     let module = utils::compile(
         r#"
-            module test;
+            mod test;
             pub fn noop() {}
         "#,
     );
@@ -122,8 +122,8 @@ fn enable_call_private_functions_allows_private_fn() {
     // functions must be callable via vm.call.
     let module = utils::compile(
         r#"
-            module test;
-            fn secret(): u64 { return 99; }
+            mod test;
+            fn secret() -> u64 { return 99; }
         "#,
     );
     let vm = Vm::new(
@@ -143,7 +143,7 @@ fn enable_call_private_functions_does_not_affect_natives() {
     // Even with the flag enabled, native functions must still be rejected.
     let module = utils::compile(
         r#"
-            module test;
+            mod test;
             fn noop() {}
         "#,
     );

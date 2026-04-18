@@ -10,7 +10,7 @@ Use `//` for single-line comments. Everything from `//` to the end of the line i
 
 ```meow
 // This is a top-level comment.
-fn add(a: u64, b: u64): u64 {
+fn add(a: u64, b: u64) -> u64 {
     // add two numbers
     return a + b; // inline comment
 }
@@ -125,11 +125,11 @@ Struct and object literals (`TypeName { field: value, ... }`) can only appear in
 ```meow
 // shapes module
 pub struct Point { pub x: u64, pub y: u64 }
-pub fn make_point(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
 
 // user module
 use shapes@0x...;
-fn run(): u64 {
+fn run() -> u64 {
     let p = shapes::make_point(3, 7); // ok — uses constructor
     // let p = shapes::Point { x: 3, y: 7 }; // rejected — cross-module construction
     return p.x;  // ok — x is pub
@@ -154,9 +154,9 @@ Only `pub fn` functions can be called directly from a transaction. Sending a tra
 Native built-in functions (`meow_vm_transfer`, `meow_vm_fresh_id`, etc.) cannot be called directly from a transaction either — they are only available from within contract code.
 
 ```meow
-module vault;
+mod vault;
 
-fn internal_helper(): u64 { return 1; } // cannot be called from a transaction
+fn internal_helper() -> u64 { return 1; } // cannot be called from a transaction
 
 pub fn deposit(amount: u64) { ... }     // valid transaction target
 pub fn withdraw(amount: u64) { ... }    // valid transaction target
@@ -184,12 +184,12 @@ Modules can import functions and types from other published modules using `use` 
 ### Declaring a dependency
 
 ```meow
-module my_game;
+mod my_game;
 
 use math@0x1a2b3c...;   // import the module named "math" at the given on-chain address
 use utils@0x9f8e7d...;
 
-fn level_up(hero: Hero): u64 {
+fn level_up(hero: Hero) -> u64 {
     return math::scale(hero.xp, 2);
 }
 ```

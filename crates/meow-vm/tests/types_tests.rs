@@ -15,8 +15,8 @@ fn address_literal_in_source() {
     assert_eq!(
         utils::run(
             r#"
-                module test;
-                pub fn get_addr(): address { return @0x01; }
+                mod test;
+                pub fn get_addr() -> address { return @0x01; }
             "#,
             "get_addr",
             vec![],
@@ -30,8 +30,8 @@ fn address_literal_equality() {
     assert_eq!(
         utils::run(
             r#"
-                module test;
-                pub fn same(): bool { let a = @0x01; let b = @0x01; return a == b; }
+                mod test;
+                pub fn same() -> bool { let a = @0x01; let b = @0x01; return a == b; }
             "#,
             "same",
             vec![],
@@ -45,8 +45,8 @@ fn address_literal_inequality() {
     assert_eq!(
         utils::run(
             r#"
-                module test;
-                pub fn different(): bool { let a = @0x01; let b = @0x02; return a == b; }
+                mod test;
+                pub fn different() -> bool { let a = @0x01; let b = @0x02; return a == b; }
             "#,
             "different",
             vec![],
@@ -60,9 +60,9 @@ fn address_literal_passed_as_parameter() {
     assert_eq!(
         utils::run(
             r#"
-                module test;
-                pub fn is_zero(a: address): bool { return a == @0x00; }
-                pub fn check(): bool { return is_zero(@0x00); }
+                mod test;
+                pub fn is_zero(a: address) -> bool { return a == @0x00; }
+                pub fn check() -> bool { return is_zero(@0x00); }
             "#,
             "check",
             vec![],
@@ -77,8 +77,8 @@ fn address_round_trip() {
     assert_eq!(
         utils::run(
             r#"
-                module test;
-                pub fn identity(a: address): address { return a; }
+                mod test;
+                pub fn identity(a: address) -> address { return a; }
             "#,
             "identity",
             vec![Value::Address(addr)]
@@ -90,8 +90,8 @@ fn address_round_trip() {
 #[test]
 fn address_equality() {
     let src = r#"
-        module test;
-        pub fn same(a: address, b: address): bool { return a == b; }
+        mod test;
+        pub fn same(a: address, b: address) -> bool { return a == b; }
     "#;
     let addr = Address::fill(1);
     let other = Address::fill(2);
@@ -120,12 +120,12 @@ fn address_equality() {
 #[test]
 fn struct_construction_and_field_access() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Point { x: u64, y: u64 }
 
-        pub fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
-        pub fn get_x(p: Point): u64 { return p.x; }
+        pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+        pub fn get_x(p: Point) -> u64 { return p.x; }
     "#;
     let vm = utils::vm(utils::compile(src));
     let mut gas = GasMeter::unlimited();
@@ -154,11 +154,11 @@ fn struct_construction_and_field_access() {
 fn struct_value_semantics() {
     // Structs are freely copyable — the same value can be passed multiple times.
     let src = r#"
-        module test;
+        mod test;
 
         struct Counter { value: u64 }
 
-        pub fn get_value(c: Counter): u64 { return c.value; }
+        pub fn get_value(c: Counter) -> u64 { return c.value; }
     "#;
     let vm = utils::vm(utils::compile(src));
     let mut gas = GasMeter::unlimited();
@@ -180,11 +180,11 @@ fn struct_value_semantics() {
 #[test]
 fn struct_field_mutation() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Counter { value: u64 }
 
-        pub fn increment(c: Counter): Counter { c.value = c.value + 1; return c; }
+        pub fn increment(c: Counter) -> Counter { c.value = c.value + 1; return c; }
     "#;
     assert_eq!(
         utils::run(src, "increment", vec![test_counter(5)]),
@@ -202,8 +202,8 @@ fn struct_field_mutation() {
 #[test]
 fn string_literal_return() {
     let src = r#"
-        module test;
-        pub fn greeting(): string { return "hello"; }
+        mod test;
+        pub fn greeting() -> string { return "hello"; }
     "#;
     assert_eq!(
         utils::run(src, "greeting", vec![]),
@@ -214,8 +214,8 @@ fn string_literal_return() {
 #[test]
 fn string_parameter_round_trip() {
     let src = r#"
-        module test;
-        pub fn identity(s: string): string { return s; }
+        mod test;
+        pub fn identity(s: string) -> string { return s; }
     "#;
     assert_eq!(
         utils::run(src, "identity", vec![Value::Str("meow".to_string())]),
@@ -229,7 +229,7 @@ fn string_passed_to_native() {
     use utils::vm_with_natives;
 
     let src = r#"
-        module test;
+        mod test;
         pub fn send_msg() { log_native("hello from meow"); }
     "#;
     let received_ptr = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
@@ -252,12 +252,12 @@ fn string_passed_to_native() {
 #[test]
 fn string_struct_field_round_trip() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Msg { text: string }
 
-        pub fn make(text: string): Msg { return Msg { text: text }; }
-        pub fn get_text(m: Msg): string { return m.text; }
+        pub fn make(text: string) -> Msg { return Msg { text: text }; }
+        pub fn get_text(m: Msg) -> string { return m.text; }
     "#;
     let vm = utils::vm(utils::compile(src));
     let mut gas = GasMeter::unlimited();
@@ -286,17 +286,17 @@ fn string_struct_field_round_trip() {
 #[test]
 fn nested_struct_construction_and_field_access() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Inner { value: u64 }
         struct Outer { inner: Inner, label: u64 }
 
-        pub fn make(v: u64, label: u64): Outer {
+        pub fn make(v: u64, label: u64) -> Outer {
             let i = Inner { value: v };
             return Outer { inner: i, label: label };
         }
 
-        pub fn get_inner_value(o: Outer): u64 {
+        pub fn get_inner_value(o: Outer) -> u64 {
             let i = o.inner;
             return i.value;
         }
@@ -320,12 +320,12 @@ fn nested_struct_construction_and_field_access() {
 #[test]
 fn nested_struct_field_mutation() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Inner { x: u64 }
         struct Outer { inner: Inner }
 
-        pub fn double_inner(o: Outer): Outer {
+        pub fn double_inner(o: Outer) -> Outer {
             o.inner = Inner { x: o.inner.x * 2 };
             return o;
         }
@@ -359,12 +359,12 @@ fn nested_struct_field_mutation() {
 #[test]
 fn nested_struct_passed_as_argument() {
     let src = r#"
-        module test;
+        mod test;
 
         struct Span { start: u64, end: u64 }
         struct Range { span: Span }
 
-        pub fn length(r: Range): u64 {
+        pub fn length(r: Range) -> u64 {
             return r.span.end - r.span.start;
         }
     "#;
@@ -386,12 +386,12 @@ fn nested_struct_passed_as_argument() {
 fn nested_struct_forward_reference() {
     // B is used as a field type in A even though B is defined after A.
     let src = r#"
-        module test;
+        mod test;
 
         struct A { b: B }
         struct B { value: u64 }
 
-        pub fn get_value(a: A): u64 {
+        pub fn get_value(a: A) -> u64 {
             let b = a.b;
             return b.value;
         }
@@ -411,12 +411,12 @@ fn nested_struct_forward_reference() {
 fn nested_struct_value_semantics() {
     // Structs are freely copyable — reading a nested struct field copies it.
     let src = r#"
-        module test;
+        mod test;
 
         struct Inner { n: u64 }
         struct Outer { inner: Inner }
 
-        pub fn read_twice(o: Outer): u64 {
+        pub fn read_twice(o: Outer) -> u64 {
             let a = o.inner;
             let b = o.inner;
             return a.n + b.n;
@@ -443,11 +443,11 @@ fn nested_struct_value_semantics() {
 #[test]
 fn object_construction_and_field_access() {
     let src = r#"
-        module test;
+        mod test;
 
         object Coin { id: address, balance: u64 }
 
-        pub fn make_coin(balance: u64): u64 {
+        pub fn make_coin(balance: u64) -> u64 {
             let c = Coin { id: meow_vm_fresh_id(), balance: balance };
             return c.balance;
         }
@@ -463,11 +463,11 @@ fn object_construction_and_field_access() {
 #[test]
 fn object_field_mutation_reflected_in_final_args() {
     let src = r#"
-        module test;
+        mod test;
 
         object Coin { id: address, balance: u64 }
 
-        pub fn double_balance(coin: Coin): u64 {
+        pub fn double_balance(coin: Coin) -> u64 {
             coin.balance = coin.balance * 2;
             return coin.balance;
         }

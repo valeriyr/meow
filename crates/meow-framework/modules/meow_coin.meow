@@ -7,7 +7,7 @@
 // All functions except mint are public and callable from transactions.
 // mint is private: it can only be invoked at genesis to create the initial supply.
 
-module meow_coin;
+mod meow_coin;
 
 // A single Meow Coin. Each instance is an owned object with a unique id and a
 // non-negative balance. The balance field is readable from other modules.

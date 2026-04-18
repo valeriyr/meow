@@ -5,7 +5,7 @@ use meow_vm_compiler::error::CompilerError;
 #[test]
 fn object_first_field_must_be_id_address() {
     let src = r#"
-        module test;
+        mod test;
 
         object BadObject { balance: u64, id: address }
 
@@ -20,7 +20,7 @@ fn object_first_field_must_be_id_address() {
 #[test]
 fn object_id_must_use_fresh_id() {
     let src = r#"
-        module test;
+        mod test;
 
         object Token { id: address, amount: u64 }
 
@@ -38,11 +38,11 @@ fn object_id_must_use_fresh_id() {
 #[test]
 fn object_cannot_be_returned_from_function() {
     let src = r#"
-        module test;
+        mod test;
 
         object Coin { id: address, balance: u64 }
 
-        fn make(id: address, balance: u64): Coin {
+        fn make(id: address, balance: u64) -> Coin {
             return Coin { id: id, balance: balance };
         }
     "#;

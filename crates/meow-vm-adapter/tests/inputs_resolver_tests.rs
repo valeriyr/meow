@@ -37,7 +37,7 @@ fn collect_inputs_publish_tx_returns_only_gas_coin() {
 #[test]
 fn collect_inputs_meow_call_returns_gas_then_module() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, &SIMPLE_SRC, &[]);
+    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
     let gas_obj = make_gas_obj();
     let tx = make_call_tx(module_addr, "noop", vec![]);
 
@@ -93,7 +93,7 @@ fn collect_inputs_dep_module_comes_before_main_module() {
 #[test]
 fn collect_inputs_missing_gas_coin_is_skipped() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, &SIMPLE_SRC, &[]);
+    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
     let tx = make_call_tx(module_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
@@ -132,7 +132,7 @@ fn collect_inputs_missing_module_is_skipped() {
 fn collect_inputs_includes_object_call_args() {
     let module_addr = Address::from_str("0x01").unwrap();
     let arg_addr = Address::from_str("0xCC").unwrap();
-    let module_obj = make_module_obj(module_addr, &SIMPLE_SRC, &[]);
+    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
     let arg_obj = make_gas_obj_at(arg_addr);
     let gas_obj = make_gas_obj();
 
@@ -163,7 +163,7 @@ fn collect_inputs_includes_object_call_args() {
 #[tokio::test]
 async fn collect_inputs_async_returns_gas_and_module() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, &SIMPLE_SRC, &[]);
+    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
     let gas_obj = make_gas_obj();
     let tx = make_call_tx(module_addr, "noop", vec![]);
 
@@ -337,16 +337,27 @@ async fn load_deps_async_deduplicates_diamond_deps() {
 const SENDER: Address = Address::fill(0xAA);
 const GAS_ADDR: Address = Address::fill(0xBB);
 
-const SIMPLE_SRC: &str = "module simple; pub fn noop() {}";
-const DEP_SRC: &str = "module point; pub struct Point { pub x: u64, pub y: u64 }";
+const SIMPLE_SRC: &str = r#"
+    mod simple;
+    pub fn noop() {}
+    "#;
+const DEP_SRC: &str = r#"
+    mod point;
+    pub struct Point { pub x: u64, pub y: u64 }
+    "#;
 
 /// Returns source for a module that imports `point` at `dep_addr`.
 /// The address is embedded in the `use` declaration so the compiler can resolve it.
 fn main_src(dep_addr: Address) -> String {
     format!(
-        "module shapes; use point@{dep_addr}; \
-         pub struct Line {{ pub a: point::Point, pub b: point::Point }} \
-         pub fn noop() {{}}"
+        r#"
+            mod shapes;
+
+            use point@{dep_addr};
+
+            pub struct Line {{ pub a: point::Point, pub b: point::Point }}
+            pub fn noop() {{}}
+         "#
     )
 }
 

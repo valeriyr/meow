@@ -22,8 +22,8 @@ fn dep_count_exceeding_limit_returns_error() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -31,9 +31,9 @@ fn dep_count_exceeding_limit_returns_error() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -41,9 +41,9 @@ fn dep_count_exceeding_limit_returns_error() {
     .expect("b must compile");
     let main_module = Compiler::compile(
         r#"
-            module main;
+            mod main;
             use b@0x02;
-            pub fn run(): u64 { return b::get(); }
+            pub fn run() -> u64 { return b::get(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -79,8 +79,8 @@ fn dep_count_at_limit_succeeds() {
 
     let c_module = Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 1; }
+            mod c;
+            pub fn get() -> u64 { return 1; }
         "#,
         &[],
         cfg.clone(),
@@ -88,9 +88,9 @@ fn dep_count_at_limit_succeeds() {
     .expect("c must compile");
     let b_module = Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x03;
-            pub fn get(): u64 { return c::get(); }
+            pub fn get() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -98,9 +98,9 @@ fn dep_count_at_limit_succeeds() {
     .expect("b must compile");
     let main_module = Compiler::compile(
         r#"
-            module main;
+            mod main;
             use b@0x02;
-            pub fn run(): u64 { return b::get(); }
+            pub fn run() -> u64 { return b::get(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -132,9 +132,9 @@ fn call_depth_exceeding_limit_returns_error() {
     // (depth 1) must fail since 1 >= limit of 1.
     let module = utils::compile(
         r#"
-        module depth_test;
-        fn b(): u64 { return 1; }
-        pub fn a(): u64 { return b(); }
+        mod depth_test;
+        fn b() -> u64 { return 1; }
+        pub fn a() -> u64 { return b(); }
     "#,
     );
 
@@ -159,9 +159,9 @@ fn call_depth_at_limit_succeeds() {
     // Same module, limit = 2 — a (depth 0) → b (depth 1) fits within the limit.
     let module = utils::compile(
         r#"
-        module depth_test;
-        fn b(): u64 { return 1; }
-        pub fn a(): u64 { return b(); }
+        mod depth_test;
+        fn b() -> u64 { return 1; }
+        pub fn a() -> u64 { return b(); }
     "#,
     );
 

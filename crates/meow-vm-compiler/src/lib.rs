@@ -39,18 +39,18 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// # Language overview
 ///
 /// ```text
-/// module my_module;
+/// mod my_module;
 ///
 /// object Coin { id: address, value: u64 }
 /// struct Point { x: u64, y: u64 }
 ///
-/// fn add(a: u64, b: u64): u64 {
+/// fn add(a: u64, b: u64) -> u64 {
 ///     return a + b;
 /// }
 /// ```
 ///
 /// ## Supported features
-/// - `module NAME;` declaration — must be the first item in source
+/// - `mod NAME;` declaration — must be the first item in source
 /// - Primitive types: `bool`, `u64`, `address`
 /// - Address literals: `@0x02` (left-padded to 32 bytes)
 /// - User-defined structs with primitive-typed fields (and nested struct fields)
@@ -72,7 +72,7 @@ impl Compiler {
     ///
     /// Each entry is `(module_name, address)` as written in a `use module_name@address;`
     /// declaration. The function validates:
-    /// - source starts with exactly one `module NAME;` declaration
+    /// - source starts with exactly one `mod NAME;` declaration
     /// - no two `use` declarations share the same module name
     ///
     /// No dep modules need to be provided — this is intended for callers that need
@@ -86,7 +86,7 @@ impl Compiler {
 
     /// Compile `source` with access to the given dependency modules.
     ///
-    /// The source must start with a `module NAME;` declaration. The name is
+    /// The source must start with a `mod NAME;` declaration. The name is
     /// extracted from the source and becomes the module's human-readable identifier.
     ///
     /// `deps` is a list of `(address, module)` pairs for all modules declared via
@@ -290,8 +290,8 @@ impl Compiler {
     ///
     /// Validates:
     /// - source is parseable
-    /// - first item is `module NAME;`
-    /// - no duplicate `module NAME;` declarations
+    /// - first item is `mod NAME;`
+    /// - no duplicate `mod NAME;` declarations
     /// - no duplicate `use` names
     ///
     /// Returns `(items, module_name, use_decls)` where `use_decls` is a list of
@@ -315,7 +315,7 @@ impl Compiler {
             Some(AstItem::ModuleDecl(name)) => name.clone(),
             _ => {
                 return Err(CompilerError::Message(
-                    "source must begin with 'module NAME;' declaration".to_string(),
+                    "source must begin with 'mod NAME;' declaration".to_string(),
                 ));
             }
         };
@@ -325,7 +325,7 @@ impl Compiler {
             .any(|i| matches!(i, AstItem::ModuleDecl(_)))
         {
             return Err(CompilerError::Message(
-                "duplicate 'module NAME;' declaration: only one is allowed per file".to_string(),
+                "duplicate 'mod NAME;' declaration: only one is allowed per file".to_string(),
             ));
         }
 

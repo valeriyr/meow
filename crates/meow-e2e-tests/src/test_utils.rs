@@ -137,8 +137,8 @@ pub async fn submit_and_reject(client: &NodeClient, transaction: &SignedTransact
 pub fn module_math() -> Vec<u8> {
     let module = builder::build(
         r#"
-            module math;
-            pub fn add(a: u64, b: u64): u64 { return a + b; }
+            mod math;
+            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
         "#,
         &[],
     )
@@ -150,7 +150,7 @@ pub fn module_math() -> Vec<u8> {
 pub fn module_noop() -> Vec<u8> {
     let module = builder::build(
         r#"
-            module noop;
+            mod noop;
             pub fn noop() {}
         "#,
         &[],

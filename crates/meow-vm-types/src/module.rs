@@ -37,7 +37,7 @@ pub struct Function {
 /// so that resolution is unambiguous even when names collide.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Module {
-    /// Human-readable module name declared by the `module NAME;` statement.
+    /// Human-readable module name declared by the `mod NAME;` statement.
     pub name: String,
     /// Addresses of dependency modules declared via `use module_name@address;`.
     pub imports: Vec<Address>,

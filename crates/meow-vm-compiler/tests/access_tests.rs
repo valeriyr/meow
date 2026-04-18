@@ -13,13 +13,13 @@ use meow_vm_types::{address::Address, module::Module};
 fn private_fn_call_from_other_module_rejected() {
     let err = with_dep(
         r#"
-            module lib;
-            fn secret(): u64 { return 42; }
+            mod lib;
+            fn secret() -> u64 { return 42; }
         "#,
         r#"
-            module caller;
+            mod caller;
             use lib@0x01;
-            fn run(): u64 { return lib::secret(); }
+            fn run() -> u64 { return lib::secret(); }
         "#,
     )
     .unwrap_err();
@@ -34,13 +34,13 @@ fn private_fn_call_from_other_module_rejected() {
 fn pub_fn_call_from_other_module_accepted() {
     with_dep(
         r#"
-            module lib;
-            pub fn exposed(): u64 { return 42; }
+            mod lib;
+            pub fn exposed() -> u64 { return 42; }
         "#,
         r#"
-            module caller;
+            mod caller;
             use lib@0x01;
-            fn run(): u64 { return lib::exposed(); }
+            fn run() -> u64 { return lib::exposed(); }
         "#,
     )
     .expect("pub fn must be callable cross-module");
@@ -54,13 +54,13 @@ fn pub_fn_call_from_other_module_accepted() {
 fn cross_module_struct_construction_rejected() {
     let err = with_dep(
         r#"
-            module shapes;
+            mod shapes;
             pub struct Point { pub x: u64, pub y: u64 }
         "#,
         r#"
-            module user;
+            mod user;
             use shapes@0x01;
-            fn bad(): shapes::Point { return shapes::Point { x: 1, y: 2 }; }
+            fn bad() -> shapes::Point { return shapes::Point { x: 1, y: 2 }; }
         "#,
     )
     .unwrap_err();
@@ -75,9 +75,9 @@ fn cross_module_struct_construction_rejected() {
 fn same_module_struct_construction_accepted() {
     utils::compile(
         r#"
-            module shapes;
+            mod shapes;
             pub struct Point { pub x: u64, pub y: u64 }
-            pub fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
         "#,
     )
     .expect("same-module construction must be accepted");
@@ -91,11 +91,11 @@ fn same_module_struct_construction_accepted() {
 fn cross_module_object_construction_rejected() {
     let err = with_dep(
         r#"
-            module coin;
+            mod coin;
             pub object Coin { id: address, pub balance: u64 }
         "#,
         r#"
-            module bad;
+            mod bad;
             use coin@0x01;
             fn forge(id: address) {
                 let c = coin::Coin { id: id, balance: 1000 };
@@ -120,11 +120,11 @@ fn private_struct_not_usable_as_field_type_cross_module() {
     // struct field type in a dependent module is rejected as an unknown type.
     let err = with_dep(
         r#"
-            module lib;
+            mod lib;
             struct Hidden { x: u64 }
         "#,
         r#"
-            module user;
+            mod user;
             use lib@0x01;
             struct Wrapper { inner: lib::Hidden }
             fn noop() {}
@@ -146,14 +146,14 @@ fn private_struct_not_usable_as_field_type_cross_module() {
 fn private_field_read_from_other_module_rejected() {
     let err = with_dep(
         r#"
-            module shapes;
+            mod shapes;
             pub struct Point { pub x: u64, y: u64 }
-            pub fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
         "#,
         r#"
-            module user;
+            mod user;
             use shapes@0x01;
-            fn read_y(): u64 {
+            fn read_y() -> u64 {
                 let p = shapes::make(1, 2);
                 return p.y;
             }
@@ -171,14 +171,14 @@ fn private_field_read_from_other_module_rejected() {
 fn pub_field_read_from_other_module_accepted() {
     with_dep(
         r#"
-            module shapes;
+            mod shapes;
             pub struct Point { pub x: u64, y: u64 }
-            pub fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
         "#,
         r#"
-            module user;
+            mod user;
             use shapes@0x01;
-            fn read_x(): u64 {
+            fn read_x() -> u64 {
                 let p = shapes::make(3, 7);
                 return p.x;
             }
@@ -191,13 +191,13 @@ fn pub_field_read_from_other_module_accepted() {
 fn private_field_read_on_object_from_other_module_rejected() {
     let err = with_dep(
         r#"
-            module coin;
+            mod coin;
             pub object Coin { id: address, balance: u64 }
         "#,
         r#"
-            module user;
+            mod user;
             use coin@0x01;
-            fn read_balance(c: coin::Coin): u64 {
+            fn read_balance(c: coin::Coin) -> u64 {
                 return c.balance;
             }
         "#,
@@ -214,13 +214,13 @@ fn private_field_read_on_object_from_other_module_rejected() {
 fn pub_field_read_on_object_from_other_module_accepted() {
     with_dep(
         r#"
-            module coin;
+            mod coin;
             pub object Coin { id: address, pub balance: u64 }
         "#,
         r#"
-            module user;
+            mod user;
             use coin@0x01;
-            fn read_balance(c: coin::Coin): u64 {
+            fn read_balance(c: coin::Coin) -> u64 {
                 return c.balance;
             }
         "#,
@@ -236,7 +236,7 @@ fn pub_field_read_on_object_from_other_module_accepted() {
 fn pub_field_in_private_struct_rejected() {
     let err = utils::compile(
         r#"
-            module shapes;
+            mod shapes;
             struct Hidden { pub x: u64 }
             fn noop() {}
         "#,
@@ -253,7 +253,7 @@ fn pub_field_in_private_struct_rejected() {
 fn pub_field_in_private_object_rejected() {
     let err = utils::compile(
         r#"
-            module coin;
+            mod coin;
             object Coin { id: address, pub balance: u64 }
             fn noop() {}
         "#,
@@ -275,12 +275,12 @@ fn pub_field_write_from_other_module_rejected() {
     // Even `pub` fields cannot be written from outside the declaring module.
     let err = with_dep(
         r#"
-            module shapes;
+            mod shapes;
             pub struct Point { pub x: u64, pub y: u64 }
-            pub fn make(x: u64, y: u64): Point { return Point { x: x, y: y }; }
+            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
         "#,
         r#"
-            module user;
+            mod user;
             use shapes@0x01;
             fn mutate() {
                 let p = shapes::make(1, 2);
@@ -300,9 +300,9 @@ fn pub_field_write_from_other_module_rejected() {
 fn field_write_in_same_module_accepted() {
     utils::compile(
         r#"
-            module shapes;
+            mod shapes;
             struct Point { x: u64, y: u64 }
-            fn set_x(p: Point, v: u64): Point {
+            fn set_x(p: Point, v: u64) -> Point {
                 p.x = v;
                 return p;
             }
@@ -319,7 +319,7 @@ fn field_write_in_same_module_accepted() {
 fn object_id_write_in_same_module_rejected() {
     let err = utils::compile(
         r#"
-            module coin;
+            mod coin;
             object Coin { id: address, balance: u64 }
             fn bad(c: Coin, new_id: address) {
                 c.id = new_id;
@@ -342,9 +342,9 @@ fn object_id_write_in_same_module_rejected() {
 fn line_comment_inside_function_body() {
     utils::compile(
         r#"
-            module comments;
+            mod comments;
             // This is a top-level comment
-            pub fn add(a: u64, b: u64): u64 {
+            pub fn add(a: u64, b: u64) -> u64 {
                 // add the two values and return
                 return a + b; // inline comment
             }
@@ -357,8 +357,8 @@ fn line_comment_inside_function_body() {
 fn comment_with_slashes_in_string_not_stripped() {
     utils::compile(
         r#"
-            module comments;
-            pub fn url(): string { return "https://example.com"; }
+            mod comments;
+            pub fn url() -> string { return "https://example.com"; }
         "#,
     )
     .expect("slashes inside string literals must not be treated as comments");

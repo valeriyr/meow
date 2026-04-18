@@ -13,10 +13,7 @@ use meow_types::{
     identifier::Identifier,
     keystore::Keystore,
     time,
-    transaction::{
-        self, Transaction, call::Call, transaction_type::TransactionType,
-        validator,
-    },
+    transaction::{self, Transaction, call::Call, transaction_type::TransactionType, validator},
 };
 use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolver};
 

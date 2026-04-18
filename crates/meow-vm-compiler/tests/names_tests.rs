@@ -11,7 +11,7 @@ use meow_vm_types::{config::CompilerConfig, identifier::RESERVED_FUNCTION_NAMES}
 fn invalid_module_name_rejected() {
     // `1bad` starts with a digit — rejected at parse time (not a valid ident).
     let src = r#"
-        module 1bad;
+        mod 1bad;
         fn f() {}
     "#;
     let err = utils::compile(src).unwrap_err();
@@ -24,7 +24,7 @@ fn invalid_module_name_rejected() {
 #[test]
 fn module_name_with_dash_rejected() {
     let src = r#"
-        module my-module;
+        mod my-module;
         fn f() {}
     "#;
     assert!(matches!(
@@ -37,7 +37,7 @@ fn module_name_with_dash_rejected() {
 fn invalid_function_name_rejected() {
     // The parser won't accept a leading digit as a function name at all.
     let src = r#"
-            module test;
+            mod test;
             fn 1bad() {}
         "#;
     assert!(matches!(
@@ -50,7 +50,7 @@ fn invalid_function_name_rejected() {
 fn invalid_struct_name_rejected() {
     // The parser won't accept a leading digit as a struct name at all.
     let src = r#"
-            module test;
+            mod test;
             struct 2bad { x: u64 } fn f() {}
         "#;
     assert!(matches!(
@@ -63,7 +63,7 @@ fn invalid_struct_name_rejected() {
 fn invalid_param_name_rejected() {
     // The parser won't accept a leading digit as a parameter name at all.
     let src = r#"
-        module test;
+        mod test;
         fn f(1x: u64) {}
     "#;
     assert!(matches!(
@@ -81,7 +81,7 @@ fn vm_level_reserved_names_are_rejected_with_default_config() {
     for name in RESERVED_FUNCTION_NAMES {
         let src = format!(
             r#"
-                module test;
+                mod test;
                 fn {name}() {{}}
             "#
         );
@@ -103,7 +103,7 @@ fn config_supplied_reserved_names_are_rejected() {
     for name in extra {
         let src = format!(
             r#"
-                module test;
+                mod test;
                 fn {name}() {{}}
             "#
         );
@@ -120,7 +120,7 @@ fn config_supplied_reserved_names_are_rejected() {
 #[test]
 fn non_reserved_function_with_name_starting_meow_is_accepted() {
     let src = r#"
-        module test;
+        mod test;
         fn meow_my_function() {}
     "#;
     assert!(utils::compile(src).is_ok());

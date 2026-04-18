@@ -19,7 +19,7 @@ Create `hero.meow`:
 // from the block's mining hash — results are deterministic across validators
 // but unpredictable at submission time.
 
-module hero;
+mod hero;
 
 // An on-chain hero owned by a player.
 //   id         — unique on-chain address, set at creation and immutable.

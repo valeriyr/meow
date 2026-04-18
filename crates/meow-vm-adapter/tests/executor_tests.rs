@@ -343,7 +343,7 @@ fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
     let coin_obj = make_coin_object(Address::fill(0xCC), SENDER, 50);
     let unrelated_bytes = compile_to_bytes(
         r#"
-            module unrelated;
+            mod unrelated;
             pub fn noop() {}
         "#,
     );
@@ -624,8 +624,8 @@ fn calling_private_function_from_transaction_returns_failure() {
     let module_addr = Address::ZERO;
     let module_obj = make_module_object_from_src(
         r#"
-            module priv_test;
-            fn secret(): u64 { return 42; }
+            mod priv_test;
+            fn secret() -> u64 { return 42; }
         "#,
     );
     let gas_obj = make_gas_coin_object();
@@ -763,7 +763,7 @@ fn execute_with_argument_count_mismatch_returns_failure() {
 fn execute_vm_abort_returns_failure() {
     // meow_vm_abort(condition: bool, code: u64, message: str) — aborts when condition is false.
     let src = r#"
-        module abort_test;
+        mod abort_test;
         pub fn do_abort() { meow_vm_abort(false, 1, "abort message"); }
     "#;
     let module_addr = Address::ZERO;
@@ -829,7 +829,7 @@ fn fresh_object_not_consumed_returns_failure() {
     // A function that calls meow_vm_fresh_id() but never transfers or destroys
     // the generated object — effects.rs requires all fresh IDs to be consumed.
     let src = r#"
-        module leak_test;
+        mod leak_test;
         pub fn generate_id() { let id = meow_vm_fresh_id(); }
     "#;
     let module_addr = Address::ZERO;
@@ -905,7 +905,7 @@ fn exhausted_gas_coin_goes_to_changed() {
 fn execute_module_publish_succeeds() {
     let module_bytes = compile_to_bytes(
         r#"
-            module publish_test;
+            mod publish_test;
             fn noop() {}
         "#,
     );
@@ -938,7 +938,7 @@ fn execute_module_publish_succeeds() {
 fn execute_module_publish_charges_gas_per_byte() {
     let module_bytes = compile_to_bytes(
         r#"
-            module charge_test;
+            mod charge_test;
             fn noop() {}
         "#,
     );
@@ -998,7 +998,7 @@ fn execute_module_publish_fails_when_module_not_deserializable() {
 fn execute_module_publish_derives_address_from_tx_digest() {
     let module_bytes = compile_to_bytes(
         r#"
-            module addr_test;
+            mod addr_test;
             fn noop() {}
         "#,
     );
@@ -1032,8 +1032,8 @@ const GAS_BALANCE: u64 = 1_000_000;
 /// Build a two-module dep chain for use in dependency resolution tests.
 ///
 /// Returns `(dep_addr, dep_module, main_module)` where:
-/// - `dep_module` is compiled at `dep_addr` (0x42) and exports `fn get(): u64`
-/// - `main_module` imports `dep_module` and exports `fn run(): u64` (delegates to dep)
+/// - `dep_module` is compiled at `dep_addr` (0x42) and exports `fn get() -> u64`
+/// - `main_module` imports `dep_module` and exports `fn run() -> u64` (delegates to dep)
 /// - `main_module` is intended to be deployed at `Address::ZERO`
 fn make_dep_chain() -> (
     meow_vm_types::address::Address,
@@ -1043,8 +1043,8 @@ fn make_dep_chain() -> (
     let dep_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
     let dep_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module helper;
-            pub fn get(): u64 { return 42; }
+            mod helper;
+            pub fn get() -> u64 { return 42; }
         "#,
         &[],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1052,9 +1052,9 @@ fn make_dep_chain() -> (
     .expect("dep must compile");
     let main_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module main_mod;
+            mod main_mod;
             use helper@0x42;
-            pub fn run(): u64 { return helper::get(); }
+            pub fn run() -> u64 { return helper::get(); }
         "#,
         &[(dep_addr, &dep_module)],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1066,9 +1066,9 @@ fn make_dep_chain() -> (
 /// Build a three-module chain for transitive dep resolution tests: A → B → C.
 ///
 /// Returns `(b_addr, c_addr, b_module, c_module, a_module)` where:
-/// - c_module: `module c`, exports `fn get(): u64` (address 0x42)
-/// - b_module: `module b`, imports c, exports `fn run(): u64` (address 0x43)
-/// - a_module: `module a`, imports b, exports `fn run(): u64` (address ZERO)
+/// - c_module: `mod c`, exports `fn get() -> u64` (address 0x42)
+/// - b_module: `mod b`, imports c, exports `fn run() -> u64` (address 0x43)
+/// - a_module: `mod a`, imports b, exports `fn run() -> u64` (address ZERO)
 fn make_three_module_chain() -> (
     meow_vm_types::address::Address,
     meow_vm_types::address::Address,
@@ -1081,8 +1081,8 @@ fn make_three_module_chain() -> (
     let b_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
     let c_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module c;
-            pub fn get(): u64 { return 42; }
+            mod c;
+            pub fn get() -> u64 { return 42; }
         "#,
         &[],
         cfg.clone(),
@@ -1090,9 +1090,9 @@ fn make_three_module_chain() -> (
     .expect("c must compile");
     let b_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module b;
+            mod b;
             use c@0x42;
-            pub fn run(): u64 { return c::get(); }
+            pub fn run() -> u64 { return c::get(); }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -1100,9 +1100,9 @@ fn make_three_module_chain() -> (
     .expect("b must compile");
     let a_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module a;
+            mod a;
             use b@0x43;
-            pub fn run(): u64 { return b::run(); }
+            pub fn run() -> u64 { return b::run(); }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -1114,10 +1114,10 @@ fn make_three_module_chain() -> (
 /// Build a diamond dep chain for dep resolution tests: A → {B, C}, B → D, C → D.
 ///
 /// Returns `(b_addr, c_addr, d_addr, b_module, c_module, d_module, a_module)` where:
-/// - d_module: `module d`, exports `fn get(): u64` (address 0x44)
-/// - b_module: `module b`, imports d, exports `fn run(): u64` (address 0x42)
-/// - c_module: `module c`, imports d, exports `fn run(): u64` (address 0x43)
-/// - a_module: `module a`, imports b and c, exports `fn run(): u64` (address ZERO)
+/// - d_module: `mod d`, exports `fn get() -> u64` (address 0x44)
+/// - b_module: `mod b`, imports d, exports `fn run() -> u64` (address 0x42)
+/// - c_module: `mod c`, imports d, exports `fn run() -> u64` (address 0x43)
+/// - a_module: `mod a`, imports b and c, exports `fn run() -> u64` (address ZERO)
 #[allow(clippy::type_complexity)]
 fn make_diamond_dep_chain() -> (
     meow_vm_types::address::Address,
@@ -1134,8 +1134,8 @@ fn make_diamond_dep_chain() -> (
     let c_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
     let d_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module d;
-            pub fn get(): u64 { return 42; }
+            mod d;
+            pub fn get() -> u64 { return 42; }
         "#,
         &[],
         cfg.clone(),
@@ -1143,9 +1143,9 @@ fn make_diamond_dep_chain() -> (
     .expect("d must compile");
     let b_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module b;
+            mod b;
             use d@0x44;
-            pub fn run(): u64 { return d::get(); }
+            pub fn run() -> u64 { return d::get(); }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1153,9 +1153,9 @@ fn make_diamond_dep_chain() -> (
     .expect("b must compile");
     let c_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module c;
+            mod c;
             use d@0x44;
-            pub fn run(): u64 { return d::get(); }
+            pub fn run() -> u64 { return d::get(); }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1163,10 +1163,10 @@ fn make_diamond_dep_chain() -> (
     .expect("c must compile");
     let a_module = meow_vm_compiler::Compiler::compile(
         r#"
-            module a;
+            mod a;
             use b@0x42;
             use c@0x43;
-            pub fn run(): u64 { return b::run(); }
+            pub fn run() -> u64 { return b::run(); }
         "#,
         &[
             (b_addr, &b_module),
@@ -1188,7 +1188,7 @@ fn make_default_module_object() -> Object {
     make_module_object(MEOW_COIN_MODULE_ADDRESS, bytes)
 }
 
-/// Compile a complete .meow source string (must include `module NAME;`) into a
+/// Compile a complete .meow source string (must include `mod NAME;`) into a
 /// module object at `Address::ZERO`. Use this for ad-hoc modules in tests where
 /// the call is constructed with a matching `Address::ZERO` module address.
 fn make_module_object_from_src(src: &str) -> Object {
@@ -1201,7 +1201,7 @@ fn make_module_object(address: Address, content: Vec<u8>) -> Object {
 }
 
 /// Compile a complete .meow source string and return the BCS-serialized bytes.
-/// The source must start with a `module NAME;` declaration.
+/// The source must start with a `mod NAME;` declaration.
 fn compile_to_bytes(src: &str) -> Vec<u8> {
     let module = builder::build(src, &[]).expect("must compile");
     bcs::to_bytes(&module).expect("module must serialize")
@@ -1317,7 +1317,7 @@ fn execute_with_timestamp(
 /// Execute the `roll()` function with the given seed.
 fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
     const RAND_MODULE_SRC: &str = r#"
-        module rand_test;
+        mod rand_test;
 
         object RandBox { id: address, value: u64 }
 
@@ -1343,7 +1343,7 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
 /// Execute the `capture()` function with the given block timestamp.
 fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
     const TIMESTAMP_MODULE_SRC: &str = r#"
-        module timestamp_test;
+        mod timestamp_test;
 
         object TimestampBox { id: address, value: u64 }
 

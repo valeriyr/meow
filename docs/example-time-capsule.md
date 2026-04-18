@@ -19,7 +19,7 @@ Create `time-capsule.meow`:
 // capsule once the block time reaches unlock_time — before that the transaction
 // fails. reclaim lets the owner cancel early; transfer changes ownership.
 
-module time_capsule;
+mod time_capsule;
 
 // A time-locked message stored on-chain.
 //   id          — unique on-chain address, set at creation and immutable.

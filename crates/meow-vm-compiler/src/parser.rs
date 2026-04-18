@@ -406,7 +406,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .boxed();
 
-    // pub? fn foo(a: u64, b: bool): RetType { ... }
+    // pub? fn foo(a: u64, b: bool) -> RetType { ... }
     let param = ident.then_ignore(just(':').padded()).then(ty);
 
     let fn_item: BoxedParser<'src, AstItem> = is_pub
@@ -419,7 +419,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 .collect::<Vec<_>>()
                 .delimited_by(just('(').padded(), just(')').padded()),
         )
-        .then(just(':').padded().ignore_then(ty).or_not())
+        .then(just("->").padded().ignore_then(ty).or_not())
         .then(
             stmt.repeated()
                 .collect::<Vec<_>>()
@@ -436,8 +436,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .boxed();
 
-    // module NAME;
-    let module_decl: BoxedParser<'src, AstItem> = kw("module")
+    // mod NAME;
+    let module_decl: BoxedParser<'src, AstItem> = kw("mod")
         .ignore_then(ident)
         .then_ignore(just(';').padded())
         .map(AstItem::ModuleDecl)
