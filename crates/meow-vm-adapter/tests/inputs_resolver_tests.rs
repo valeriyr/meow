@@ -35,6 +35,87 @@ fn collect_inputs_publish_tx_returns_only_gas_coin() {
 }
 
 #[test]
+fn collect_inputs_publish_tx_includes_dep_module() {
+    let dep_addr = Address::from_str("0x10").unwrap();
+
+    let dep_module = compile(DEP_SRC, &[]);
+    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+
+    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
+    let gas_obj = make_gas_obj();
+
+    let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
+    let tx = make_publish_tx(module_bytes);
+
+    let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
+        if addr == gas_obj.address() {
+            return Some(gas_obj.clone());
+        }
+        if addr == &dep_addr {
+            return Some(dep_obj.clone());
+        }
+        None
+    });
+
+    // Gas coin first, then dep module in post-order
+    assert_eq!(inputs.len(), 2);
+    assert_eq!(inputs[0].address(), gas_obj.address());
+    assert_eq!(inputs[1].address(), &dep_addr);
+}
+
+#[test]
+fn collect_inputs_publish_tx_transitive_dep() {
+    // point ← shapes (imports point) ← outer (imports shapes, being published)
+    let point_addr = Address::from_str("0x10").unwrap();
+    let shapes_addr = Address::from_str("0x20").unwrap();
+
+    let point_module = compile(DEP_SRC, &[]);
+    let shapes_module = compile(&main_src(point_addr), &[(point_addr, &point_module)]);
+    let outer_src = format!(
+        r#"
+            mod outer;
+            use shapes@{shapes_addr};
+            pub struct Path {{ pub line: shapes::Line }}
+            pub fn noop() {{}}
+        "#
+    );
+    let outer_module = compile(
+        &outer_src,
+        &[(shapes_addr, &shapes_module), (point_addr, &point_module)],
+    );
+
+    let point_obj = make_obj_from_module(point_addr, &point_module);
+    let shapes_obj = make_obj_from_module(shapes_addr, &shapes_module);
+    let gas_obj = make_gas_obj();
+
+    let module_bytes = bcs::to_bytes(&outer_module).expect("must serialize");
+    let tx = make_publish_tx(module_bytes);
+
+    let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
+        if addr == gas_obj.address() {
+            return Some(gas_obj.clone());
+        }
+        if addr == &shapes_addr {
+            return Some(shapes_obj.clone());
+        }
+        if addr == &point_addr {
+            return Some(point_obj.clone());
+        }
+        None
+    });
+
+    // Post-order: gas, point, shapes
+    assert_eq!(inputs.len(), 3);
+    assert_eq!(inputs[0].address(), gas_obj.address());
+    assert_eq!(
+        inputs[1].address(),
+        &point_addr,
+        "point must come before shapes"
+    );
+    assert_eq!(inputs[2].address(), &shapes_addr);
+}
+
+#[test]
 fn collect_inputs_meow_call_returns_gas_then_module() {
     let module_addr = Address::from_str("0x01").unwrap();
     let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
@@ -226,6 +307,39 @@ async fn collect_inputs_async_fetches_transitive_dep() {
     assert_eq!(inputs[2].address(), &main_addr);
 }
 
+#[tokio::test]
+async fn collect_inputs_async_publish_tx_includes_dep_module() {
+    let dep_addr = Address::from_str("0x10").unwrap();
+
+    let dep_module = compile(DEP_SRC, &[]);
+    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+
+    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
+    let gas_obj = make_gas_obj();
+
+    let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
+    let tx = make_publish_tx(module_bytes);
+
+    let inputs = inputs_resolver::collect_inputs_async(&tx, |addr| {
+        let gas = gas_obj.clone();
+        let dep = dep_obj.clone();
+        async move {
+            if addr == *gas.address() {
+                Some(gas)
+            } else if addr == dep_addr {
+                Some(dep)
+            } else {
+                None
+            }
+        }
+    })
+    .await;
+
+    assert_eq!(inputs.len(), 2);
+    assert_eq!(inputs[0].address(), gas_obj.address());
+    assert_eq!(inputs[1].address(), &dep_addr);
+}
+
 //
 // ─── load_deps_async ───
 //
@@ -402,11 +516,7 @@ fn make_call_tx(module: Address, fn_name: &str, args: Vec<Input>) -> Transaction
     Transaction::new(SENDER, gas_ref, TransactionType::MeowCall(call))
 }
 
-fn make_publish_tx(_bytes: Vec<u8>) -> Transaction {
+fn make_publish_tx(bytes: Vec<u8>) -> Transaction {
     let gas_ref = ObjectRef::new(GAS_ADDR, ObjectVersion::ONE, Digest::ZERO);
-    Transaction::new(
-        SENDER,
-        gas_ref,
-        TransactionType::MeowModulePublish(vec![1, 2, 3]),
-    )
+    Transaction::new(SENDER, gas_ref, TransactionType::MeowModulePublish(bytes))
 }

@@ -21,6 +21,7 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_bytecode_verifier::BytecodeVerifier;
 use meow_vm_types::{config::VmConfig, module::Module};
 
 use crate::{
@@ -70,7 +71,7 @@ pub fn execute(
                 external_context,
             ),
             TransactionType::MeowModulePublish(module) => {
-                execute_meow_module_publish(&tx_digest, module, &mut gas)
+                execute_meow_module_publish(&tx_digest, module, &inputs, &mut gas)
             }
         },
         Err(e) => ExecutionResult::failure(e.to_string(), tx_digest),
@@ -109,7 +110,7 @@ pub fn execute_genesis_transaction(
             &ExternalContext::default(),
         ),
         TransactionType::MeowModulePublish(module) => {
-            execute_meow_module_publish(&tx_digest, module, &mut gas_meter)
+            execute_meow_module_publish(&tx_digest, module, &inputs, &mut gas_meter)
         }
     };
 
@@ -213,6 +214,7 @@ fn execute_meow_call(
 fn execute_meow_module_publish(
     tx_digest: &Digest,
     module: &[u8],
+    inputs: &[Object],
     gas: &mut GasMeter,
 ) -> ExecutionResult {
     let module_size = module.len();
@@ -228,8 +230,35 @@ fn execute_meow_module_publish(
         );
     }
 
-    if let Err(e) = bcs::from_bytes::<Module>(module) {
-        return ExecutionResult::failure(format!("failed to deserialize module: {e}"), *tx_digest);
+    let module_val = match bcs::from_bytes::<Module>(module) {
+        Ok(m) => m,
+        Err(e) => {
+            return ExecutionResult::failure(
+                format!("failed to deserialize module: {e}"),
+                *tx_digest,
+            );
+        }
+    };
+
+    let deps = match resolvers::resolve_dep_modules(inputs, &module_val.imports) {
+        Ok(d) => d,
+        Err(e) => {
+            return ExecutionResult::failure(format!("dep resolution: {e}"), *tx_digest);
+        }
+    };
+    let deps_ref: std::collections::HashMap<_, _> = deps.iter().map(|(a, m)| (*a, m)).collect();
+
+    let adapter_natives = natives::adapter_native_signatures();
+    if let Err(errors) = BytecodeVerifier::new(adapter_natives).verify(&module_val, &deps_ref) {
+        let msg = errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("; ");
+        return ExecutionResult::failure(
+            format!("bytecode verification failed: {msg}"),
+            *tx_digest,
+        );
     }
 
     let cost = module_size as u64 * GAS_PER_MODULE_BYTE;

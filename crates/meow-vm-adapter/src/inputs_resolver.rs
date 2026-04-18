@@ -27,18 +27,34 @@ where
         inputs.push(obj);
     }
 
-    if let TransactionType::MeowCall(call) = transaction.type_() {
-        if let Some(module_obj) = get_object(call.module()) {
-            let mut seen = HashSet::new();
-            seen.insert(*call.module());
-            collect_dep_modules(&module_obj, &get_object, &mut inputs, &mut seen);
-            inputs.push(module_obj);
+    match transaction.type_() {
+        TransactionType::MeowCall(call) => {
+            if let Some(module_obj) = get_object(call.module()) {
+                let mut seen = HashSet::new();
+                seen.insert(*call.module());
+                collect_dep_modules(&module_obj, &get_object, &mut inputs, &mut seen);
+                inputs.push(module_obj);
+            }
+            for arg in call.arguments() {
+                if let Input::Object(obj_ref) = arg
+                    && let Some(obj) = get_object(obj_ref.address())
+                {
+                    inputs.push(obj);
+                }
+            }
         }
-        for arg in call.arguments() {
-            if let Input::Object(obj_ref) = arg
-                && let Some(obj) = get_object(obj_ref.address())
-            {
-                inputs.push(obj);
+        TransactionType::MeowModulePublish(module_bytes) => {
+            if let Ok(module) = bcs::from_bytes::<Module>(module_bytes) {
+                let mut seen = HashSet::new();
+                for vm_addr in &module.imports {
+                    let addr = Address::from(*vm_addr);
+                    if seen.insert(addr)
+                        && let Some(dep_obj) = get_object(&addr)
+                    {
+                        collect_dep_modules(&dep_obj, &get_object, &mut inputs, &mut seen);
+                        inputs.push(dep_obj);
+                    }
+                }
             }
         }
     }
@@ -64,29 +80,22 @@ where
         cache.insert(gas_addr, obj);
     }
 
-    if let TransactionType::MeowCall(call) = transaction.type_() {
-        let mut queue = vec![*call.module()];
-        let mut seen = HashSet::new();
-        while let Some(addr) = queue.pop() {
-            if !seen.insert(addr) {
-                continue;
-            }
-            if let Some(obj) = get_object(addr).await {
-                if let Ok(module) = bcs::from_bytes::<Module>(obj.content()) {
-                    for vm_addr in &module.imports {
-                        queue.push(Address::from(*vm_addr));
+    match transaction.type_() {
+        TransactionType::MeowCall(call) => {
+            bfs_fetch_modules(vec![*call.module()], &get_object, &mut cache).await;
+            for arg in call.arguments() {
+                if let Input::Object(obj_ref) = arg {
+                    let addr = *obj_ref.address();
+                    if let Some(obj) = get_object(addr).await {
+                        cache.insert(addr, obj);
                     }
                 }
-                cache.insert(addr, obj);
             }
         }
-
-        for arg in call.arguments() {
-            if let Input::Object(obj_ref) = arg {
-                let addr = *obj_ref.address();
-                if let Some(obj) = get_object(addr).await {
-                    cache.insert(addr, obj);
-                }
+        TransactionType::MeowModulePublish(module_bytes) => {
+            if let Ok(module) = bcs::from_bytes::<Module>(module_bytes) {
+                let seeds = module.imports.iter().map(|a| Address::from(*a)).collect();
+                bfs_fetch_modules(seeds, &get_object, &mut cache).await;
             }
         }
     }
@@ -128,6 +137,33 @@ where
     }
 
     loaded
+}
+
+/// BFS over module objects reachable from `seeds`, fetching each via `get_object`
+/// and populating `cache`. Already-visited addresses are skipped.
+async fn bfs_fetch_modules<F, Fut>(
+    seeds: Vec<Address>,
+    get_object: &F,
+    cache: &mut HashMap<Address, Object>,
+) where
+    F: Fn(Address) -> Fut,
+    Fut: Future<Output = Option<Object>>,
+{
+    let mut queue = seeds;
+    let mut seen = HashSet::new();
+    while let Some(addr) = queue.pop() {
+        if !seen.insert(addr) {
+            continue;
+        }
+        if let Some(obj) = get_object(addr).await {
+            if let Ok(module) = bcs::from_bytes::<Module>(obj.content()) {
+                for vm_addr in &module.imports {
+                    queue.push(Address::from(*vm_addr));
+                }
+            }
+            cache.insert(addr, obj);
+        }
+    }
 }
 
 /// Recursive post-order traversal: dependency modules are pushed before the

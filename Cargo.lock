@@ -2443,12 +2443,22 @@ dependencies = [
  "bcs",
  "meow-types",
  "meow-vm",
+ "meow-vm-bytecode-verifier",
  "meow-vm-compiler",
  "meow-vm-types",
  "rand 0.8.5",
  "serde",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "meow-vm-bytecode-verifier"
+version = "0.1.0"
+dependencies = [
+ "meow-vm-compiler",
+ "meow-vm-types",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

@@ -14,6 +14,7 @@ thiserror.workspace = true
 
 meow-types.workspace = true
 meow-vm.workspace = true
+meow-vm-bytecode-verifier.workspace = true
 meow-vm-compiler.workspace = true
 meow-vm-types.workspace = true
 

@@ -50,9 +50,10 @@ crates/
 ├── meow-nakamoto-types  Block and block-header type definitions
 ├── meow-types           Shared types — addresses, digests, objects, transactions, keys
 ├── meow-vm              Smart contract runtime
-├── meow-vm-compiler     .meow source → bytecode compiler
-├── meow-vm-adapter      VM ↔ chain glue layer
-├── meow-vm-types        VM type definitions
+├── meow-vm-compiler              .meow source → bytecode compiler
+├── meow-vm-bytecode-verifier     bytecode verifier — runs at publish time
+├── meow-vm-adapter               VM ↔ chain glue layer
+├── meow-vm-types                 VM type definitions
 ├── meow-gossip-network  libp2p gossipsub + mDNS networking
 ├── meow-gossip-types    Network-level shared types and config
 ├── meow-genesis         Genesis file loading and validation

@@ -14,6 +14,7 @@ members = [
     "crates/meow-types",
     "crates/meow-vm",
     "crates/meow-vm-adapter",
+    "crates/meow-vm-bytecode-verifier",
     "crates/meow-vm-compiler",
     "crates/meow-vm-types",
     ]
@@ -65,5 +66,6 @@ meow-node-client = { path = "crates/meow-node-client" }
 meow-types = { path = "crates/meow-types" }
 meow-vm = { path = "crates/meow-vm" }
 meow-vm-adapter = { path = "crates/meow-vm-adapter" }
+meow-vm-bytecode-verifier = { path = "crates/meow-vm-bytecode-verifier" }
 meow-vm-compiler = { path = "crates/meow-vm-compiler" }
 meow-vm-types = { path = "crates/meow-vm-types" }

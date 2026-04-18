@@ -995,6 +995,35 @@ fn execute_module_publish_fails_when_module_not_deserializable() {
 }
 
 #[test]
+fn execute_module_publish_fails_when_bytecode_invalid() {
+    // Compile a valid module, then tamper with the bytecode so it violates
+    // a verifier rule (duplicate function name). The executor must reject it.
+    let mut module = builder::build(
+        r#"
+            mod tamper_test;
+            pub fn noop() {}
+        "#,
+        &[],
+    )
+    .expect("must compile");
+
+    let dup = module.functions[0].clone();
+    module.functions.push(dup); // duplicate function name — Phase 1 violation
+
+    let module_bytes = bcs::to_bytes(&module).expect("module must serialize");
+    let gas_obj = make_gas_coin_object();
+    let tx = make_meow_module_publish_transaction(module_bytes);
+
+    let result = execute(&tx, vec![gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("bytecode verification failed")),
+        "tampered module must be rejected by verifier, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
 fn execute_module_publish_derives_address_from_tx_digest() {
     let module_bytes = compile_to_bytes(
         r#"

@@ -42,8 +42,8 @@ pub mod gas_schedule;
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
-use std::str::FromStr;
 
+use meow_vm_types::module_ref;
 use meow_vm_types::{address::Address, config::VmConfig, types::Value};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
@@ -496,7 +496,9 @@ impl Vm {
                     type_name,
                     field_names,
                 } => {
-                    let def = if let Some((dep_addr, struct_name)) = parse_module_ref(&type_name) {
+                    let def = if let Some((dep_addr, struct_name)) =
+                        module_ref::parse_module_ref(&type_name)
+                    {
                         self.deps
                             .get(&dep_addr)
                             .and_then(|m| m.get_struct(struct_name))
@@ -582,7 +584,7 @@ impl Vm {
 
                 // ── Functions ─────────────────────────────────────────────────
                 Instruction::Call(name) => {
-                    if let Some((dep_addr, fn_name_in_dep)) = parse_module_ref(&name) {
+                    if let Some((dep_addr, fn_name_in_dep)) = module_ref::parse_module_ref(&name) {
                         // Cross-module call: `@<hex_address>::function_name`.
                         let dep = self
                             .deps
@@ -649,17 +651,6 @@ impl Vm {
 //
 // ─── Helpers ───
 //
-
-/// Parse a bytecode cross-module reference of the form `@<64-hex-chars>::<name>`.
-///
-/// Returns `(dep_address, name_within_dep)` on success, or `None` if the string
-/// is not a cross-module reference (i.e. it is a plain local name).
-fn parse_module_ref(s: &str) -> Option<(Address, &str)> {
-    let rest = s.strip_prefix('@')?;
-    let (hex_part, name) = rest.split_once("::")?;
-    let address = Address::from_str(hex_part).ok()?;
-    Some((address, name))
-}
 
 fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
     let a = l

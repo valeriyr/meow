@@ -8,7 +8,9 @@ use crate::address::Address;
 /// start at 0 with the first function parameter.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Instruction {
-    // ── Literals ──────────────────────────────────────────────────────────────
+    //
+    // ─── Literals ───
+    //
     PushBool(bool),
     PushU64(u64),
     /// Push an address literal written as `@0x...` in source.
@@ -16,7 +18,9 @@ pub enum Instruction {
     /// Push a string literal (only for native call arguments like meow_vm_abort).
     PushStr(String),
 
-    // ── Local variables ───────────────────────────────────────────────────────
+    //
+    // ─── Local variables ───
+    //
     /// Copy/move the value at local slot `n` onto the stack.
     /// For Object values: moves (consumes the slot). For all others: copies.
     Load(u8),
@@ -27,7 +31,9 @@ pub enum Instruction {
     /// Pop a value and write it into a field of local slot `n` WITHOUT consuming the slot.
     StoreField(u8, String),
 
-    // ── Arithmetic ────────────────────────────────────────────────────────────
+    //
+    // ─── Arithmetic ───
+    //
     Add,
     Sub,
     Mul,
@@ -36,7 +42,9 @@ pub enum Instruction {
     /// Integer modulo; errors on division by zero.
     Mod,
 
-    // ── Comparison ────────────────────────────────────────────────────────────
+    //
+    // ─── Comparison ───
+    //
     Eq,
     Ne,
     Lt,
@@ -44,12 +52,16 @@ pub enum Instruction {
     Gt,
     Ge,
 
-    // ── Boolean logic ─────────────────────────────────────────────────────────
+    //
+    // ─── Boolean logic ───
+    //
     Not,
     And,
     Or,
 
-    // ── Struct / Object operations ────────────────────────────────────────────
+    //
+    // ─── Struct / Object operations ───
+    //
     /// Pop `field_names.len()` values (pushed in field-definition order),
     /// then construct a struct or object and push it.
     NewStruct {
@@ -61,11 +73,15 @@ pub enum Instruction {
     /// This is a consuming operation — the struct/object is gone after this.
     GetField(String),
 
-    // ── Stack manipulation ────────────────────────────────────────────────────
+    //
+    // ─── Stack manipulation ───
+    //
     Pop,
     Dup,
 
-    // ── Control flow ─────────────────────────────────────────────────────────
+    //
+    // ─── Control flow ───
+    //
     /// Unconditional jump by a relative offset (in instructions, signed).
     Jump(i32),
     /// Pop a Bool; jump if `true`.
@@ -73,7 +89,9 @@ pub enum Instruction {
     /// Pop a Bool; jump if `false`.
     JumpIfNot(i32),
 
-    // ── Functions ─────────────────────────────────────────────────────────────
+    //
+    // ─── Functions ───
+    //
     /// Call a function (module or native) by name. Arguments must already be
     /// on the stack in left-to-right order.
     Call(String),

@@ -1,8 +1,29 @@
 use std::{cell::RefCell, rc::Rc};
 
 use meow_vm::{NativeFnEntry, NativeResult};
+use meow_vm_bytecode_verifier::natives::{NativeParam, NativeSignature};
+use meow_vm_types::types::Type;
 
 use crate::{Value, context::Context};
+
+/// Returns the verifier signatures for the adapter-supplied native functions.
+///
+/// These are passed to [`meow_vm_bytecode_verifier::BytecodeVerifier::new`] so
+/// the verifier can type-check call sites for adapter natives.
+pub fn adapter_native_signatures() -> Vec<NativeSignature> {
+    vec![
+        NativeSignature::new("meow_vm_fresh_id", vec![], Some(Type::Address)),
+        NativeSignature::new(
+            "meow_vm_transfer",
+            vec![NativeParam::AnyObject, NativeParam::Concrete(Type::Address)],
+            None,
+        ),
+        NativeSignature::new("meow_vm_destroy", vec![NativeParam::AnyObject], None),
+        NativeSignature::new("meow_vm_sender", vec![], Some(Type::Address)),
+        NativeSignature::new("meow_vm_rand", vec![], Some(Type::U64)),
+        NativeSignature::new("meow_vm_timestamp", vec![], Some(Type::U64)),
+    ]
+}
 
 /// Constructs the native function table used by the executor.
 ///
@@ -108,4 +129,44 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     };
 
     vec![fresh_id, transfer, destroy, sender, rand, timestamp]
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{cell::RefCell, rc::Rc};
+
+    use meow_types::{address::Address, digest::Digest};
+
+    use super::*;
+    use crate::{context::Context, external_context::DEFAULT_RAND_SEED};
+
+    #[test]
+    fn adapter_signatures_match_build_natives() {
+        let ctx = Rc::new(RefCell::new(Context::new(
+            Address::ZERO,
+            Digest::ZERO,
+            DEFAULT_RAND_SEED,
+            0,
+        )));
+        let sigs = adapter_native_signatures();
+        let entries = build_natives(ctx);
+
+        let sig_names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();
+        let entry_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(
+            sig_names, entry_names,
+            "adapter_native_signatures and build_natives must list functions in the same order"
+        );
+
+        for (sig, entry) in sigs.iter().zip(entries.iter()) {
+            assert_eq!(
+                sig.params.len(),
+                entry.param_count,
+                "param count mismatch for '{}': verifier expects {}, VM expects {}",
+                sig.name,
+                sig.params.len(),
+                entry.param_count,
+            );
+        }
+    }
 }

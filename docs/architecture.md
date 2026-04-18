@@ -14,6 +14,7 @@
 | **meow-types** | Addresses, digests, objects, transactions, keys |
 | **meow-vm** | Smart contract runtime |
 | **meow-vm-compiler** | The Meow Language source → bytecode |
+| **meow-vm-bytecode-verifier** | Bytecode verifier — structural and type-safety checks at publish time |
 | **meow-vm-adapter** | VM ↔ chain glue |
 | **meow-vm-types** | VM type definitions |
 | **meow-gossip-network** | libp2p peer-to-peer networking |
