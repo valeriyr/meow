@@ -54,6 +54,21 @@ pub fn vm_with_natives(source: &str, natives: Vec<NativeFnEntry>) -> Vm {
     )
 }
 
+/// Build a `Vm` with dep modules and native functions.
+pub fn vm_with_deps_and_natives(
+    module: Module,
+    deps: HashMap<Address, Module>,
+    natives: Vec<NativeFnEntry>,
+) -> Vm {
+    Vm::new(
+        module,
+        natives,
+        GasSchedule::default(),
+        deps,
+        VmConfig::default(),
+    )
+}
+
 /// Compile a source snippet, run `fn_name` with `args`, and return the return value.
 /// Panics if compilation or execution fails.
 pub fn run(source: &str, fn_name: &str, args: Vec<Value>) -> Option<Value> {

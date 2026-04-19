@@ -73,6 +73,19 @@ pub fn collect_object_effects(
         }
     }
 
+    // Validate that all input objects are accounted for (transferred, destroyed, or surviving in their original slot).
+    for (arg_idx, input_obj) in object_args {
+        let id = input_obj.address();
+        let surviving = call_result
+            .final_args
+            .get(*arg_idx)
+            .is_some_and(|v| v.is_some());
+        let accounted = transferred_ids.contains(id) || destroyed_ids.contains(id) || surviving;
+        if !accounted {
+            return Err(format!("input object not accounted for: {id}"));
+        }
+    }
+
     // Collect transferred objects.
     for (obj_val, owner) in ctx.transfers() {
         let id: Address = obj_val

@@ -97,4 +97,12 @@ pub enum Instruction {
     Call(String),
     /// Return the top-of-stack value to the caller (or Void if stack is empty).
     Return,
+
+    //
+    // ─── Tuples ───
+    //
+    /// Pop `n` values (rightmost on top) and pack them into a `Tuple([v0, v1, ..., vn-1])`.
+    MakeTuple(u8),
+    /// Pop a `Tuple` of size `n` and push its elements (first element ends up on top).
+    UnpackTuple(u8),
 }

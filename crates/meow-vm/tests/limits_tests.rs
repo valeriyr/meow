@@ -23,7 +23,7 @@ fn dep_count_exceeding_limit_returns_error() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -33,7 +33,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -43,7 +43,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             mod main;
             use b@0x02;
-            pub fn run() -> u64 { return b::get(); }
+            pub fn run() -> u64 { b::get() }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -80,7 +80,7 @@ fn dep_count_at_limit_succeeds() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -90,7 +90,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -100,7 +100,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             mod main;
             use b@0x02;
-            pub fn run() -> u64 { return b::get(); }
+            pub fn run() -> u64 { b::get() }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -133,8 +133,8 @@ fn call_depth_exceeding_limit_returns_error() {
     let module = utils::compile(
         r#"
         mod depth_test;
-        fn b() -> u64 { return 1; }
-        pub fn a() -> u64 { return b(); }
+        fn b() -> u64 { 1 }
+        pub fn a() -> u64 { b() }
     "#,
     );
 
@@ -160,8 +160,8 @@ fn call_depth_at_limit_succeeds() {
     let module = utils::compile(
         r#"
         mod depth_test;
-        fn b() -> u64 { return 1; }
-        pub fn a() -> u64 { return b(); }
+        fn b() -> u64 { 1 }
+        pub fn a() -> u64 { b() }
     "#,
     );
 

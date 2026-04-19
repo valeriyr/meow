@@ -16,6 +16,13 @@ pub enum VerificationError {
     #[error("duplicate struct name '{name}'")]
     DuplicateStructName { name: String },
 
+    #[error("function '{function}': tuple has {size} elements, exceeding the limit of {limit}")]
+    TupleTooLarge {
+        function: String,
+        size: usize,
+        limit: usize,
+    },
+
     #[error("function '{function}': local_count {local_count} < param count {param_count}")]
     LocalCountTooSmall {
         function: String,

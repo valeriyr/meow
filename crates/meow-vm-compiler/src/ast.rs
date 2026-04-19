@@ -1,3 +1,5 @@
+//! AST node types produced by the parser and consumed by the code generator.
+
 use meow_vm_types::{address::Address, types::Type};
 
 #[derive(Debug, Clone)]
@@ -27,6 +29,20 @@ pub enum Expr {
         name: String,
         args: Vec<Expr>,
     },
+    /// A tuple literal: `(expr1, expr2, ...)`. Requires at least two elements.
+    Tuple(Vec<Expr>),
+    /// A unary operation: `op expr`.
+    UnaryOp {
+        op: UnaryOp,
+        expr: Box<Expr>,
+    },
+}
+
+/// Unary operators.
+#[derive(Debug, Clone, Copy)]
+pub enum UnaryOp {
+    /// Boolean not: `!expr` → `bool`.
+    Not,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -72,6 +88,11 @@ pub enum Stmt {
         field: String,
         expr: Expr,
     },
+    /// Destructuring let: `let (a, b) = expr;`
+    LetTuple {
+        names: Vec<String>,
+        expr: Expr,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -89,9 +110,9 @@ pub struct AstStruct {
     /// True if this struct/object is declared with `pub`.
     pub is_public: bool,
     pub name: String,
-    /// Fields in declaration order: (is_public, name, type).
-    /// A field marked `pub` is readable from other modules (writes remain module-local).
-    pub fields: Vec<(bool, String, Type)>,
+    /// Fields in declaration order: (name, type).
+    /// All fields are private — accessible only within the declaring module.
+    pub fields: Vec<(String, Type)>,
     pub is_object: bool,
 }
 

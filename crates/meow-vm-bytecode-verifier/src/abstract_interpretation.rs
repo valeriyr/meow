@@ -27,6 +27,8 @@ enum AbstractType {
     Object(String),
     /// Sentinel pushed by void-returning calls to keep the stack balanced.
     Void,
+    /// A tuple of abstract types — produced by MakeTuple, consumed by UnpackTuple.
+    Tuple(Vec<AbstractType>),
 }
 
 impl AbstractType {
@@ -39,11 +41,20 @@ impl AbstractType {
             Self::Struct(n) => format!("struct({n})"),
             Self::Object(n) => format!("object({n})"),
             Self::Void => "void".to_string(),
+            Self::Tuple(types) => {
+                let inner: Vec<String> = types.iter().map(|t| t.display_name()).collect();
+                format!("({})", inner.join(", "))
+            }
         }
     }
 
+    /// Returns true if this type is or contains an Object (move semantics).
     fn is_object(&self) -> bool {
-        matches!(self, Self::Object(_))
+        match self {
+            Self::Object(_) => true,
+            Self::Tuple(types) => types.iter().any(|t| t.is_object()),
+            _ => false,
+        }
     }
 }
 
@@ -55,6 +66,7 @@ fn from_type(ty: &Type) -> AbstractType {
         Type::Str => AbstractType::Str,
         Type::Struct(n) => AbstractType::Struct(n.clone()),
         Type::Object(n) => AbstractType::Object(n.clone()),
+        Type::Tuple(types) => AbstractType::Tuple(types.iter().map(from_type).collect()),
     }
 }
 
@@ -72,6 +84,12 @@ fn from_type_resolved(ty: &Type, module: &Module) -> AbstractType {
             }
             AbstractType::Struct(name.clone())
         }
+        Type::Tuple(types) => AbstractType::Tuple(
+            types
+                .iter()
+                .map(|t| from_type_resolved(t, module))
+                .collect(),
+        ),
         other => from_type(other),
     }
 }
@@ -164,8 +182,8 @@ fn merge(
         .zip(incoming.locals.iter())
         .enumerate()
     {
-        let a_obj = matches!(a, SlotState::Live(AbstractType::Object(_)));
-        let b_obj = matches!(b, SlotState::Live(AbstractType::Object(_)));
+        let a_obj = matches!(a, SlotState::Live(t) if t.is_object());
+        let b_obj = matches!(b, SlotState::Live(t) if t.is_object());
         if a_obj != b_obj {
             errors.push(VerificationError::LivenessMergeConflict {
                 function: fn_name.to_string(),
@@ -223,13 +241,8 @@ fn resolve_field_type(
 }
 
 /// Check cross-module field read visibility.
-/// Returns an error if the type is cross-module and the field is not public.
-fn check_field_read_visibility(
-    ty: &AbstractType,
-    field_name: &str,
-    _module: &Module,
-    deps: &HashMap<Address, &Module>,
-) -> Option<VerificationError> {
+/// All fields are private — any cross-module field read is forbidden.
+fn check_field_read_visibility(ty: &AbstractType, field_name: &str) -> Option<VerificationError> {
     let type_name = match ty {
         AbstractType::Struct(n) | AbstractType::Object(n) => n.as_str(),
         _ => return None,
@@ -237,24 +250,12 @@ fn check_field_read_visibility(
     if !is_cross_module_type(type_name) {
         return None; // same-module: always allowed
     }
-    // Try to resolve via any dep that has this struct name after "::"
-    let local_name = type_name.split("::").last()?;
-    for dep_mod in deps.values() {
-        if let Some(def) = dep_mod.get_struct(local_name) {
-            if let Some(field_def) = def.fields.iter().find(|f| f.name == field_name)
-                && !field_def.is_public
-            {
-                return Some(VerificationError::CrossModulePrivateFieldRead {
-                    function: String::new(), // filled by caller
-                    pc: 0,
-                    type_name: type_name.to_string(),
-                    field: field_name.to_string(),
-                });
-            }
-            return None; // found struct, field is public or doesn't exist
-        }
-    }
-    None
+    Some(VerificationError::CrossModulePrivateFieldRead {
+        function: String::new(), // filled by caller
+        pc: 0,
+        type_name: type_name.to_string(),
+        field: field_name.to_string(),
+    })
 }
 
 //
@@ -412,9 +413,7 @@ pub(crate) fn check_function(
                     }
                 }
                 // Visibility check for cross-module field reads
-                if let Some(mut err) =
-                    check_field_read_visibility(&holder_ty, field_name, module, deps)
-                {
+                if let Some(mut err) = check_field_read_visibility(&holder_ty, field_name) {
                     if let VerificationError::CrossModulePrivateFieldRead {
                         function,
                         pc: err_pc,
@@ -799,9 +798,66 @@ pub(crate) fn check_function(
                 );
             }
 
+            // ── Tuples ────────────────────────────────────────────────────
+            Instruction::MakeTuple(n) => {
+                let n = *n as usize;
+                if state.stack.len() < n {
+                    errors.push(VerificationError::StackUnderflow {
+                        function: fn_name.clone(),
+                        pc,
+                        expected: format!("{n} values for MakeTuple"),
+                    });
+                    state.stack.clear();
+                } else {
+                    let start = state.stack.len() - n;
+                    let types: Vec<AbstractType> = state.stack.drain(start..).collect();
+                    state.push(AbstractType::Tuple(types));
+                }
+            }
+
+            Instruction::UnpackTuple(n) => {
+                let n = *n as usize;
+                match state.pop() {
+                    None => {
+                        errors.push(VerificationError::StackUnderflow {
+                            function: fn_name.clone(),
+                            pc,
+                            expected: "tuple".to_string(),
+                        });
+                    }
+                    Some(AbstractType::Tuple(types)) => {
+                        if types.len() != n {
+                            errors.push(VerificationError::TypeMismatch {
+                                function: fn_name.clone(),
+                                pc,
+                                expected: format!("tuple of size {n}"),
+                                found: format!("tuple of size {}", types.len()),
+                            });
+                        } else {
+                            // Push in reverse so element[0] ends up on top
+                            for t in types.into_iter().rev() {
+                                state.push(t);
+                            }
+                        }
+                    }
+                    Some(other) => {
+                        errors.push(VerificationError::TypeMismatch {
+                            function: fn_name.clone(),
+                            pc,
+                            expected: "tuple".to_string(),
+                            found: other.display_name(),
+                        });
+                        // Push placeholder values to keep stack size consistent
+                        for _ in 0..n {
+                            state.push(AbstractType::U64);
+                        }
+                    }
+                }
+            }
+
             // ── Return ────────────────────────────────────────────────────
             Instruction::Return => {
-                check_return(func, pc, &state, &mut errors);
+                check_return(func, pc, module, &state, &mut errors);
                 state.reachable = false;
             }
         }
@@ -820,7 +876,7 @@ pub(crate) fn check_function(
         });
         // Also check for unconsumed objects on the escaped path.
         if let Some(escaped) = jump_to_end {
-            for (slot, local) in escaped.locals.iter().enumerate() {
+            for (slot, local) in escaped.locals.iter().enumerate().skip(func.params.len()) {
                 if matches!(local, SlotState::Live(t) if t.is_object()) {
                     errors.push(VerificationError::UnconsumedObject {
                         function: fn_name.clone(),
@@ -854,8 +910,9 @@ fn check_call(
         if let Some(dep_mod) = deps.get(&dep_addr)
             && let Some(callee) = dep_mod.get_function(callee_name)
         {
+            let return_type = callee.return_type.clone();
             pop_and_check_params(&callee.params, name, pc, fn_name, module, state, errors);
-            push_return_type(callee.return_type.as_ref(), state);
+            push_return_type(return_type.as_ref(), dep_mod, state);
             return;
         }
         errors.push(VerificationError::UndefinedFunction {
@@ -874,7 +931,7 @@ fn check_call(
         let params: Vec<(String, Type)> = callee.params.clone();
         let return_type: Option<Type> = callee.return_type.clone();
         pop_and_check_params(&params, name, pc, fn_name, module, state, errors);
-        push_return_type(return_type.as_ref(), state);
+        push_return_type(return_type.as_ref(), module, state);
         return;
     }
 
@@ -916,7 +973,7 @@ fn check_call(
                 }
             }
         }
-        push_return_type(native.return_type.as_ref(), state);
+        push_return_type(native.return_type.as_ref(), module, state);
         return;
     }
 
@@ -966,9 +1023,9 @@ fn pop_and_check_params(
     }
 }
 
-fn push_return_type(return_type: Option<&Type>, state: &mut AbstractState) {
+fn push_return_type(return_type: Option<&Type>, module: &Module, state: &mut AbstractState) {
     match return_type {
-        Some(ty) => state.push(from_type(ty)),
+        Some(ty) => state.push(from_type_resolved(ty, module)),
         None => state.push(AbstractType::Void),
     }
 }
@@ -980,6 +1037,7 @@ fn push_return_type(return_type: Option<&Type>, state: &mut AbstractState) {
 fn check_return(
     func: &Function,
     _pc: usize,
+    module: &Module,
     state: &AbstractState,
     errors: &mut Vec<VerificationError>,
 ) {
@@ -1001,7 +1059,7 @@ fn check_return(
             }
         }
         Some(declared) => {
-            let expected = from_type(declared);
+            let expected = from_type_resolved(declared, module);
             match state.stack.last() {
                 None => {
                     errors.push(VerificationError::ReturnTypeMismatch {
@@ -1022,8 +1080,11 @@ fn check_return(
         }
     }
 
-    // Unconsumed objects in local slots
-    for (slot, local) in state.locals.iter().enumerate() {
+    // Unconsumed objects in non-param local slots.
+    // Param slots (0..params.len()) are exempt: a live object there means
+    // "mutated in place" — the effects system writes it back to its original owner.
+    let param_count = func.params.len();
+    for (slot, local) in state.locals.iter().enumerate().skip(param_count) {
         if matches!(local, SlotState::Live(t) if t.is_object()) {
             errors.push(VerificationError::UnconsumedObject {
                 function: fn_name.clone(),

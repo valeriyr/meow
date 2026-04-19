@@ -15,7 +15,7 @@ fn arithmetic_and_return_passes() {
         mod m;
         fn compute(a: u64, b: u64) -> u64 {
             let c = a + b;
-            return c * 2;
+            c * 2
         }
     "#,
     );
@@ -28,7 +28,7 @@ fn native_sender_call_passes() {
         r#"
         mod m;
         fn get_sender() -> address {
-            return meow_vm_sender();
+            meow_vm_sender()
         }
     "#,
     );
@@ -41,11 +41,66 @@ fn native_rand_call_passes() {
         r#"
         mod m;
         fn get_rand() -> u64 {
-            return meow_vm_rand();
+            meow_vm_rand()
         }
     "#,
     );
     verify_ok(&module, &no_deps());
+}
+
+//
+// ─── Boolean not ───
+//
+
+#[test]
+fn not_on_bool_passes() {
+    let module = compile(
+        r#"
+        mod m;
+        fn f(x: bool) -> bool { !x }
+    "#,
+    );
+    verify_ok(&module, &no_deps());
+}
+
+#[test]
+fn not_on_non_bool_rejected() {
+    let mut module = compile(
+        r#"
+        mod m;
+        fn f() -> bool { true }
+    "#,
+    );
+    tamper(&mut module, "f", |code| {
+        *code = vec![
+            Instruction::PushU64(1),
+            Instruction::Not,
+            Instruction::Return,
+        ];
+    });
+    let errs = verify_errors(&module, &no_deps());
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::TypeMismatch { expected, .. } if expected == "bool"
+    )));
+}
+
+#[test]
+fn not_on_empty_stack_rejected() {
+    let mut module = compile(
+        r#"
+        mod m;
+        fn f() -> bool { true }
+    "#,
+    );
+    tamper(&mut module, "f", |code| {
+        *code = vec![Instruction::Not, Instruction::Return];
+    });
+    let errs = verify_errors(&module, &no_deps());
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
+    );
 }
 
 //
@@ -57,7 +112,7 @@ fn add_bool_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -80,7 +135,7 @@ fn compare_mismatched_types_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> bool { return true; }
+        fn f() -> bool { true }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -107,7 +162,7 @@ fn stack_underflow_on_add() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -129,7 +184,7 @@ fn stack_underflow_on_pop() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -155,7 +210,7 @@ fn wrong_return_type_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -173,7 +228,7 @@ fn missing_return_detected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -195,7 +250,7 @@ fn call_unknown_function_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -220,7 +275,7 @@ fn native_wrong_arg_count_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -242,7 +297,7 @@ fn native_wrong_arg_type_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {

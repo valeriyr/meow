@@ -11,7 +11,7 @@ use meow_vm_types::{address::Address, types::Value};
 fn native_returns_value() {
     let src = r#"
         mod test;
-        pub fn compute(a: u64, b: u64) -> u64 { let sum = add_native(a, b); return sum; }
+        pub fn compute(a: u64, b: u64) -> u64 { let sum = add_native(a, b); sum }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_add_native()]);
     let mut gas = GasMeter::unlimited();
@@ -27,7 +27,7 @@ fn void_native_does_not_leave_stack_garbage() {
     // must push Void (not nothing) or the Pop would underflow the stack.
     let src = r#"
         mod test;
-        pub fn run_side_effect(x: u64) -> u64 { log_native(x); return x + 1; }
+        pub fn run_side_effect(x: u64) -> u64 { log_native(x); x + 1 }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_log_native()]);
     let mut gas = GasMeter::unlimited();
@@ -107,7 +107,7 @@ fn use_after_move_is_an_error() {
 fn final_args_holds_primitives_after_call() {
     let src = r#"
         mod test;
-        pub fn f(a: u64, b: u64) -> u64 { return a + b; }
+        pub fn f(a: u64, b: u64) -> u64 { a + b }
     "#;
     let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();
@@ -138,7 +138,7 @@ fn final_args_is_some_for_surviving_object() {
         mod test;
         object Token { id: address, amount: u64 }
 
-        pub fn read_amount(tok: Token) -> u64 { return tok.amount; }
+        pub fn read_amount(tok: Token) -> u64 { tok.amount }
     "#;
     let vm = utils::vm_with_natives(src, vec![]);
     let mut gas = GasMeter::unlimited();

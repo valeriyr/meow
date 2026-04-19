@@ -35,12 +35,12 @@ fn gas_meter_spent_and_remaining() {
     assert!(matches!(
         gas.charge(2).unwrap_err(),
         VmError::OutOfGas {
-            spent: 11,
+            spent: 10,
             limit: 10
         }
     ));
 
-    assert_eq!(gas.spent(), 11);
+    assert_eq!(gas.spent(), 10);
     assert_eq!(gas.remaining(), 0);
     assert_eq!(gas.limit(), 10);
 }
@@ -61,7 +61,7 @@ fn out_of_gas_returns_error() {
     let err = vm
         .call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)
         .unwrap_err();
-    assert!(matches!(err, VmError::OutOfGas { limit: 1, spent: 2 }));
+    assert!(matches!(err, VmError::OutOfGas { limit: 1, spent: 1 }));
 }
 
 //
@@ -70,5 +70,5 @@ fn out_of_gas_returns_error() {
 
 const SRC: &str = r#"
         mod gas_test;
-        pub fn add(a: u64, b: u64) -> u64 { return a + b; }
+        pub fn add(a: u64, b: u64) -> u64 { a + b }
     "#;

@@ -92,6 +92,10 @@ impl Serialize for ValueToRust<'_> {
                 use serde::ser::Error;
                 Err(S::Error::custom("void value cannot be serialized"))
             }
+            Value::Tuple(_) => {
+                use serde::ser::Error;
+                Err(S::Error::custom("tuple value cannot be serialized to BCS"))
+            }
             Value::Struct { fields, .. } | Value::Object { fields, .. } => {
                 // BCS structs are just their fields concatenated in order.
                 // serialize_tuple produces the same layout as serialize_struct in BCS.

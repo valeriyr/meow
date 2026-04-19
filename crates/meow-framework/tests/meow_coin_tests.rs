@@ -113,8 +113,8 @@ fn split_with_insufficient_balance() {
     .expect_err("split must fail with insufficient balance");
 
     assert!(
-        matches!(err, VmError::Aborted { code: 1, .. }),
-        "must abort with code 1"
+        matches!(&err, VmError::Aborted { code: 1, message, .. } if message.contains("The balance is insufficient")),
+        "must abort with code 1 and insufficient-balance message, got: {err:?}"
     );
 }
 
@@ -162,6 +162,36 @@ fn mint_with_zero_balance_succeeds() {
 }
 
 #[test]
+fn balance_returns_coin_and_balance() {
+    let result =
+        run("balance", vec![make_coin(Address::fill(0x10), 77)]).expect("balance must succeed");
+
+    // The coin is moved into the return tuple; the input slot is consumed.
+    assert!(
+        result.final_args[0].is_none(),
+        "coin must be consumed from input slot"
+    );
+
+    let rv = result.return_value.expect("must have return value");
+    let Value::Tuple(elems) = rv else {
+        panic!("expected tuple return value");
+    };
+    assert_eq!(
+        coin_balance(&elems[0]),
+        77,
+        "returned coin balance must be 77"
+    );
+    assert_eq!(
+        elems[1].as_u64(),
+        Some(77),
+        "returned u64 balance must be 77"
+    );
+
+    assert!(result.transfers.is_empty());
+    assert!(result.destroyed.is_empty());
+}
+
+#[test]
 fn merge_combines_balances() {
     let from = make_coin(Address::fill(0x11), 60);
     let to = make_coin(Address::fill(0x22), 40);
@@ -175,6 +205,24 @@ fn merge_combines_balances() {
     let final_to = result.final_args[1].as_ref().expect("to must survive");
     assert_eq!(coin_balance(final_to), 100);
     assert_eq!(result.gas_spent, 51);
+}
+
+#[test]
+fn split_and_transfer_with_insufficient_balance() {
+    let err = run(
+        "split_and_transfer",
+        vec![
+            make_coin(Address::fill(0xEE), 10),
+            Value::U64(20),
+            Value::Address(Address::fill(0x03).into()),
+        ],
+    )
+    .expect_err("split_and_transfer must fail with insufficient balance");
+
+    assert!(
+        matches!(&err, VmError::Aborted { code: 1, message, .. } if message.contains("The balance is insufficient")),
+        "must abort with code 1 and insufficient-balance message, got: {err:?}"
+    );
 }
 
 #[test]

@@ -2,7 +2,7 @@ mod utils;
 use utils::*;
 
 use meow_vm_bytecode_verifier::VerificationError;
-use meow_vm_types::bytecode::Instruction;
+use meow_vm_types::{bytecode::Instruction, config::CompilerConfig};
 
 //
 // ─── Happy paths ───
@@ -14,7 +14,7 @@ fn valid_module_passes() {
         r#"
         mod m;
         fn add(a: u64, b: u64) -> u64 {
-            return a + b;
+            a + b
         }
     "#,
     );
@@ -43,7 +43,7 @@ fn invalid_module_name_rejected() {
     let mut module = compile(
         r#"
         mod valid;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.name = "1invalid".to_string();
@@ -60,7 +60,7 @@ fn invalid_struct_name_rejected() {
         r#"
         mod m;
         struct S { x: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.structs[0].name = "bad-name".to_string();
@@ -77,7 +77,7 @@ fn invalid_field_name_rejected() {
         r#"
         mod m;
         struct S { x: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.structs[0].fields[0].name = "bad name".to_string();
@@ -98,7 +98,7 @@ fn duplicate_struct_name_rejected() {
         r#"
         mod m;
         struct S { x: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     let dup = module.structs[0].clone();
@@ -115,7 +115,7 @@ fn duplicate_function_name_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     let dup = module.functions[0].clone();
@@ -137,7 +137,7 @@ fn object_missing_id_field_rejected() {
         r#"
         mod m;
         object Coin { id: address, value: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.structs[0].fields[0].name = "ident".to_string();
@@ -154,7 +154,7 @@ fn invalid_object_name_rejected() {
         r#"
         mod m;
         object Coin { id: address, value: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.structs[0].name = "bad-name".to_string();
@@ -171,7 +171,7 @@ fn invalid_object_field_name_rejected() {
         r#"
         mod m;
         object Coin { id: address, value: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.structs[0].fields[1].name = "bad name".to_string();
@@ -188,7 +188,7 @@ fn duplicate_object_name_rejected() {
         r#"
         mod m;
         object Coin { id: address, value: u64 }
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     let dup = module.structs[0].clone();
@@ -209,7 +209,7 @@ fn local_count_too_small_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f(x: u64) -> u64 { return x; }
+        fn f(x: u64) -> u64 { x }
     "#,
     );
     module.functions[0].local_count = 0;
@@ -225,7 +225,7 @@ fn slot_out_of_range_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -247,7 +247,7 @@ fn backward_jump_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -265,7 +265,7 @@ fn jump_out_of_bounds_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {
@@ -278,6 +278,34 @@ fn jump_out_of_bounds_rejected() {
     );
 }
 
+//
+// ─── Tuple element count ───
+//
+
+#[test]
+fn tuple_too_large_in_return_type_rejected() {
+    let limit = CompilerConfig::default().max_tuple_elements();
+    let mut module = compile(
+        r#"
+        mod m;
+        fn f() -> u64 { 1 }
+    "#,
+    );
+    // Inject an oversized MakeTuple instruction directly.
+    tamper(&mut module, "f", |code| {
+        *code = vec![
+            Instruction::MakeTuple((limit + 1) as u8),
+            Instruction::Return,
+        ];
+    });
+    let errs = verify_errors(&module, &no_deps());
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, VerificationError::TupleTooLarge { .. })),
+        "MakeTuple exceeding limit must be rejected, got: {errs:?}"
+    );
+}
+
 #[test]
 fn jump_to_past_end_rejected() {
     // A reachable Jump(offset) with target == code_len escapes the function
@@ -286,7 +314,7 @@ fn jump_to_past_end_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     tamper(&mut module, "f", |code| {

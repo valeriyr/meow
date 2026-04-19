@@ -16,7 +16,7 @@ Create `hero.meow`:
 //
 // Each Hero is a uniquely-owned object. Spawn creates one and sends it to the
 // transaction sender. Duel resolves combat using on-chain randomness seeded
-// from the block's mining hash — results are deterministic across validators
+// from the block's mining hash — results are deterministic across all nodes
 // but unpredictable at submission time.
 
 mod hero;
@@ -176,7 +176,7 @@ meow transaction meow-call \
 
 Both heroes must be owned by the transaction sender. Spawn a second hero first, then pass both addresses as object arguments.
 
-Each hero draws a random number from `meow_vm_rand()`. Higher roll wins — the outcome is never guaranteed regardless of level. The winner gains `loser.level × 25` XP and **levels up automatically** when their XP reaches `level × 100` (level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The randomness is seeded from the block's mining hash (which commits to the transaction set and nonce), so it is deterministic across all validators but cannot be predicted by a transaction sender before the block is mined. See [Contracts → Randomness](contracts.md#randomness) for the full security model.
+Each hero draws a random number from `meow_vm_rand()`. Higher roll wins — the outcome is never guaranteed regardless of level. The winner gains `loser.level × 25` XP and **levels up automatically** when their XP reaches `level × 100` (level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The randomness is seeded from the block's mining hash (which commits to the transaction set and nonce), so it is deterministic across all nodes but cannot be predicted by a transaction sender before the block is mined. See [Contracts → Randomness](contracts.md#randomness) for the full security model.
 
 ```bash
 # Spawn a second hero to be the defender

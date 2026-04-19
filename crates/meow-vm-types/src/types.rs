@@ -16,6 +16,8 @@ pub enum Type {
     /// A user-defined object referenced by name.
     /// Objects must have `id: address` as their first field.
     Object(String),
+    /// A tuple of types — used for multi-value function returns.
+    Tuple(Vec<Type>),
 }
 
 impl Type {
@@ -31,13 +33,17 @@ impl Type {
     }
 
     /// Returns the canonical name string for this type.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> String {
         match self {
-            Self::Bool => "bool",
-            Self::U64 => "u64",
-            Self::Address => "address",
-            Self::Str => "string",
-            Self::Struct(n) | Self::Object(n) => n,
+            Self::Bool => "bool".to_string(),
+            Self::U64 => "u64".to_string(),
+            Self::Address => "address".to_string(),
+            Self::Str => "string".to_string(),
+            Self::Struct(n) | Self::Object(n) => n.clone(),
+            Self::Tuple(types) => {
+                let inner: Vec<String> = types.iter().map(|t| t.name()).collect();
+                format!("({})", inner.join(", "))
+            }
         }
     }
 
@@ -47,9 +53,30 @@ impl Type {
     }
 
     /// Returns true if this type can be used as a struct/object field type.
-    /// Primitives and (non-object) structs are allowed; objects are not.
+    /// Primitives and (non-object) structs are allowed; objects and tuples are not.
     pub fn is_valid_field_type(&self) -> bool {
         self.is_primitive() || matches!(self, Self::Struct(_))
+    }
+}
+
+/// Returns true if `ty` is, or contains, an object type.
+///
+/// `structs` is used to resolve `Type::Struct(name)` — the compiler emits
+/// `Type::Struct` for all named types in function signatures, so checking
+/// whether the name refers to an `is_object` definition requires the
+/// struct list from the declaring module.
+pub fn type_contains_object(ty: &Type, structs: &[StructDef]) -> bool {
+    match ty {
+        Type::Object(_) => true,
+        Type::Struct(name) => structs.iter().any(|s| s.name == *name && s.is_object),
+        Type::Tuple(types) => types.iter().any(|t| type_contains_object(t, structs)),
+        _ => false,
+    }
+}
+
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name())
     }
 }
 
@@ -77,6 +104,9 @@ pub enum Value {
         /// Fields in struct-definition order (first field is always `id: address`).
         fields: Vec<(String, Value)>,
     },
+    /// A tuple of values — produced by `MakeTuple`, consumed by `UnpackTuple`.
+    /// Uses move semantics if any element is an Object.
+    Tuple(Vec<Value>),
 }
 
 impl Value {
@@ -89,6 +119,7 @@ impl Value {
             Self::Str(_) => "str",
             Self::Void => "void",
             Self::Struct { type_name, .. } | Self::Object { type_name, .. } => type_name,
+            Self::Tuple(_) => "tuple",
         }
     }
 
@@ -148,9 +179,14 @@ impl Value {
         matches!(self, Self::Object { .. })
     }
 
-    /// Returns true if this value uses move semantics (only Object).
+    /// Returns true if this value uses move semantics.
+    /// Objects always use move semantics. Tuples use move semantics if any element does.
     pub fn uses_move_semantics(&self) -> bool {
-        self.is_object()
+        match self {
+            Self::Object { .. } => true,
+            Self::Tuple(values) => values.iter().any(|v| v.uses_move_semantics()),
+            _ => false,
+        }
     }
 }
 
@@ -170,20 +206,26 @@ impl std::fmt::Display for Value {
                     .join(", ");
                 write!(f, "{} {{ {} }}", type_name, fields_str)
             }
+            Self::Tuple(values) => {
+                let inner = values
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                write!(f, "({})", inner)
+            }
         }
     }
 }
 
-/// A field in a struct or object definition, with its visibility flag.
+/// A field in a struct or object definition.
+/// All fields are private — only accessible within the module that declares the type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldDef {
     /// The field name.
     pub name: String,
     /// The field type.
     pub ty: Type,
-    /// True if the field is readable from modules other than the one that declared this type.
-    /// Field writes are always restricted to the declaring module regardless of this flag.
-    pub is_public: bool,
 }
 
 /// Schema of a user-defined struct or object.

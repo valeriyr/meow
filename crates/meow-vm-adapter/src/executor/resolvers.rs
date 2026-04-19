@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use meow_types::{
     address::Address,
@@ -200,8 +200,7 @@ pub fn resolve_module(
 /// could be reached during execution — not just direct dependencies.
 ///
 /// Diamond dependencies (the same address reachable through two different paths)
-/// are allowed and silently deduplicated. Circular dependencies (a module that
-/// eventually imports itself) are rejected with an error.
+/// are allowed and silently deduplicated.
 ///
 /// Every address in the transitive closure must have a corresponding
 /// `ObjectType::Module` object in `inputs`; returns an error naming the first
@@ -242,49 +241,5 @@ pub fn resolve_dep_modules(
         deps.insert(vm_addr, dep);
     }
 
-    // After collecting all deps, check for cycles via DFS.
-    let mut visited: HashSet<VmAddress> = HashSet::new();
-    let mut in_stack: HashSet<VmAddress> = HashSet::new();
-    for &start in deps.keys() {
-        if !visited.contains(&start) {
-            detect_dep_cycle(start, &deps, &mut visited, &mut in_stack)?;
-        }
-    }
-
     Ok(deps)
-}
-
-/// DFS helper: detects cycles in the module dependency graph.
-///
-/// `in_stack` tracks the current DFS path. A back edge (child already in
-/// `in_stack`) means the child is an ancestor of the current node — i.e. a cycle.
-fn detect_dep_cycle(
-    node: VmAddress,
-    deps: &HashMap<VmAddress, Module>,
-    visited: &mut HashSet<VmAddress>,
-    in_stack: &mut HashSet<VmAddress>,
-) -> std::result::Result<(), String> {
-    visited.insert(node);
-    in_stack.insert(node);
-
-    if let Some(module) = deps.get(&node) {
-        for &import in &module.imports {
-            if !deps.contains_key(&import) {
-                continue; // not part of the resolved graph — skip
-            }
-            if in_stack.contains(&import) {
-                let display_addr = Address::from(import);
-                return Err(format!(
-                    "circular dependency detected: module at address {display_addr} \
-                     is part of a recursive import chain",
-                ));
-            }
-            if !visited.contains(&import) {
-                detect_dep_cycle(import, deps, visited, in_stack)?;
-            }
-        }
-    }
-
-    in_stack.remove(&node);
-    Ok(())
 }

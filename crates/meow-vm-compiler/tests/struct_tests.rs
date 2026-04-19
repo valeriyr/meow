@@ -9,7 +9,7 @@ fn struct_field_can_be_string_type() {
 
         struct Msg { text: string }
 
-        fn make(text: string) -> Msg { return Msg { text: text }; }
+        fn make(text: string) -> Msg { Msg { text: text } }
     "#;
     assert!(utils::compile(src).is_ok());
 }

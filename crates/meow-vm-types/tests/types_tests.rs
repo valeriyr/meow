@@ -76,17 +76,14 @@ fn struct_def_field_index() {
             FieldDef {
                 name: "a".to_string(),
                 ty: Type::U64,
-                is_public: false,
             },
             FieldDef {
                 name: "b".to_string(),
                 ty: Type::Bool,
-                is_public: false,
             },
             FieldDef {
                 name: "c".to_string(),
                 ty: Type::Address,
-                is_public: true,
             },
         ],
         is_object: false,
@@ -121,12 +118,10 @@ fn struct_def_fields() {
             FieldDef {
                 name: "x".to_string(),
                 ty: Type::U64,
-                is_public: false,
             },
             FieldDef {
                 name: "y".to_string(),
                 ty: Type::U64,
-                is_public: true,
             },
         ],
         is_object: false,
@@ -135,8 +130,6 @@ fn struct_def_fields() {
     assert_eq!(def.fields.len(), 2);
     assert_eq!(def.fields[0].name, "x");
     assert_eq!(def.fields[0].ty, Type::U64);
-    assert!(!def.fields[0].is_public);
     assert_eq!(def.fields[1].name, "y");
     assert_eq!(def.fields[1].ty, Type::U64);
-    assert!(def.fields[1].is_public);
 }

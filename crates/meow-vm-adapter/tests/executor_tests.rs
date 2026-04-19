@@ -520,56 +520,6 @@ fn execute_meow_call_diamond_dep_succeeds() {
     );
 }
 
-#[test]
-fn execute_meow_call_cyclic_dep_returns_failure() {
-    // Cycle: A → B → C → B.
-    // B and C form a cycle; the executor must detect and reject it.
-    // These modules are hand-crafted (the compiler prevents cyclic imports).
-    let b_addr = meow_vm_types::address::Address::from_str("0x42").unwrap();
-    let c_addr = meow_vm_types::address::Address::from_str("0x43").unwrap();
-
-    // Hand-craft modules with a cycle: B imports C, C imports B.
-    let mut b_module = meow_vm_types::module::Module::new("b");
-    b_module.imports = vec![c_addr];
-    let mut c_module = meow_vm_types::module::Module::new("c");
-    c_module.imports = vec![b_addr];
-
-    // A is a normal module that imports B (which pulls in the cycle).
-    let mut a_module = meow_vm_types::module::Module::new("a");
-    a_module.imports = vec![b_addr];
-
-    let a_obj = make_module_object(Address::ZERO, bcs::to_bytes(&a_module).unwrap());
-    let b_obj = make_module_object(
-        Address::from(<[u8; 32]>::from(b_addr)),
-        bcs::to_bytes(&b_module).unwrap(),
-    );
-    let c_obj = make_module_object(
-        Address::from(<[u8; 32]>::from(c_addr)),
-        bcs::to_bytes(&c_module).unwrap(),
-    );
-    let gas_obj = make_gas_coin_object();
-
-    let call = Call::new(Address::ZERO, Identifier::new("run").unwrap(), vec![]);
-    let tx = Transaction::new(
-        SENDER,
-        make_gas_coin_object().object_ref(),
-        TransactionType::MeowCall(call),
-    );
-
-    let result = execute(&tx, vec![a_obj, b_obj, c_obj, gas_obj]).unwrap();
-
-    assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("circular")),
-        "cyclic dep must produce Failure, got: {:?}",
-        result.status()
-    );
-    assert_eq!(
-        result.changed_objects().len(),
-        1,
-        "gas coin must still be returned"
-    );
-}
-
 //
 // ─── Function call tests (resolvers.rs, executor/mod.rs) ───
 //
@@ -625,7 +575,7 @@ fn calling_private_function_from_transaction_returns_failure() {
     let module_obj = make_module_object_from_src(
         r#"
             mod priv_test;
-            fn secret() -> u64 { return 42; }
+            fn secret() -> u64 { 42 }
         "#,
     );
     let gas_obj = make_gas_coin_object();
@@ -647,6 +597,83 @@ fn calling_private_function_from_transaction_returns_failure() {
         result.changed_objects().len(),
         1,
         "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn calling_function_returning_primitive_from_transaction_succeeds() {
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(
+        r#"
+            mod test;
+            pub fn get_value() -> u64 { 42 }
+        "#,
+    );
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(module_addr, Identifier::new("get_value").unwrap(), vec![]);
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![module_obj, gas_obj]).unwrap();
+
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "pub fn returning a primitive must succeed when called from a transaction"
+    );
+}
+
+#[test]
+fn calling_function_returning_object_in_tuple_from_transaction_returns_failure() {
+    // meow_coin::balance returns (MeowCoin, u64) — the object in the tuple makes it
+    // ineligible as a transaction entry point.
+    let module_obj = make_default_module_object();
+    let coin_obj = make_coin_object(Address::fill(0xAA), SENDER, 50);
+    let gas_obj = make_gas_coin_object();
+    let tx = make_meow_call_transaction("balance", vec![Input::Object(coin_obj.object_ref())]);
+
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("returns an object")),
+        "pub fn returning an object in a tuple must be rejected as a transaction entry point, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn calling_function_returning_bare_object_from_transaction_returns_failure() {
+    // A pub fn with a direct object return type (not in a tuple) must also be rejected.
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(
+        r#"
+            mod test;
+            object Coin { id: address, balance: u64 }
+            pub fn passthrough(coin: Coin) -> Coin { coin }
+        "#,
+    );
+    let coin_obj = make_coin_object(Address::fill(0xAA), SENDER, 50);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(
+        module_addr,
+        Identifier::new("passthrough").unwrap(),
+        vec![Input::Object(coin_obj.object_ref())],
+    );
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("returns an object")),
+        "pub fn returning a bare object must be rejected as a transaction entry point, got: {:?}",
+        result.status()
     );
 }
 
@@ -823,6 +850,41 @@ fn split_with_insufficient_balance_returns_failure() {
 //
 // ─── Object effects tests (effects.rs) ───
 //
+
+#[test]
+fn input_object_consumed_but_not_accounted_for_returns_failure() {
+    // The coin is moved out of its original arg slot into a local variable
+    // (let c = coin), then the function returns without transferring or destroying it.
+    // effects.rs must detect the unaccounted input object.
+    let module_addr = Address::ZERO;
+    let module_obj = make_module_object_from_src(
+        r#"
+            mod test;
+            object Coin { id: address, balance: u64 }
+            pub fn lose(coin: Coin) { let c = coin; }
+        "#,
+    );
+    let coin_obj = make_coin_object(Address::fill(0xAA), SENDER, 50);
+    let gas_obj = make_gas_coin_object();
+    let call = Call::new(
+        module_addr,
+        Identifier::new("lose").unwrap(),
+        vec![Input::Object(coin_obj.object_ref())],
+    );
+    let tx = Transaction::new(
+        SENDER,
+        make_gas_coin_object().object_ref(),
+        TransactionType::MeowCall(call),
+    );
+
+    let result = execute(&tx, vec![module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("input object not accounted for")),
+        "consumed but unaccounted input object must produce Failure, got: {:?}",
+        result.status()
+    );
+}
 
 #[test]
 fn fresh_object_not_consumed_returns_failure() {
@@ -1073,7 +1135,7 @@ fn make_dep_chain() -> (
     let dep_module = meow_vm_compiler::Compiler::compile(
         r#"
             mod helper;
-            pub fn get() -> u64 { return 42; }
+            pub fn get() -> u64 { 42 }
         "#,
         &[],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1083,7 +1145,7 @@ fn make_dep_chain() -> (
         r#"
             mod main_mod;
             use helper@0x42;
-            pub fn run() -> u64 { return helper::get(); }
+            pub fn run() -> u64 { helper::get() }
         "#,
         &[(dep_addr, &dep_module)],
         meow_vm_types::config::CompilerConfig::default(),
@@ -1111,7 +1173,7 @@ fn make_three_module_chain() -> (
     let c_module = meow_vm_compiler::Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 42; }
+            pub fn get() -> u64 { 42 }
         "#,
         &[],
         cfg.clone(),
@@ -1121,7 +1183,7 @@ fn make_three_module_chain() -> (
         r#"
             mod b;
             use c@0x42;
-            pub fn run() -> u64 { return c::get(); }
+            pub fn run() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -1131,7 +1193,7 @@ fn make_three_module_chain() -> (
         r#"
             mod a;
             use b@0x43;
-            pub fn run() -> u64 { return b::run(); }
+            pub fn run() -> u64 { b::run() }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
         cfg,
@@ -1164,7 +1226,7 @@ fn make_diamond_dep_chain() -> (
     let d_module = meow_vm_compiler::Compiler::compile(
         r#"
             mod d;
-            pub fn get() -> u64 { return 42; }
+            pub fn get() -> u64 { 42 }
         "#,
         &[],
         cfg.clone(),
@@ -1174,7 +1236,7 @@ fn make_diamond_dep_chain() -> (
         r#"
             mod b;
             use d@0x44;
-            pub fn run() -> u64 { return d::get(); }
+            pub fn run() -> u64 { d::get() }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1184,7 +1246,7 @@ fn make_diamond_dep_chain() -> (
         r#"
             mod c;
             use d@0x44;
-            pub fn run() -> u64 { return d::get(); }
+            pub fn run() -> u64 { d::get() }
         "#,
         &[(d_addr, &d_module)],
         cfg.clone(),
@@ -1195,7 +1257,7 @@ fn make_diamond_dep_chain() -> (
             mod a;
             use b@0x42;
             use c@0x43;
-            pub fn run() -> u64 { return b::run(); }
+            pub fn run() -> u64 { b::run() }
         "#,
         &[
             (b_addr, &b_module),

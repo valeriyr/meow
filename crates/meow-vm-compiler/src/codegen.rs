@@ -1,3 +1,5 @@
+//! Code generator: walks the AST and emits bytecode [`Instruction`]s.
+
 use std::collections::HashMap;
 
 use meow_vm_types::{
@@ -10,7 +12,7 @@ use meow_vm_types::{
 
 use crate::{
     Result,
-    ast::{AstFunction, BinOp, Expr, Stmt},
+    ast::{AstFunction, BinOp, Expr, Stmt, UnaryOp},
     error::CompilerError,
     validator,
 };
@@ -64,24 +66,6 @@ impl<'m> Codegen<'m> {
             local_fn_return_types,
             config,
         );
-
-        // Validate return type: functions may not return an Object.
-        // Note: the parser maps all named types to Type::Struct, so we also check
-        // whether the name refers to an object definition in the structs list.
-        if let Some(rt) = &ast_fn.return_type {
-            let is_object_return = match rt {
-                Type::Object(_) => true,
-                Type::Struct(name) => structs.iter().any(|s| s.name == *name && s.is_object),
-                _ => false,
-            };
-            if is_object_return {
-                return Err(CompilerError::Message(format!(
-                    "function '{}': cannot return Object type '{}'",
-                    ast_fn.name,
-                    rt.name()
-                )));
-            }
-        }
 
         // Allocate slots for parameters and record their types.
         let mut params: Vec<(String, Type)> = Vec::with_capacity(ast_fn.params.len());
@@ -235,6 +219,8 @@ impl<'m> Codegen<'m> {
                 BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => "u64".to_string(),
                 _ => "bool".to_string(),
             }),
+            Expr::Tuple(_) => None,
+            Expr::UnaryOp { .. } => Some("bool".to_string()),
         }
     }
 
@@ -265,26 +251,14 @@ impl<'m> Codegen<'m> {
         Ok(())
     }
 
-    /// Check that reading or writing `field` on a value of `type_name` is allowed.
+    /// Check that reading `field` on a value of `type_name` is allowed.
     ///
-    /// For cross-module types, only fields marked `pub` may be read; writes are
-    /// always rejected regardless of field visibility. For same-module types all
-    /// field reads are allowed (writes are handled separately via `check_field_write`).
-    fn check_field_read(&self, type_name: &str, field: &str) -> Result<()> {
-        if !Self::is_cross_module_type(type_name) {
-            return Ok(());
-        }
-        let def = self
-            .structs
-            .iter()
-            .find(|s| s.name == type_name)
-            .ok_or_else(|| CompilerError::Message(format!("unknown type '{type_name}'")))?;
-        let field_def = def.fields.iter().find(|f| f.name == field).ok_or_else(|| {
-            CompilerError::Message(format!("field '{field}' not found in '{type_name}'",))
-        })?;
-        if !field_def.is_public {
+    /// All fields are private — cross-module field reads are always rejected.
+    /// Within the declaring module, all field reads are allowed.
+    fn check_field_read(&self, type_name: &str, _field: &str) -> Result<()> {
+        if Self::is_cross_module_type(type_name) {
             return Err(CompilerError::Message(format!(
-                "field '{field}' of '{type_name}' is private",
+                "fields of '{type_name}' are private — use a public getter function to access them",
             )));
         }
         Ok(())
@@ -430,6 +404,27 @@ impl<'m> Codegen<'m> {
                 });
             }
 
+            Expr::UnaryOp { op, expr } => {
+                self.compile_expr(*expr)?;
+                match op {
+                    UnaryOp::Not => self.emit(Instruction::Not),
+                }
+            }
+
+            Expr::Tuple(items) => {
+                let n = items.len();
+                let max = self.config.max_tuple_elements();
+                if n > max {
+                    return Err(CompilerError::Message(format!(
+                        "tuple literal has {n} elements, exceeding the limit of {max}"
+                    )));
+                }
+                for item in items {
+                    self.compile_expr(item)?;
+                }
+                self.emit(Instruction::MakeTuple(n as u8));
+            }
+
             Expr::Call { name, args } => {
                 // Access check for cross-module function calls.
                 self.check_fn_visibility(&name)?;
@@ -518,6 +513,23 @@ impl<'m> Codegen<'m> {
                 } else {
                     self.code[patch_cond] =
                         Instruction::JumpIfNot((self.code.len() - patch_cond) as i32);
+                }
+            }
+
+            Stmt::LetTuple { names, expr } => {
+                let n = names.len();
+                let max = self.config.max_tuple_elements();
+                if n > max {
+                    return Err(CompilerError::Message(format!(
+                        "tuple destructuring has {n} elements, exceeding the limit of {max}"
+                    )));
+                }
+                self.compile_expr(expr)?;
+                self.emit(Instruction::UnpackTuple(n as u8));
+                // UnpackTuple pushes elements with element[0] on top.
+                for name in names {
+                    let slot = self.alloc_local(name.clone())?;
+                    self.emit(Instruction::Store(slot));
                 }
             }
 

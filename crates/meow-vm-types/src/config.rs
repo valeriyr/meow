@@ -15,6 +15,8 @@ pub struct CompilerConfig {
     max_fields: usize,
     /// Maximum number of parameters in a function.
     max_params: usize,
+    /// Maximum number of elements in a tuple literal or tuple return type.
+    max_tuple_elements: usize,
     /// Maximum number of local variable slots in a function.
     max_locals: usize,
     /// Maximum number of bytecode instructions in a single function.
@@ -55,6 +57,11 @@ impl CompilerConfig {
     /// Returns the maximum number of parameters allowed in a function.
     pub fn max_params(&self) -> usize {
         self.max_params
+    }
+
+    /// Returns the maximum number of elements allowed in a tuple literal or tuple return type.
+    pub fn max_tuple_elements(&self) -> usize {
+        self.max_tuple_elements
     }
 
     /// Returns the maximum number of local variable slots allowed in a function.
@@ -104,6 +111,7 @@ impl Default for CompilerConfig {
             max_functions: 256,
             max_fields: 32,
             max_params: 16,
+            max_tuple_elements: 16,
             max_locals: 255,
             max_fun_code_size: 65_536,
             max_imports: 64,

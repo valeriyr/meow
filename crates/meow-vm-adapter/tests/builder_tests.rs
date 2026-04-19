@@ -19,7 +19,7 @@ fn build_module_successful() {
         struct Point { x: u64, y: u64 }
         object Token { id: address, amount: u64 }
 
-        fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+        fn make(x: u64, y: u64) -> Point { Point { x: x, y: y } }
     "#;
 
     let module = builder::build(src, &[]).unwrap();
@@ -62,7 +62,7 @@ fn build_from_file_with_dep_successful() {
     let dep = builder::build(
         r#"
             mod math;
-            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
     )
@@ -74,7 +74,7 @@ fn build_from_file_with_dep_successful() {
         r#"
             mod main;
             use math@0x42;
-            fn run() -> u64 { return math::add(1, 2); }
+            fn run() -> u64 { math::add(1, 2) }
         "#,
     )
     .unwrap();
@@ -213,7 +213,7 @@ fn build_with_dep_cross_module_function_call() {
     let math = builder::build(
         r#"
             mod math;
-            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
     )
@@ -226,7 +226,7 @@ fn build_with_dep_cross_module_function_call() {
             use math@0x01;
 
             fn double_add(a: u64, b: u64) -> u64 {
-                return math::add(a, b) + math::add(a, b);
+                math::add(a, b) + math::add(a, b)
             }
         "#,
         &[(dep_addr, &math)],
@@ -244,10 +244,10 @@ fn build_with_dep_cross_module_struct() {
         r#"
             mod shapes;
 
-            pub struct Point { pub x: u64, y: u64 }
+            pub struct Point { x: u64, y: u64 }
 
-            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
-            pub fn get_x(p: Point) -> u64 { return p.x; }
+            pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
+            pub fn get_x(p: Point) -> u64 { p.x }
         "#,
         &[],
     )
@@ -261,7 +261,7 @@ fn build_with_dep_cross_module_struct() {
 
             fn make_and_read() -> u64 {
                 let p = shapes::make_point(5, 9);
-                return shapes::get_x(p);
+                shapes::get_x(p)
             }
         "#,
         &[(dep_addr, &shapes)],
@@ -277,7 +277,7 @@ fn build_with_declared_dep_not_provided_returns_error() {
     let src = r#"
         mod main;
         use math@0x01;
-        fn run() -> u64 { return math::add(1, 2); }
+        fn run() -> u64 { math::add(1, 2) }
     "#;
     assert!(matches!(
         builder::build(src, &[]).unwrap_err(),
@@ -301,7 +301,7 @@ fn build_with_extra_undeclared_dep_is_accepted() {
     let module = builder::build(
         r#"
             mod main;
-            fn run() -> u64 { return 1; }
+            fn run() -> u64 { 1 }
         "#,
         &[(dep_addr, &extra)],
     )

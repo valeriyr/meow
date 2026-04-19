@@ -228,7 +228,7 @@ impl ChainState {
 
         // Use the mining hash as the randomness seed — it commits height,
         // parent_hash, transactions_root, timestamp, and nonce, all of which
-        // are fixed before any transaction runs and verifiable by every validator.
+        // are fixed before any transaction runs and verifiable by every node.
         let external_executor_context =
             ExternalContext::new(block.header.mining_hash().into(), timestamp);
 

@@ -250,86 +250,141 @@ fn bool_or() {
     );
 }
 
+#[test]
+fn bool_not() {
+    assert_eq!(
+        utils::run(NOT_SRC, "f", vec![Value::Bool(true)]),
+        Some(Value::Bool(false))
+    );
+    assert_eq!(
+        utils::run(NOT_SRC, "f", vec![Value::Bool(false)]),
+        Some(Value::Bool(true))
+    );
+}
+
+#[test]
+fn bool_not_double_negation() {
+    assert_eq!(
+        utils::run(DOUBLE_NOT_SRC, "f", vec![Value::Bool(true)]),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        utils::run(DOUBLE_NOT_SRC, "f", vec![Value::Bool(false)]),
+        Some(Value::Bool(false))
+    );
+}
+
+#[test]
+fn bool_not_in_condition() {
+    // `if !flag { 0 } else { 1 }` — not used in a guard expression
+    assert_eq!(
+        utils::run(NOT_COND_SRC, "f", vec![Value::Bool(false)]),
+        Some(Value::U64(99))
+    );
+    assert_eq!(
+        utils::run(NOT_COND_SRC, "f", vec![Value::Bool(true)]),
+        Some(Value::U64(0))
+    );
+}
+
 //
 // ─── Utilities ───
 //
 
 const ADD_SRC: &str = r#"
         mod math;
-        pub fn add(a: u64, b: u64) -> u64 { return a + b; }
+        pub fn add(a: u64, b: u64) -> u64 { a + b }
     "#;
 
 const SUB_SRC: &str = r#"
         mod math;
-        pub fn sub(a: u64, b: u64) -> u64 { return a - b; }
+        pub fn sub(a: u64, b: u64) -> u64 { a - b }
     "#;
 
 const MUL_SRC: &str = r#"
         mod math;
-        pub fn mul(a: u64, b: u64) -> u64 { return a * b; }
+        pub fn mul(a: u64, b: u64) -> u64 { a * b }
     "#;
 
 const DIV_SRC: &str = r#"
         mod math;
-        pub fn div(a: u64, b: u64) -> u64 { return a / b; }
+        pub fn div(a: u64, b: u64) -> u64 { a / b }
     "#;
 
 const REM_SRC: &str = r#"
         mod math;
-        pub fn rem(a: u64, b: u64) -> u64 { return a % b; }
+        pub fn rem(a: u64, b: u64) -> u64 { a % b }
     "#;
 
 const GROUP_EXPR_SRC_WITH_PARENTHESES: &str = r#"
         mod math;
-        pub fn f(a: u64, b: u64, c: u64) -> u64 { return (a + b) % c; }
+        pub fn f(a: u64, b: u64, c: u64) -> u64 { (a + b) % c }
     "#;
 
 const GROUP_EXPR_SRC_WITHOUT_PARENTHESES: &str = r#"
         mod math;
-        pub fn f(a: u64, b: u64, c: u64) -> u64 { return a + b % c; }
+        pub fn f(a: u64, b: u64, c: u64) -> u64 { a + b % c }
     "#;
 
 const EVEN_SRC: &str = r#"
         mod math;
-        pub fn is_even(n: u64) -> bool { return n % 2 == 0; }
+        pub fn is_even(n: u64) -> bool { n % 2 == 0 }
     "#;
 
 const EQUAL_SRC: &str = r#"
         mod math;
-        pub fn eq(a: u64, b: u64) -> bool { return a == b; }
+        pub fn eq(a: u64, b: u64) -> bool { a == b }
     "#;
 
 const NOT_EQUAL_SRC: &str = r#"
         mod math;
-        pub fn ne(a: u64, b: u64) -> bool { return a != b; }
+        pub fn ne(a: u64, b: u64) -> bool { a != b }
     "#;
 
 const LT_SRC: &str = r#"
         mod math;
-        pub fn lt(a: u64, b: u64) -> bool { return a < b; }
+        pub fn lt(a: u64, b: u64) -> bool { a < b }
     "#;
 
 const LE_SRC: &str = r#"
         mod math;
-        pub fn le(a: u64, b: u64) -> bool { return a <= b; }
+        pub fn le(a: u64, b: u64) -> bool { a <= b }
     "#;
 
 const GT_SRC: &str = r#"
         mod math;
-        pub fn gt(a: u64, b: u64) -> bool { return a > b; }
+        pub fn gt(a: u64, b: u64) -> bool { a > b }
     "#;
 
 const GE_SRC: &str = r#"
         mod math;
-        pub fn ge(a: u64, b: u64) -> bool { return a >= b; }
+        pub fn ge(a: u64, b: u64) -> bool { a >= b }
     "#;
 
 const AND_SRC: &str = r#"
         mod math;
-        pub fn f(a: bool, b: bool) -> bool { return a && b; }
+        pub fn f(a: bool, b: bool) -> bool { a && b }
     "#;
 
 const OR_SRC: &str = r#"
         mod math;
-        pub fn f(a: bool, b: bool) -> bool { return a || b; }
+        pub fn f(a: bool, b: bool) -> bool { a || b }
+    "#;
+
+const NOT_SRC: &str = r#"
+        mod math;
+        pub fn f(a: bool) -> bool { !a }
+    "#;
+
+const DOUBLE_NOT_SRC: &str = r#"
+        mod math;
+        pub fn f(a: bool) -> bool { !!a }
+    "#;
+
+const NOT_COND_SRC: &str = r#"
+        mod math;
+        pub fn f(flag: bool) -> u64 {
+            if !flag { return 99; }
+            0
+        }
     "#;

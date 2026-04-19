@@ -75,7 +75,7 @@ fn collect_inputs_publish_tx_transitive_dep() {
         r#"
             mod outer;
             use shapes@{shapes_addr};
-            pub struct Path {{ pub line: shapes::Line }}
+            pub struct Path {{ line: shapes::Line }}
             pub fn noop() {{}}
         "#
     );
@@ -457,7 +457,7 @@ const SIMPLE_SRC: &str = r#"
     "#;
 const DEP_SRC: &str = r#"
     mod point;
-    pub struct Point { pub x: u64, pub y: u64 }
+    pub struct Point { x: u64, y: u64 }
     "#;
 
 /// Returns source for a module that imports `point` at `dep_addr`.
@@ -469,7 +469,7 @@ fn main_src(dep_addr: Address) -> String {
 
             use point@{dep_addr};
 
-            pub struct Line {{ pub a: point::Point, pub b: point::Point }}
+            pub struct Line {{ a: point::Point, b: point::Point }}
             pub fn noop() {{}}
          "#
     )

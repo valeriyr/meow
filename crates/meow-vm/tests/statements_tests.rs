@@ -11,7 +11,11 @@ use meow_vm_types::types::Value;
 fn let_binding() {
     let src = r#"
         mod test;
-        pub fn compute(x: u64) -> u64 { let a = x + 1; let b = a * 2; return b; }
+        pub fn compute(x: u64) -> u64 {
+            let a = x + 1;
+            let b = a * 2;
+            b
+        }
     "#;
     assert_eq!(
         utils::run(src, "compute", vec![Value::U64(4)]),
@@ -27,7 +31,10 @@ fn let_binding() {
 fn if_branch_taken() {
     let src = r#"
         mod test;
-        pub fn max(a: u64, b: u64) -> u64 { if a > b { return a; } return b; }
+        pub fn max(a: u64, b: u64) -> u64 {
+            if a > b { return a; }
+            b
+        }
     "#;
     assert_eq!(
         utils::run(src, "max", vec![Value::U64(10), Value::U64(5)]),
@@ -46,7 +53,7 @@ fn if_mutates_local() {
         pub fn clamp(x: u64, max: u64) -> u64 {
             let result = x;
             if x > max { result = max; }
-            return result;
+            result
         }
     "#;
     assert_eq!(
@@ -107,8 +114,8 @@ fn function_call_chain() {
     let src = r#"
         mod test;
 
-        pub fn double(n: u64) -> u64 { return n * 2; }
-        pub fn quad(n: u64) -> u64 { return double(double(n)); }
+        pub fn double(n: u64) -> u64 { n * 2 }
+        pub fn quad(n: u64) -> u64 { double(double(n)) }
     "#;
     assert_eq!(
         utils::run(src, "quad", vec![Value::U64(3)]),
@@ -139,7 +146,10 @@ fn void_call_as_statement_does_not_corrupt_stack() {
         mod test;
 
         pub fn noop() {}
-        pub fn compute(x: u64) -> u64 { noop(); return x * 2; }
+        pub fn compute(x: u64) -> u64 {
+            noop();
+            x * 2
+        }
     "#;
     assert_eq!(
         utils::run(src, "compute", vec![Value::U64(5)]),

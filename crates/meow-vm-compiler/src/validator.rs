@@ -1,3 +1,5 @@
+//! Semantic validator: checks struct references, field types, identifier rules, and limits.
+
 use std::collections::{HashMap, HashSet};
 
 use meow_vm_types::{
@@ -56,7 +58,7 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
         )));
     }
 
-    for (is_pub, field_name, ty) in &def.fields {
+    for (field_name, ty) in &def.fields {
         validate_identifier(
             field_name,
             &format!("field in {kind} '{}'", def.name),
@@ -70,19 +72,12 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
                 ty.name()
             )));
         }
-        if *is_pub && !def.is_public {
-            return Err(CompilerError::Message(format!(
-                "{kind} '{}': field '{field_name}' is declared `pub` but the {kind} itself is private — \
-                 `pub` fields are only allowed on `pub` structs and objects",
-                def.name,
-            )));
-        }
     }
 
     // Objects must have `id: address` as their first field.
     if def.is_object {
         match def.fields.first() {
-            Some((_is_pub, name, Type::Address)) if name == "id" => {}
+            Some((name, Type::Address)) if name == "id" => {}
             _ => {
                 return Err(CompilerError::Message(format!(
                     "object '{}': first field must be 'id: address'",
@@ -96,13 +91,12 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
 }
 
 /// Build a [`FieldDef`] list from an AST struct's field tuples.
-pub fn ast_fields_to_field_defs(fields: &[(bool, String, Type)]) -> Vec<FieldDef> {
+pub fn ast_fields_to_field_defs(fields: &[(String, Type)]) -> Vec<FieldDef> {
     fields
         .iter()
-        .map(|(is_public, name, ty)| FieldDef {
+        .map(|(name, ty)| FieldDef {
             name: name.clone(),
             ty: ty.clone(),
-            is_public: *is_public,
         })
         .collect()
 }

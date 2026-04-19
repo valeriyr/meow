@@ -16,7 +16,7 @@ fn cross_module_function_call() {
         r#"
             mod math;
 
-            pub fn add(a: u64, b: u64) -> u64 { return a + b; }
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
     );
 
@@ -28,7 +28,7 @@ fn cross_module_function_call() {
                 use math@{};
 
                 pub fn double_add(a: u64, b: u64) -> u64 {{
-                    return math::add(a, b) + math::add(a, b);
+                    math::add(a, b) + math::add(a, b)
                 }}
             "#,
             a1
@@ -58,10 +58,10 @@ fn cross_module_struct_via_constructor_and_field_access() {
         r#"
             mod shapes;
 
-            pub struct Point { pub x: u64, pub y: u64 }
+            pub struct Point { x: u64, y: u64 }
 
-            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
-            pub fn get_x(p: Point) -> u64 { return p.x; }
+            pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
+            pub fn get_x(p: Point) -> u64 { p.x }
         "#,
     );
 
@@ -74,7 +74,7 @@ fn cross_module_struct_via_constructor_and_field_access() {
 
                 pub fn make_and_read() -> u64 {{
                     let p = shapes::make_point(5, 9);
-                    return shapes::get_x(p);
+                    shapes::get_x(p)
                 }}
             "#,
             a10
@@ -89,19 +89,20 @@ fn cross_module_struct_via_constructor_and_field_access() {
 }
 
 //
-// ─── Cross-module pub field read ───
+// ─── Cross-module field read via getter function ───
 //
 
 #[test]
-fn cross_module_pub_field_read() {
+fn cross_module_field_read_via_getter() {
     let a10 = Address::from_str("0x10").unwrap();
     let shapes = utils::compile(
         r#"
             mod shapes;
 
-            pub struct Point { pub x: u64, pub y: u64 }
+            pub struct Point { x: u64, y: u64 }
 
-            pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
+            pub fn get_x(p: Point) -> u64 { p.x }
         "#,
     );
 
@@ -112,9 +113,9 @@ fn cross_module_pub_field_read() {
 
                 use shapes@{};
 
-                pub fn read_x_directly() -> u64 {{
+                pub fn read_x_via_getter() -> u64 {{
                     let p = shapes::make_point(7, 3);
-                    return p.x;
+                    shapes::get_x(p)
                 }}
             "#,
             a10
@@ -124,7 +125,7 @@ fn cross_module_pub_field_read() {
 
     let vm = utils::vm_with_deps(user, HashMap::from([(a10, shapes)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
-    let result = vm.call("read_x_directly", vec![], &mut gas).unwrap();
+    let result = vm.call("read_x_via_getter", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(7)));
 }
 
@@ -141,20 +142,20 @@ fn same_struct_name_in_different_modules_are_distinct() {
         r#"
             mod mod_a;
 
-            pub struct Token { pub amount: u64 }
+            pub struct Token { amount: u64 }
 
-            pub fn make_token(amount: u64) -> Token { return Token { amount: amount }; }
-            pub fn get_amount(t: Token) -> u64 { return t.amount; }
+            pub fn make_token(amount: u64) -> Token { Token { amount: amount } }
+            pub fn get_amount(t: Token) -> u64 { t.amount }
         "#,
     );
     let mod_b = utils::compile(
         r#"
             mod mod_b;
 
-            pub struct Token { pub points: u64 }
+            pub struct Token { points: u64 }
 
-            pub fn make_token(points: u64) -> Token { return Token { points: points }; }
-            pub fn get_points(t: Token) -> u64 { return t.points; }
+            pub fn make_token(points: u64) -> Token { Token { points: points } }
+            pub fn get_points(t: Token) -> u64 { t.points }
         "#,
     );
 
@@ -169,7 +170,7 @@ fn same_struct_name_in_different_modules_are_distinct() {
                 pub fn run() -> u64 {{
                     let ta = mod_a::make_token(100);
                     let tb = mod_b::make_token(42);
-                    return mod_a::get_amount(ta) + mod_b::get_points(tb);
+                    mod_a::get_amount(ta) + mod_b::get_points(tb)
                 }}
             "#,
             aa0, ab0
@@ -195,14 +196,14 @@ fn same_module_name_different_address_are_distinct() {
         r#"
             mod lib;
 
-            pub fn version() -> u64 { return 1; }
+            pub fn version() -> u64 { 1 }
         "#,
     );
     let lib_v2 = utils::compile(
         r#"
             mod lib;
 
-            pub fn version() -> u64 { return 2; }
+            pub fn version() -> u64 { 2 }
         "#,
     );
 
@@ -214,7 +215,7 @@ fn same_module_name_different_address_are_distinct() {
 
                 use lib@{};
 
-                pub fn get() -> u64 {{ return lib::version(); }}
+                pub fn get() -> u64 {{ lib::version() }}
             "#,
             a01
         ),
@@ -249,8 +250,8 @@ fn dep_module_internal_calls_stay_in_dep_context() {
         r#"
             mod math;
 
-            fn square(x: u64) -> u64 { return x * x; }
-            pub fn sum_of_squares(a: u64, b: u64) -> u64 { return square(a) + square(b); }
+            fn square(x: u64) -> u64 { x * x }
+            pub fn sum_of_squares(a: u64, b: u64) -> u64 { square(a) + square(b) }
         "#,
     );
 
@@ -261,7 +262,7 @@ fn dep_module_internal_calls_stay_in_dep_context() {
 
                 use math@{};
 
-                pub fn run(a: u64, b: u64) -> u64 {{ return math::sum_of_squares(a, b); }}
+                pub fn run(a: u64, b: u64) -> u64 {{ math::sum_of_squares(a, b) }}
             "#,
             a20
         ),
@@ -287,7 +288,9 @@ fn cross_module_nested_structs() {
         r#"
             mod geometry;
 
-            pub struct Point { pub x: u64, pub y: u64 }
+            pub struct Point { x: u64, y: u64 }
+
+            pub fn get_x(p: Point) -> u64 { p.x }
         "#,
     );
 
@@ -301,7 +304,7 @@ fn cross_module_nested_structs() {
                 pub struct Line {{ a: geometry::Point, b: geometry::Point }}
 
                 pub fn x_distance(line: Line) -> u64 {{
-                    return line.b.x - line.a.x;
+                    geometry::get_x(line.b) - geometry::get_x(line.a)
                 }}
             "#,
             a30
@@ -343,7 +346,9 @@ fn cross_module_deeply_nested_structs() {
         r#"
             mod point;
 
-            pub struct Point { pub x: u64, pub y: u64 }
+            pub struct Point { x: u64, y: u64 }
+
+            pub fn get_x(p: Point) -> u64 { p.x }
         "#,
     );
 
@@ -354,7 +359,9 @@ fn cross_module_deeply_nested_structs() {
 
                 use point@{};
 
-                pub struct Line {{ pub a: point::Point, pub b: point::Point }}
+                pub struct Line {{ a: point::Point, b: point::Point }}
+
+                pub fn get_a_x(line: Line) -> u64 {{ point::get_x(line.a) }}
             "#,
             a10
         ),
@@ -366,16 +373,14 @@ fn cross_module_deeply_nested_structs() {
             r#"
                 mod geometry;
 
-                use point@{a10};
                 use shapes@{a20};
 
-                pub struct Rect {{ pub l1: shapes::Line, pub l2: shapes::Line }}
+                pub struct Rect {{ l1: shapes::Line, l2: shapes::Line }}
 
                 pub fn left_top_x(rect: Rect) -> u64 {{
-                    return rect.l1.a.x;
+                    shapes::get_a_x(rect.l1)
                 }}
             "#,
-            a10 = a10,
             a20 = a20,
         ),
         &[(a10, &point), (a20, &shapes)],
@@ -407,6 +412,58 @@ fn cross_module_deeply_nested_structs() {
 }
 
 //
+// ─── Cross-module object: constructor function + getter ───
+//
+// Objects can only be constructed inside the declaring module.
+// Cross-module callers must use constructor functions provided by the dep module.
+//
+
+#[test]
+fn cross_module_object_via_constructor_and_getter() {
+    let a10 = Address::from_str("0x10").unwrap();
+    let coin = utils::compile(
+        r#"
+            mod coin;
+
+            pub object Coin { id: address, balance: u64 }
+
+            pub fn mint(balance: u64) -> Coin {
+                Coin { id: meow_vm_fresh_id(), balance: balance }
+            }
+            pub fn get_balance(c: Coin) -> u64 { c.balance }
+        "#,
+    );
+
+    let user = utils::compile_with_deps(
+        &format!(
+            r#"
+                mod user;
+
+                use coin@{};
+
+                pub fn make_and_read(balance: u64) -> u64 {{
+                    let c = coin::mint(balance);
+                    coin::get_balance(c)
+                }}
+            "#,
+            a10
+        ),
+        &[(a10, &coin)],
+    );
+
+    let vm = utils::vm_with_deps_and_natives(
+        user,
+        HashMap::from([(a10, coin)]),
+        vec![utils::fresh_id_native()],
+    );
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let result = vm
+        .call("make_and_read", vec![Value::U64(100)], &mut gas)
+        .unwrap();
+    assert_eq!(result.return_value, Some(Value::U64(100)));
+}
+
+//
 // ─── Chained calls: caller → dep A → dep B ───
 //
 
@@ -417,7 +474,7 @@ fn chained_cross_module_calls() {
         r#"
             mod base;
 
-            pub fn one() -> u64 { return 1; }
+            pub fn one() -> u64 { 1 }
         "#,
     );
 
@@ -429,7 +486,7 @@ fn chained_cross_module_calls() {
 
                 use base@{};
 
-                pub fn two() -> u64 {{ return base::one() + base::one(); }}
+                pub fn two() -> u64 {{ base::one() + base::one() }}
             "#,
             a60
         ),
@@ -443,7 +500,7 @@ fn chained_cross_module_calls() {
 
                 use mid@{};
 
-                pub fn four() -> u64 {{ return mid::two() + mid::two(); }}
+                pub fn four() -> u64 {{ mid::two() + mid::two() }}
             "#,
             a61
         ),

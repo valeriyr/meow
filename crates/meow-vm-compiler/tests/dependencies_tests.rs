@@ -17,7 +17,7 @@ fn extract_deps_returns_declared_imports() {
         use math@0x01;
         use util@0x02;
 
-        fn run() -> u64 { return 0; }
+        fn run() -> u64 { 0 }
     "#;
     let deps = Compiler::extract_deps(src).unwrap();
     assert_eq!(deps.len(), 2);
@@ -35,7 +35,7 @@ fn extract_deps_returns_declared_imports() {
 fn extract_deps_no_imports_returns_empty() {
     let src = r#"
         mod main;
-        fn run() -> u64 { return 0; }
+        fn run() -> u64 { 0 }
     "#;
     let deps = Compiler::extract_deps(src).unwrap();
     assert!(deps.is_empty());
@@ -85,7 +85,7 @@ fn duplicate_dep_address_is_rejected() {
     let dep = utils::compile(
         r#"
             mod helper;
-            fn get() -> u64 { return 1; }
+            fn get() -> u64 { 1 }
         "#,
     )
     .expect("dep must compile");
@@ -95,7 +95,7 @@ fn duplicate_dep_address_is_rejected() {
 
         use helper@0x42;
 
-        fn run() -> u64 { return helper::get(); }
+        fn run() -> u64 { helper::get() }
     "#;
     assert!(matches!(
         utils::compile_with_deps(src, &[(addr, &dep), (addr, &dep)]).unwrap_err(),
@@ -108,7 +108,7 @@ fn duplicate_use_declaration_is_rejected() {
     let dep = utils::compile(
         r#"
             mod helper;
-            fn get() -> u64 { return 1; }
+            fn get() -> u64 { 1 }
         "#,
     )
     .expect("dep must compile");
@@ -119,7 +119,7 @@ fn duplicate_use_declaration_is_rejected() {
         use helper@0x42;
         use helper@0x42;
 
-        fn run() -> u64 { return helper::get(); }
+        fn run() -> u64 { helper::get() }
     "#;
     assert!(matches!(
         utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
@@ -143,7 +143,7 @@ fn use_unknown_dep_is_compile_error() {
 fn undeclared_module_reference_is_compile_error() {
     let src = r#"
         mod bad;
-        fn run(a: u64, b: u64) -> u64 { return math::add(a, b); }
+        fn run(a: u64, b: u64) -> u64 { math::add(a, b) }
     "#;
     assert!(matches!(
         utils::compile(src).unwrap_err(),
@@ -194,7 +194,7 @@ fn missing_transitive_dep_is_rejected() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -204,7 +204,7 @@ fn missing_transitive_dep_is_rejected() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -217,7 +217,7 @@ fn missing_transitive_dep_is_rejected() {
             r#"
                 mod main;
                 use b@0x02;
-                fn run() -> u64 { return b::get(); }
+                fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module)],
             cfg,
@@ -237,7 +237,7 @@ fn complete_transitive_closure_is_accepted() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -247,7 +247,7 @@ fn complete_transitive_closure_is_accepted() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg.clone(),
@@ -259,7 +259,7 @@ fn complete_transitive_closure_is_accepted() {
             r#"
                 mod main;
                 use b@0x02;
-                fn run() -> u64 { return b::get(); }
+                fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             cfg,

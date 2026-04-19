@@ -55,11 +55,12 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// - Address literals: `@0x02` (left-padded to 32 bytes)
 /// - User-defined structs with primitive-typed fields (and nested struct fields)
 /// - User-defined objects with `id: address` as first field
-/// - Functions with parameters and an optional return type (not Object)
+/// - Functions with parameters and an optional return type (including `Object`)
 /// - `let` bindings, `return` statements
 /// - `if` / `else` statements
 /// - Field assignment: `obj.field = expr;`
 /// - Binary operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`
+/// - Unary operator: `!` (boolean not)
 /// - Field access: `expr.field`
 /// - Struct/object literals: `Foo { field: expr, … }`
 /// - Function calls: `foo(arg, …)` (module or native)
@@ -222,8 +223,8 @@ impl Compiler {
         // to other modules. Structs are stored under source-level qualified names
         // (`dep_name::StructName`) for compile-time look-up. The codegen later translates
         // these to address-qualified names (`@<hex>::StructName`) in the emitted bytecode.
-        // All fields (including private ones) are retained so that the codegen can enforce
-        // per-field read visibility.
+        // Fields are retained for type resolution (struct literal construction, etc.),
+        // but field access from other modules is always rejected (all fields are private).
         let dep_structs: Vec<StructDef> = deps
             .iter()
             .filter_map(|(addr, dep)| {

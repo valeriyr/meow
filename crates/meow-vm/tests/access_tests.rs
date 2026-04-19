@@ -16,7 +16,7 @@ fn calling_private_fn_returns_private_function_error() {
     let module = utils::compile(
         r#"
             mod test;
-            fn secret() -> u64 { return 42; }
+            fn secret() -> u64 { 42 }
         "#,
     );
     let vm = utils::vm(module);
@@ -33,7 +33,7 @@ fn calling_pub_fn_succeeds() {
     let module = utils::compile(
         r#"
             mod test;
-            pub fn answer() -> u64 { return 42; }
+            pub fn answer() -> u64 { 42 }
         "#,
     );
     let vm = utils::vm(module);
@@ -48,8 +48,8 @@ fn private_fn_callable_internally() {
     let module = utils::compile(
         r#"
             mod test;
-            fn helper() -> u64 { return 7; }
-            pub fn run() -> u64 { return helper(); }
+            fn helper() -> u64 { 7 }
+            pub fn run() -> u64 { helper() }
         "#,
     );
     let vm = utils::vm(module);
@@ -123,7 +123,7 @@ fn enable_call_private_functions_allows_private_fn() {
     let module = utils::compile(
         r#"
             mod test;
-            fn secret() -> u64 { return 99; }
+            fn secret() -> u64 { 99 }
         "#,
     );
     let vm = Vm::new(

@@ -28,7 +28,7 @@ fn if_without_else_passes() {
         mod m;
         fn clamp(x: u64, hi: u64) -> u64 {
             if x > hi { return hi; }
-            return x;
+            x
         }
     "#,
     );
@@ -71,7 +71,7 @@ fn stack_merge_conflict_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        fn f() -> u64 { return 1; }
+        fn f() -> u64 { 1 }
     "#,
     );
     module.functions[0].return_type = None;

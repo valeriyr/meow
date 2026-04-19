@@ -100,6 +100,9 @@ impl GasSchedule {
 
             Instruction::Call(_) => self.call,
             Instruction::Return => self.return_,
+
+            Instruction::MakeTuple(n) => *n as u64,
+            Instruction::UnpackTuple(n) => *n as u64,
         }
     }
 }

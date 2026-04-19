@@ -298,7 +298,7 @@ impl Vm {
                 Instruction::PushAddress(a) => frame.push(Value::Address(a)),
                 Instruction::PushStr(s) => frame.push(Value::Str(s)),
 
-                // ── Locals ────────────────────────────────────────────────────
+                // ── Local variable access ─────────────────────────────────────
                 Instruction::Load(slot) => {
                     let idx = slot as usize;
                     if idx >= frame.locals.len() {
@@ -491,7 +491,7 @@ impl Vm {
                     frame.push(Value::Bool(a || b));
                 }
 
-                // ── Struct / Object operations ─────────────────────────────────
+                // ── Struct / object operations ────────────────────────────────
                 Instruction::NewStruct {
                     type_name,
                     field_names,
@@ -582,7 +582,7 @@ impl Vm {
                     }
                 }
 
-                // ── Functions ─────────────────────────────────────────────────
+                // ── Function calls ────────────────────────────────────────────
                 Instruction::Call(name) => {
                     if let Some((dep_addr, fn_name_in_dep)) = module_ref::parse_module_ref(&name) {
                         // Cross-module call: `@<hex_address>::function_name`.
@@ -637,9 +637,43 @@ impl Vm {
                     }
                 }
 
+                // ── Return ────────────────────────────────────────────────────
                 Instruction::Return => {
                     let ret = frame.stack.pop();
                     return Ok((ret, frame.locals));
+                }
+
+                // ── Tuples ────────────────────────────────────────────────────
+                Instruction::MakeTuple(n) => {
+                    let mut values: Vec<Value> =
+                        (0..n).map(|_| frame.pop()).collect::<Result<Vec<_>>>()?;
+                    values.reverse(); // collected in reverse; restore original order
+                    frame.push(Value::Tuple(values));
+                }
+
+                Instruction::UnpackTuple(n) => {
+                    let n = n as usize;
+                    let v = frame.pop()?;
+                    match v {
+                        Value::Tuple(values) => {
+                            if values.len() != n {
+                                return Err(VmError::TypeError(format!(
+                                    "UnpackTuple: expected tuple of size {n}, got size {}",
+                                    values.len()
+                                )));
+                            }
+                            // Push in reverse so element[0] ends up on top for first Store
+                            for val in values.into_iter().rev() {
+                                frame.push(val);
+                            }
+                        }
+                        other => {
+                            return Err(VmError::TypeError(format!(
+                                "UnpackTuple: expected tuple, got {}",
+                                other.type_name()
+                            )));
+                        }
+                    }
                 }
             }
         }

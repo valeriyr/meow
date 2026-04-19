@@ -24,9 +24,11 @@ impl GasMeter {
 
         self.spent = new;
 
-        if new > self.limit {
+        if self.spent > self.limit {
+            self.spent = self.limit;
+
             return Err(VmError::OutOfGas {
-                spent: new,
+                spent: self.spent,
                 limit: self.limit,
             });
         }

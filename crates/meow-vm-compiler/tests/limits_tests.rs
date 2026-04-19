@@ -131,7 +131,7 @@ fn too_many_dep_modules_rejected() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -141,7 +141,7 @@ fn too_many_dep_modules_rejected() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg,
@@ -155,7 +155,7 @@ fn too_many_dep_modules_rejected() {
             r#"
                 mod main;
                 use b@0x02;
-                fn run() -> u64 { return b::get(); }
+                fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             strict
@@ -175,7 +175,7 @@ fn dep_modules_at_limit_succeeds() {
     let c_module = Compiler::compile(
         r#"
             mod c;
-            pub fn get() -> u64 { return 1; }
+            pub fn get() -> u64 { 1 }
         "#,
         &[],
         cfg.clone(),
@@ -185,7 +185,7 @@ fn dep_modules_at_limit_succeeds() {
         r#"
             mod b;
             use c@0x03;
-            pub fn get() -> u64 { return c::get(); }
+            pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
         cfg,
@@ -198,13 +198,55 @@ fn dep_modules_at_limit_succeeds() {
             r#"
                 mod main;
                 use b@0x02;
-                fn run() -> u64 { return b::get(); }
+                fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
             at_limit
         )
         .is_ok()
     );
+}
+
+#[test]
+fn tuple_literal_too_many_elements_rejected() {
+    let config = CompilerConfig::default();
+    let items = (0..=config.max_tuple_elements())
+        .map(|i| format!("{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let src = format!(
+        r#"
+            mod test;
+            fn f() {{ let t = ({items}); }}
+        "#
+    );
+    assert!(matches!(
+        Compiler::compile(&src, &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("exceeding the limit")
+    ));
+}
+
+#[test]
+fn tuple_return_type_too_many_elements_rejected() {
+    let config = CompilerConfig::default();
+    let types = (0..=config.max_tuple_elements())
+        .map(|_| "u64")
+        .collect::<Vec<_>>()
+        .join(", ");
+    let items = (0..=config.max_tuple_elements())
+        .map(|i| format!("{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let src = format!(
+        r#"
+            mod test;
+            fn f() -> ({types}) {{ ({items}) }}
+        "#
+    );
+    assert!(matches!(
+        Compiler::compile(&src, &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("exceeding the limit")
+    ));
 }
 
 #[test]

@@ -84,7 +84,7 @@ Because the miner has discretion within these bounds, contracts that depend on `
 
 `meow_vm_rand()` draws from a per-transaction pseudo-random sequence seeded from the **mining hash** combined with the transaction digest. Because the mining hash commits to `height`, `parent_hash`, `transactions_root`, `timestamp`, and the solved `nonce`, the seed is:
 
-- **Deterministic across re-executions** — every validator running the same block gets the same sequence.
+- **Deterministic across re-executions** — every node running the same block gets the same sequence.
 - **Unknown at submission time** — the nonce is only determined after your transaction is already in the mempool.
 - **Per-transaction** — different transaction digests yield independent sequences even within the same block.
 

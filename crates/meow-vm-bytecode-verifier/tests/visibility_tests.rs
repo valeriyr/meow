@@ -17,14 +17,14 @@ fn cross_module_call_chain_passes() {
     let dep = compile(
         r#"
         mod dep;
-        pub fn double(x: u64) -> u64 { return x + x; }
+        pub fn double(x: u64) -> u64 { x + x }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn quadruple(x: u64) -> u64 { return dep::double(dep::double(x)); }
+            pub fn quadruple(x: u64) -> u64 { dep::double(dep::double(x)) }
         "#,
         &[(addr, &dep)],
     );
@@ -44,13 +44,13 @@ fn call_private_cross_module_function_rejected() {
     let dep = compile(
         r#"
         mod dep;
-        fn secret() -> u64 { return 99; }
+        fn secret() -> u64 { 99 }
     "#,
     );
     let mut main = compile(
         r#"
         mod main;
-        pub fn f() -> u64 { return 1; }
+        pub fn f() -> u64 { 1 }
     "#,
     );
     main.imports.push(addr);
@@ -76,14 +76,14 @@ fn call_public_cross_module_function_passes() {
     let dep = compile(
         r#"
         mod dep;
-        pub fn get() -> u64 { return 42; }
+        pub fn get() -> u64 { 42 }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { return dep::get(); }
+            pub fn f() -> u64 { dep::get() }
         "#,
         &[(addr, &dep)],
     );
@@ -102,15 +102,15 @@ fn cross_module_struct_construction_rejected() {
     let dep = compile(
         r#"
         mod dep;
-        pub struct Point { pub x: u64, pub y: u64 }
-        fn noop() -> u64 { return 0; }
+        pub struct Point { x: u64, y: u64 }
+        fn noop() -> u64 { 0 }
     "#,
     );
     let mut main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { return 1; }
+            pub fn f() -> u64 { 1 }
         "#,
         &[(addr, &dep)],
     );
@@ -147,15 +147,15 @@ fn cross_module_private_field_read_rejected() {
     let dep = compile(
         r#"
         mod dep;
-        pub struct Pair { pub a: u64, b: u64 }
-        fn noop() -> u64 { return 0; }
+        pub struct Pair { a: u64, b: u64 }
+        fn noop() -> u64 { 0 }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { return 1; }
+            pub fn f() -> u64 { 1 }
         "#,
         &[(addr, &dep)],
     );
@@ -177,15 +177,15 @@ fn cross_module_field_write_rejected() {
     let dep = compile(
         r#"
         mod dep;
-        pub struct Pair { pub a: u64, pub b: u64 }
-        fn noop() -> u64 { return 0; }
+        pub struct Pair { a: u64, b: u64 }
+        fn noop() -> u64 { 0 }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { return 1; }
+            pub fn f() -> u64 { 1 }
         "#,
         &[(addr, &dep)],
     );
@@ -203,14 +203,14 @@ fn missing_dep_causes_undefined_function_error() {
     let dep = compile(
         r#"
         mod dep;
-        pub fn get() -> u64 { return 42; }
+        pub fn get() -> u64 { 42 }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { return dep::get(); }
+            pub fn f() -> u64 { dep::get() }
         "#,
         &[(addr, &dep)],
     );

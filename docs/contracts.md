@@ -27,7 +27,7 @@ fn add(a: u64, b: u64) -> u64 {
 | `struct <Name>` | Value | Named record with primitive fields; freely copyable |
 | `object <Name>` | Move | Owned on-chain resource; must have `id: address` as its first field |
 
-Objects have **move semantics** — passing an object to a function consumes it. At the end of execution the adapter handles it in one of three ways (see [Object Model](object-model.md) for the full lifecycle):
+Objects have **move semantics** — passing an object to a function (or returning one) transfers ownership to the callee or caller respectively. At the end of transaction execution every object must be consumed in one of three ways (see [Object Model](object-model.md) for the full lifecycle):
 
 - **Transferred** (`meow_vm_transfer`) — saved with the new owner.
 - **Destroyed** (`meow_vm_destroy`) — removed from state.
@@ -40,9 +40,10 @@ Struct and object fields must be primitive (`bool`, `u64`, `address`, `string`).
 | Statement | Syntax |
 |-----------|--------|
 | Local variable | `let name = expr;` |
+| Tuple destructure | `let (a, b) = expr;` |
 | Reassignment | `name = expr;` |
 | Field assignment | `obj.field = expr;` |
-| Return | `return expr;` or `return;` |
+| Return | `return expr;` or `return;` or last expression without `;` |
 | Conditional | `if cond { ... }` or `if cond { ... } else { ... }` |
 | Bare expression | `expr;` (value discarded) |
 
@@ -50,7 +51,8 @@ Struct and object fields must be primitive (`bool`, `u64`, `address`, `string`).
 
 Arithmetic: `+` `-` `*` `/` `%`  
 Comparison: `==` `!=` `<` `<=` `>` `>=`  
-Logical: `&&` `||`
+Logical (binary): `&&` `||`  
+Logical (unary): `!` (boolean not)
 
 ### Native functions
 
@@ -103,7 +105,7 @@ See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and
 
 ## Access control
 
-All functions, structs, objects, and struct fields are **private by default**. The `pub` keyword makes them accessible from other modules.
+All functions, structs, and objects are **private by default**. The `pub` keyword makes them accessible from other modules. **Fields are always private** — they can only be read or written within the module that declares the type. To expose a field value cross-module, write a public getter function.
 
 ### Rules at a glance
 
@@ -115,26 +117,49 @@ All functions, structs, objects, and struct fields are **private by default**. T
 | `pub struct Foo { ... }` | Public — other modules can use `Foo` as a type and receive values of this type |
 | `object Foo { ... }` | Private — not nameable from other modules |
 | `pub object Foo { ... }` | Public — other modules can use `Foo` as a type and receive values of this type |
-| `field: u64` | Private — not readable or writable from other modules |
-| `pub field: u64` | Public readable — readable from other modules; writes are still module-local |
+| `field: u64` | Always private — readable and writable only within the declaring module |
 
 ### Construction is always module-local
 
-Struct and object literals (`TypeName { field: value, ... }`) can only appear inside the module that declares the type, regardless of `pub`. Other modules must call a constructor function:
+Struct and object literals (`TypeName { field: value, ... }`) can only appear inside the module that declares the type, regardless of `pub`. Other modules must call a constructor function. Since fields are always private, a getter function is needed to read field values cross-module:
 
 ```meow
 // shapes module
-pub struct Point { pub x: u64, pub y: u64 }
+pub struct Point { x: u64, y: u64 }
 pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+pub fn get_x(p: Point) -> u64 { return p.x; }
 
 // user module
 use shapes@0x...;
 fn run() -> u64 {
     let p = shapes::make_point(3, 7); // ok — uses constructor
     // let p = shapes::Point { x: 3, y: 7 }; // rejected — cross-module construction
-    return p.x;  // ok — x is pub
+    return shapes::get_x(p);  // ok — uses getter
 }
 ```
+
+### Multiple return values
+
+A function can return multiple values using a tuple `(T1, T2, ...)` as the return type. This is the standard pattern for getter functions that need to return both the (possibly mutated) object and a value:
+
+```meow
+// shapes module
+pub struct Point { x: u64, y: u64 }
+pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+pub fn get_x(p: Point) -> (Point, u64) {
+    let val = p.x;
+    (p, val)   // implicit return — last expression without semicolon
+}
+
+// user module
+use shapes@0x...;
+fn use_x(p: shapes::Point) -> u64 {
+    let (p, val) = shapes::get_x(p);
+    return val;
+}
+```
+
+Tuple destructuring uses `let (a, b) = expr;`. Objects can appear in return tuples, following the same move semantics — the caller receives ownership and is responsible for consuming them.
 
 ### The `id` field is immutable
 
@@ -149,17 +174,22 @@ fn bad(c: Coin, new_id: address) {
 
 ### Transaction entry points
 
-Only `pub fn` functions can be called directly from a transaction. Sending a transaction that targets a private function is rejected by the VM before execution begins.
+Only `pub fn` functions can be called directly from a transaction. Two things are rejected before execution begins:
+
+- Targeting a private function.
+- Targeting a `pub fn` that returns an object (directly or inside a tuple) — the transaction is rejected with a failure status. This restriction applies only at the transaction entry point; the same function can be called freely from other contract functions. Primitive and struct return values are allowed and simply ignored by the caller.
 
 Native built-in functions (`meow_vm_transfer`, `meow_vm_fresh_id`, etc.) cannot be called directly from a transaction either — they are only available from within contract code.
 
 ```meow
 mod vault;
 
-fn internal_helper() -> u64 { return 1; } // cannot be called from a transaction
+fn internal_helper() -> u64 { return 1; }  // cannot be called from a transaction (private)
+pub fn mint() -> Coin { ... }              // cannot be called from a transaction (returns object)
 
-pub fn deposit(amount: u64) { ... }     // valid transaction target
-pub fn withdraw(amount: u64) { ... }    // valid transaction target
+pub fn get_balance(coin: Coin) -> u64 { ... } // valid — primitive return is discarded
+pub fn deposit(amount: u64) { ... }           // valid transaction target
+pub fn withdraw(amount: u64) { ... }          // valid transaction target
 ```
 
 ### Summary of cross-module restrictions
@@ -172,8 +202,7 @@ pub fn withdraw(amount: u64) { ... }    // valid transaction target
 | Use private struct / object as type | No |
 | Construct any type with struct literal | No (always module-local) |
 | Destroy object with `meow_vm_destroy` | No (always module-local) |
-| Read `pub` field | Yes |
-| Read private field | No |
+| Read any field directly | No (always module-local; use a getter function) |
 | Write any field | No (always module-local) |
 | Write `id` field | No (immutable everywhere) |
 

@@ -14,12 +14,12 @@ fn private_fn_call_from_other_module_rejected() {
     let err = with_dep(
         r#"
             mod lib;
-            fn secret() -> u64 { return 42; }
+            fn secret() -> u64 { 42 }
         "#,
         r#"
             mod caller;
             use lib@0x01;
-            fn run() -> u64 { return lib::secret(); }
+            fn run() -> u64 { lib::secret() }
         "#,
     )
     .unwrap_err();
@@ -35,12 +35,12 @@ fn pub_fn_call_from_other_module_accepted() {
     with_dep(
         r#"
             mod lib;
-            pub fn exposed() -> u64 { return 42; }
+            pub fn exposed() -> u64 { 42 }
         "#,
         r#"
             mod caller;
             use lib@0x01;
-            fn run() -> u64 { return lib::exposed(); }
+            fn run() -> u64 { lib::exposed() }
         "#,
     )
     .expect("pub fn must be callable cross-module");
@@ -55,12 +55,12 @@ fn cross_module_struct_construction_rejected() {
     let err = with_dep(
         r#"
             mod shapes;
-            pub struct Point { pub x: u64, pub y: u64 }
+            pub struct Point { x: u64, y: u64 }
         "#,
         r#"
             mod user;
             use shapes@0x01;
-            fn bad() -> shapes::Point { return shapes::Point { x: 1, y: 2 }; }
+            fn bad() -> shapes::Point { shapes::Point { x: 1, y: 2 } }
         "#,
     )
     .unwrap_err();
@@ -76,8 +76,8 @@ fn same_module_struct_construction_accepted() {
     utils::compile(
         r#"
             mod shapes;
-            pub struct Point { pub x: u64, pub y: u64 }
-            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub struct Point { x: u64, y: u64 }
+            pub fn make(x: u64, y: u64) -> Point { Point { x: x, y: y } }
         "#,
     )
     .expect("same-module construction must be accepted");
@@ -92,7 +92,7 @@ fn cross_module_object_construction_rejected() {
     let err = with_dep(
         r#"
             mod coin;
-            pub object Coin { id: address, pub balance: u64 }
+            pub object Coin { id: address, balance: u64 }
         "#,
         r#"
             mod bad;
@@ -116,8 +116,6 @@ fn cross_module_object_construction_rejected() {
 
 #[test]
 fn private_struct_not_usable_as_field_type_cross_module() {
-    // A private struct from a dep is filtered from dep_structs — using it as a
-    // struct field type in a dependent module is rejected as an unknown type.
     let err = with_dep(
         r#"
             mod lib;
@@ -139,23 +137,26 @@ fn private_struct_not_usable_as_field_type_cross_module() {
 }
 
 //
-// ─── Private field read rejected ───
+// ─── All field reads from other modules are rejected ───
+//
+// Fields are always private — there is no `pub field` syntax.
+// Use a public getter function to expose field values cross-module.
 //
 
 #[test]
-fn private_field_read_from_other_module_rejected() {
+fn field_read_from_other_module_rejected() {
     let err = with_dep(
         r#"
             mod shapes;
-            pub struct Point { pub x: u64, y: u64 }
-            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub struct Point { x: u64, y: u64 }
+            pub fn make(x: u64, y: u64) -> Point { Point { x: x, y: y } }
         "#,
         r#"
             mod user;
             use shapes@0x01;
-            fn read_y() -> u64 {
+            fn read_x() -> u64 {
                 let p = shapes::make(1, 2);
-                return p.y;
+                p.x
             }
         "#,
     )
@@ -163,32 +164,12 @@ fn private_field_read_from_other_module_rejected() {
 
     assert!(
         matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
-        "expected private-field-read error, got: {err:?}"
+        "expected private-field error, got: {err:?}"
     );
 }
 
 #[test]
-fn pub_field_read_from_other_module_accepted() {
-    with_dep(
-        r#"
-            mod shapes;
-            pub struct Point { pub x: u64, y: u64 }
-            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
-        "#,
-        r#"
-            mod user;
-            use shapes@0x01;
-            fn read_x() -> u64 {
-                let p = shapes::make(3, 7);
-                return p.x;
-            }
-        "#,
-    )
-    .expect("pub field must be readable cross-module");
-}
-
-#[test]
-fn private_field_read_on_object_from_other_module_rejected() {
+fn field_read_on_object_from_other_module_rejected() {
     let err = with_dep(
         r#"
             mod coin;
@@ -198,7 +179,7 @@ fn private_field_read_on_object_from_other_module_rejected() {
             mod user;
             use coin@0x01;
             fn read_balance(c: coin::Coin) -> u64 {
-                return c.balance;
+                c.balance
             }
         "#,
     )
@@ -206,64 +187,32 @@ fn private_field_read_on_object_from_other_module_rejected() {
 
     assert!(
         matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
-        "expected private-field-read error on object, got: {err:?}"
+        "expected private-field error on object, got: {err:?}"
     );
 }
 
 #[test]
-fn pub_field_read_on_object_from_other_module_accepted() {
+fn getter_function_exposes_field_cross_module() {
     with_dep(
         r#"
-            mod coin;
-            pub object Coin { id: address, pub balance: u64 }
+            mod shapes;
+            pub struct Point { x: u64, y: u64 }
+            pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
+            pub fn get_x(p: Point) -> (Point, u64) {
+                let val = p.x;
+                (p, val)
+            }
         "#,
         r#"
             mod user;
-            use coin@0x01;
-            fn read_balance(c: coin::Coin) -> u64 {
-                return c.balance;
+            use shapes@0x01;
+            fn read_x(p: shapes::Point) -> u64 {
+                let (p, val) = shapes::get_x(p);
+                val
             }
         "#,
     )
-    .expect("pub field on object must be readable cross-module");
-}
-
-//
-// ─── pub field in private struct/object rejected ───
-//
-
-#[test]
-fn pub_field_in_private_struct_rejected() {
-    let err = utils::compile(
-        r#"
-            mod shapes;
-            struct Hidden { pub x: u64 }
-            fn noop() {}
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("pub") && msg.contains("private")),
-        "expected pub-field-in-private-struct error, got: {err:?}"
-    );
-}
-
-#[test]
-fn pub_field_in_private_object_rejected() {
-    let err = utils::compile(
-        r#"
-            mod coin;
-            object Coin { id: address, pub balance: u64 }
-            fn noop() {}
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("pub") && msg.contains("private")),
-        "expected pub-field-in-private-object error, got: {err:?}"
-    );
+    .expect("getter function pattern must be accepted cross-module");
 }
 
 //
@@ -271,13 +220,12 @@ fn pub_field_in_private_object_rejected() {
 //
 
 #[test]
-fn pub_field_write_from_other_module_rejected() {
-    // Even `pub` fields cannot be written from outside the declaring module.
+fn field_write_from_other_module_rejected() {
     let err = with_dep(
         r#"
             mod shapes;
-            pub struct Point { pub x: u64, pub y: u64 }
-            pub fn make(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+            pub struct Point { x: u64, y: u64 }
+            pub fn make(x: u64, y: u64) -> Point { Point { x: x, y: y } }
         "#,
         r#"
             mod user;
@@ -304,11 +252,34 @@ fn field_write_in_same_module_accepted() {
             struct Point { x: u64, y: u64 }
             fn set_x(p: Point, v: u64) -> Point {
                 p.x = v;
-                return p;
+                p
             }
         "#,
     )
     .expect("same-module field write must be accepted");
+}
+
+#[test]
+fn object_field_write_from_other_module_rejected() {
+    let err = with_dep(
+        r#"
+            mod coin;
+            pub object Coin { id: address, balance: u64 }
+        "#,
+        r#"
+            mod user;
+            use coin@0x01;
+            fn mutate(c: coin::Coin) {
+                c.balance = 99;
+            }
+        "#,
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot be written")),
+        "expected cross-module write error, got: {err:?}"
+    );
 }
 
 //
@@ -346,7 +317,7 @@ fn line_comment_inside_function_body() {
             // This is a top-level comment
             pub fn add(a: u64, b: u64) -> u64 {
                 // add the two values and return
-                return a + b; // inline comment
+                a + b // inline comment
             }
         "#,
     )
@@ -358,7 +329,7 @@ fn comment_with_slashes_in_string_not_stripped() {
     utils::compile(
         r#"
             mod comments;
-            pub fn url() -> string { return "https://example.com"; }
+            pub fn url() -> string { "https://example.com" }
         "#,
     )
     .expect("slashes inside string literals must not be treated as comments");

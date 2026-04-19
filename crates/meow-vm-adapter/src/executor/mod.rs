@@ -22,7 +22,7 @@ use meow_types::{
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_bytecode_verifier::BytecodeVerifier;
-use meow_vm_types::{config::VmConfig, module::Module};
+use meow_vm_types::{config::VmConfig, module::Module, types::type_contains_object};
 
 use crate::{
     context::Context, executor::error::ExecutorError, external_context::ExternalContext, natives,
@@ -157,6 +157,19 @@ fn execute_meow_call(
         }
     };
 
+    if func
+        .return_type
+        .as_ref()
+        .is_some_and(|rt| type_contains_object(rt, &module.structs))
+    {
+        return ExecutionResult::failure(
+            format!(
+                "function '{fn_name}' returns an object and cannot be called directly from a transaction"
+            ),
+            *tx_digest,
+        );
+    }
+
     let (vm_args, object_args) = match resolvers::resolve_args(call, func, inputs) {
         Ok(res) => res,
         Err(e) => {
@@ -249,7 +262,9 @@ fn execute_meow_module_publish(
     let deps_ref: std::collections::HashMap<_, _> = deps.iter().map(|(a, m)| (*a, m)).collect();
 
     let adapter_natives = natives::adapter_native_signatures();
-    if let Err(errors) = BytecodeVerifier::new(adapter_natives).verify(&module_val, &deps_ref) {
+    if let Err(errors) = BytecodeVerifier::new(adapter_natives, config::compiler_config())
+        .verify(&module_val, &deps_ref)
+    {
         let msg = errors
             .iter()
             .map(|e| e.to_string())

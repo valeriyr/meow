@@ -10,19 +10,18 @@ use meow_vm_types::{
     types::Type,
 };
 
-use crate::{error::VerificationError, natives::NativeSignature};
+use crate::error::VerificationError;
 
 /// Phase 1 — purely structural checks that require no stack simulation.
 pub(crate) fn check_module(
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    _natives: &[NativeSignature],
+    cfg: &CompilerConfig,
 ) -> Vec<VerificationError> {
-    let cfg = CompilerConfig::default();
     let mut errors = Vec::new();
 
     // Module name
-    if !is_valid_identifier(&module.name, &cfg) {
+    if !is_valid_identifier(&module.name, cfg) {
         errors.push(VerificationError::InvalidIdentifier {
             name: module.name.clone(),
             context: "module declaration".to_string(),
@@ -32,7 +31,7 @@ pub(crate) fn check_module(
     // Duplicate struct names
     let mut seen_structs = HashSet::new();
     for s in &module.structs {
-        if !is_valid_identifier(&s.name, &cfg) {
+        if !is_valid_identifier(&s.name, cfg) {
             errors.push(VerificationError::InvalidIdentifier {
                 name: s.name.clone(),
                 context: "struct definition".to_string(),
@@ -45,7 +44,7 @@ pub(crate) fn check_module(
         }
         // Field shape rules
         for field in &s.fields {
-            if !is_valid_identifier(&field.name, &cfg) {
+            if !is_valid_identifier(&field.name, cfg) {
                 errors.push(VerificationError::InvalidIdentifier {
                     name: field.name.clone(),
                     context: format!("field in struct '{}'", s.name),
@@ -75,7 +74,7 @@ pub(crate) fn check_module(
     // Duplicate function names
     let mut seen_fns = HashSet::new();
     for f in &module.functions {
-        if !is_valid_identifier(&f.name, &cfg) || RESERVED_FUNCTION_NAMES.contains(&f.name.as_str())
+        if !is_valid_identifier(&f.name, cfg) || RESERVED_FUNCTION_NAMES.contains(&f.name.as_str())
         {
             errors.push(VerificationError::InvalidIdentifier {
                 name: f.name.clone(),
@@ -86,6 +85,19 @@ pub(crate) fn check_module(
             errors.push(VerificationError::DuplicateFunctionName {
                 name: f.name.clone(),
             });
+        }
+
+        // Tuple return type arity
+        if let Some(Type::Tuple(types)) = &f.return_type {
+            let size = types.len();
+            let limit = cfg.max_tuple_elements();
+            if size > limit {
+                errors.push(VerificationError::TupleTooLarge {
+                    function: f.name.clone(),
+                    size,
+                    limit,
+                });
+            }
         }
 
         // local_count must cover params
@@ -202,6 +214,17 @@ pub(crate) fn check_module(
                                 }
                             },
                         }
+                    }
+                }
+                Instruction::MakeTuple(n) | Instruction::UnpackTuple(n) => {
+                    let size = *n as usize;
+                    let limit = cfg.max_tuple_elements();
+                    if size > limit {
+                        errors.push(VerificationError::TupleTooLarge {
+                            function: f.name.clone(),
+                            size,
+                            limit,
+                        });
                     }
                 }
                 _ => {}

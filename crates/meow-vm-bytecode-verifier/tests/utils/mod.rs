@@ -21,13 +21,13 @@ pub fn compile_with_deps(src: &str, deps: &[(Address, &Module)]) -> Module {
 }
 
 pub fn verify_ok(module: &Module, deps: &HashMap<Address, &Module>) {
-    BytecodeVerifier::new(adapter_natives())
+    BytecodeVerifier::new(adapter_natives(), CompilerConfig::default())
         .verify(module, deps)
         .unwrap_or_else(|errs| panic!("expected verification OK, got errors:\n{errs:#?}"));
 }
 
 pub fn verify_errors(module: &Module, deps: &HashMap<Address, &Module>) -> Vec<VerificationError> {
-    BytecodeVerifier::new(adapter_natives())
+    BytecodeVerifier::new(adapter_natives(), CompilerConfig::default())
         .verify(module, deps)
         .expect_err("expected verification errors but verification passed")
 }

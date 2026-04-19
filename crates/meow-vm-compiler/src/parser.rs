@@ -1,9 +1,11 @@
+//! Parser: source text → AST. Built with [chumsky](https://docs.rs/chumsky).
+
 use std::str::FromStr;
 
 use chumsky::prelude::*;
 use meow_vm_types::{address::Address, types::Type};
 
-use crate::ast::{AstFunction, AstItem, AstStruct, BinOp, Expr, Stmt};
+use crate::ast::{AstFunction, AstItem, AstStruct, BinOp, Expr, Stmt, UnaryOp};
 
 /// Strip `//` line comments from source, preserving all character positions
 /// by replacing comment text (not the newline) with spaces.
@@ -69,7 +71,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .padded();
 
-    // ── Address literal parser ─────────────────────────────────────────────────
+    // ── Address literal parser ────────────────────────────────────────────────
     // Matches `@0x...` (with optional leading zeros, short forms accepted).
     let hex_digits = text::digits(16).at_least(1).collect::<String>().padded();
 
@@ -82,6 +84,28 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 .map_err(|_| Rich::custom(span, format!("invalid address literal: @0x{hex}")))
         })
         .boxed();
+
+    // ── Return type parser (allows tuples) ────────────────────────────────────
+    // `-> Type` or `-> (Type1, Type2, ...)`
+    let return_ty: BoxedParser<'src, Type> = {
+        let ty_clone = ty;
+        // Tuple return type: `(T1, T2, ...)` — requires at least 2 elements
+        let tuple_ret = ty_clone
+            .then_ignore(just(',').padded())
+            .then(
+                ty_clone
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .delimited_by(just('(').padded(), just(')').padded())
+            .map(|(first, rest)| {
+                let mut types = vec![first];
+                types.extend(rest);
+                Type::Tuple(types)
+            });
+        choice((tuple_ret, ty_clone)).boxed()
+    };
 
     // ── Expressions ───────────────────────────────────────────────────────────
     let expr: BoxedParser<'src, Expr> = recursive(|expr| {
@@ -162,14 +186,35 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             })
             .boxed();
 
+        // Tuple expression: `(expr1, expr2, ...)` — requires at least 2 elements.
+        // Parsed before grouped so the comma-separated form is tried first.
+        let tuple_expr = expr
+            .clone()
+            .then_ignore(just(',').padded())
+            .then(
+                expr.clone()
+                    .separated_by(just(',').padded())
+                    .allow_trailing()
+                    .collect::<Vec<_>>(),
+            )
+            .delimited_by(just('(').padded(), just(')').padded())
+            .map(|(first, rest)| {
+                let mut items = vec![first];
+                items.extend(rest);
+                Expr::Tuple(items)
+            });
+
         // Parenthesised expression: `(expr)` — used for explicit grouping.
         let grouped = expr
             .clone()
             .delimited_by(just('(').padded(), just(')').padded());
 
         // Primary — box to erase the large `choice` type.
-        let primary: BoxedParser<'src, Expr> =
-            choice((bool_lit, str_lit, addr_lit, int_lit, ident_expr, grouped)).boxed();
+        // tuple_expr before grouped: the tuple parser requires a comma, so `(expr)` falls through.
+        let primary: BoxedParser<'src, Expr> = choice((
+            bool_lit, str_lit, addr_lit, int_lit, ident_expr, tuple_expr, grouped,
+        ))
+        .boxed();
 
         // Postfix: field access `a.field` (no tuple indices).
         let postfix_op = just('.')
@@ -187,15 +232,29 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             })
             .boxed();
 
+        // Unary prefix: `!expr` (boolean not). Chains: `!!x` = `Not(Not(x))`.
+        let unary: BoxedParser<'src, Expr> = just('!')
+            .padded()
+            .repeated()
+            .collect::<Vec<_>>()
+            .then(postfix)
+            .map(|(nots, base)| {
+                nots.into_iter().rev().fold(base, |acc, _| Expr::UnaryOp {
+                    op: UnaryOp::Not,
+                    expr: Box::new(acc),
+                })
+            })
+            .boxed();
+
         // Multiplicative
         let mul_op = choice((
             just('*').padded().to(BinOp::Mul),
             just('/').padded().to(BinOp::Div),
             just('%').padded().to(BinOp::Mod),
         ));
-        let mul: BoxedParser<'src, Expr> = postfix
+        let mul: BoxedParser<'src, Expr> = unary
             .clone()
-            .then(mul_op.then(postfix).repeated().collect::<Vec<_>>())
+            .then(mul_op.then(unary).repeated().collect::<Vec<_>>())
             .map(|(first, rest)| {
                 rest.into_iter().fold(first, |l, (op, r)| Expr::BinOp {
                     left: Box::new(l),
@@ -293,6 +352,20 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             .then_ignore(just(';').padded())
             .map(|(name, e)| Stmt::Let { name, expr: e });
 
+        // Destructuring let: `let (a, b, ...) = expr;` — requires 2+ names.
+        let let_tuple_stmt = kw("let")
+            .ignore_then(
+                ident
+                    .separated_by(just(',').padded())
+                    .at_least(2)
+                    .collect::<Vec<_>>()
+                    .delimited_by(just('(').padded(), just(')').padded()),
+            )
+            .then_ignore(just('=').padded())
+            .then(expr.clone())
+            .then_ignore(just(';').padded())
+            .map(|(names, e)| Stmt::LetTuple { names, expr: e });
+
         let return_stmt = kw("return")
             .ignore_then(expr.clone().or_not())
             .then_ignore(just(';').padded())
@@ -337,7 +410,9 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
         let expr_stmt = expr.clone().then_ignore(just(';').padded()).map(Stmt::Expr);
 
+        // let_tuple before let_stmt: both start with `let`, but let_tuple requires `(`
         choice((
+            let_tuple_stmt,
             let_stmt,
             return_stmt,
             if_stmt,
@@ -357,16 +432,11 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .or_not()
         .map(|b| b.unwrap_or(false));
 
-    // struct field: `pub? name: type`
-    let struct_field = text::ascii::keyword("pub")
-        .padded()
-        .to(true)
-        .or_not()
-        .map(|b| b.unwrap_or(false))
-        .then(ident)
+    // struct field: `name: type` (no pub keyword — all fields are private)
+    let struct_field = ident
         .then_ignore(just(':').padded())
         .then(ty)
-        .map(|((is_field_pub, name), ty)| (is_field_pub, name, ty));
+        .map(|(name, ty)| (name, ty));
 
     let struct_body = struct_field
         .separated_by(just(',').padded())
@@ -374,12 +444,12 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .collect::<Vec<_>>()
         .delimited_by(just('{').padded(), just('}').padded());
 
-    // pub? struct Foo { pub? x: u64, y: bool }
+    // pub? struct Foo { x: u64, y: bool }
     let struct_item: BoxedParser<'src, AstItem> = is_pub
         .clone()
         .then_ignore(kw("struct"))
         .then(ident)
-        .then(struct_body.clone())
+        .then(struct_body)
         .map(|((is_public, name), fields)| {
             AstItem::Struct(AstStruct {
                 is_public,
@@ -390,7 +460,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         })
         .boxed();
 
-    // pub? object Foo { id: address, pub? x: u64 }
+    // pub? object Foo { id: address, x: u64 }
     let object_item: BoxedParser<'src, AstItem> = is_pub
         .clone()
         .then_ignore(kw("object"))
@@ -407,7 +477,23 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .boxed();
 
     // pub? fn foo(a: u64, b: bool) -> RetType { ... }
+    // RetType may be a single type or a tuple `(T1, T2, ...)`.
     let param = ident.then_ignore(just(':').padded()).then(ty);
+
+    // Function body: zero or more statements, optionally followed by a
+    // bare expression (implicit return — no trailing semicolon required).
+    let fn_body = stmt
+        .clone()
+        .repeated()
+        .collect::<Vec<_>>()
+        .then(expr.clone().or_not())
+        .delimited_by(just('{').padded(), just('}').padded())
+        .map(|(mut stmts, tail)| {
+            if let Some(e) = tail {
+                stmts.push(Stmt::Return(Some(e)));
+            }
+            stmts
+        });
 
     let fn_item: BoxedParser<'src, AstItem> = is_pub
         .then_ignore(kw("fn"))
@@ -419,12 +505,8 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 .collect::<Vec<_>>()
                 .delimited_by(just('(').padded(), just(')').padded()),
         )
-        .then(just("->").padded().ignore_then(ty).or_not())
-        .then(
-            stmt.repeated()
-                .collect::<Vec<_>>()
-                .delimited_by(just('{').padded(), just('}').padded()),
-        )
+        .then(just("->").padded().ignore_then(return_ty).or_not())
+        .then(fn_body)
         .map(|((((is_public, name), params), return_type), body)| {
             AstItem::Fn(AstFunction {
                 is_public,
