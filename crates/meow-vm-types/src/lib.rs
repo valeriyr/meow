@@ -13,4 +13,5 @@ pub mod convert;
 pub mod identifier;
 pub mod module;
 pub mod module_ref;
+pub mod natives;
 pub mod types;

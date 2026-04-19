@@ -25,7 +25,7 @@ pub struct Function {
 
 /// A compiled module — the unit of compilation and execution.
 ///
-/// A module contains struct/object definitions (schemas) and compiled functions.
+/// A module contains struct definitions (schemas) and compiled functions.
 /// It is produced by the compiler and consumed by the VM.
 ///
 /// The module itself does not carry an on-chain address — the address is always
@@ -41,7 +41,7 @@ pub struct Module {
     pub name: String,
     /// Addresses of dependency modules declared via `use module_name@address;`.
     pub imports: Vec<Address>,
-    /// Struct and object definitions.
+    /// Struct definitions.
     pub structs: Vec<StructDef>,
     /// Compiled functions.
     pub functions: Vec<Function>,
@@ -58,7 +58,7 @@ impl Module {
         }
     }
 
-    /// Find a struct/object definition by name.
+    /// Find a struct definition by name.
     pub fn get_struct(&self, name: &str) -> Option<&StructDef> {
         self.structs.iter().find(|s| s.name == name)
     }

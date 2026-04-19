@@ -17,7 +17,7 @@ fn too_many_functions_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many functions")
     ));
 }
@@ -36,8 +36,8 @@ fn too_many_structs_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("too many struct/object definitions")
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("too many struct definitions")
     ));
 }
 
@@ -55,7 +55,7 @@ fn too_many_params_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many parameters")
     ));
 }
@@ -74,7 +74,7 @@ fn too_many_fields_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many fields")
     ));
 }
@@ -97,6 +97,7 @@ fn too_many_imports_rejected() {
             "#
             ),
             &[],
+            &[],
             CompilerConfig::default(),
         )
         .unwrap();
@@ -116,7 +117,7 @@ fn too_many_imports_rejected() {
     let dep_refs = dep_modules.iter().map(|(a, m)| (*a, m)).collect::<Vec<_>>();
 
     assert!(matches!(
-        Compiler::compile(&src, &dep_refs, config).unwrap_err(),
+        Compiler::compile(&src, &dep_refs, &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("too many use declarations")
     ));
 }
@@ -134,6 +135,7 @@ fn too_many_dep_modules_rejected() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -144,6 +146,7 @@ fn too_many_dep_modules_rejected() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg,
     )
     .expect("b must compile");
@@ -158,6 +161,7 @@ fn too_many_dep_modules_rejected() {
                 fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
+            &[],
             strict
         )
         .unwrap_err(),
@@ -178,6 +182,7 @@ fn dep_modules_at_limit_succeeds() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -188,6 +193,7 @@ fn dep_modules_at_limit_succeeds() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg,
     )
     .expect("b must compile");
@@ -201,6 +207,7 @@ fn dep_modules_at_limit_succeeds() {
                 fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
+            &[],
             at_limit
         )
         .is_ok()
@@ -221,7 +228,7 @@ fn tuple_literal_too_many_elements_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("exceeding the limit")
     ));
 }
@@ -244,7 +251,7 @@ fn tuple_return_type_too_many_elements_rejected() {
         "#
     );
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("exceeding the limit")
     ));
 }
@@ -262,7 +269,7 @@ fn module_name_too_long_rejected() {
     );
 
     assert!(matches!(
-        Compiler::compile(&src, &[], config).unwrap_err(),
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("module name")
     ));
 }

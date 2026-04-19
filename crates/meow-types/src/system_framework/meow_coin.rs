@@ -1,14 +1,19 @@
-use meow_vm_types::types::Value;
+use meow_vm_types::{convert::VmTypeNames, types::Value};
 use serde::{Deserialize, Serialize};
 
 use crate::{
     address::Address,
     object::{Object, object_decl_ref::ObjectDeclRef, object_type::ObjectType},
-    system_framework::utils,
+    system_framework::{
+        meow_object::{
+            MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MEOW_OBJECT_ID_OBJECT_NAME, MeowObjectId,
+        },
+        utils,
+    },
 };
 
 /// The meow coin module address is a reserved address where the meow coin module is deployed.
-pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x1);
+pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x10);
 /// The meow coin module name.
 pub const MEOW_COIN_MODULE_NAME: &str = "meow_coin";
 /// The meow coin object name.
@@ -26,7 +31,7 @@ pub const MEOW_COIN_MODULE_PATH: &str = concat!(
 #[derive(Serialize, Deserialize)]
 pub struct MeowCoin {
     /// The unique on-chain object identifier for this coin.
-    id: Address,
+    id: MeowObjectId,
     /// The coin balance denominated in the smallest indivisible unit.
     balance: u64,
 }
@@ -34,17 +39,29 @@ pub struct MeowCoin {
 impl MeowCoin {
     /// Creates a new MeowCoin with the given id and balance.
     pub fn new(id: Address, balance: u64) -> Self {
-        Self { id, balance }
+        Self {
+            id: MeowObjectId::new(id),
+            balance,
+        }
     }
 
     /// Returns the id of the MeowCoin.
-    pub fn id(&self) -> &Address {
+    pub fn id(&self) -> &MeowObjectId {
         &self.id
     }
 
     /// Returns the balance of the MeowCoin.
     pub fn balance(&self) -> u64 {
         self.balance
+    }
+}
+
+impl VmTypeNames for MeowCoin {
+    fn type_names() -> &'static [(&'static str, &'static str)] {
+        &[(
+            MEOW_OBJECT_ID_OBJECT_NAME,
+            MEOW_OBJECT_ID_BYTECODE_TYPE_NAME,
+        )]
     }
 }
 

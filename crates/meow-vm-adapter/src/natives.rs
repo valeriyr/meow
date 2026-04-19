@@ -1,27 +1,78 @@
 use std::{cell::RefCell, rc::Rc};
 
-use meow_vm::{NativeFnEntry, NativeResult};
+use meow_types::system_framework::meow_object::{
+    self, MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId,
+};
 use meow_vm_bytecode_verifier::natives::{NativeParam, NativeSignature};
-use meow_vm_types::types::Type;
+use meow_vm_types::{
+    convert,
+    natives::{NativeFnEntry, NativeResult, NativeSig},
+    types::Type,
+};
 
 use crate::{Value, context::Context};
 
 /// Returns the verifier signatures for the adapter-supplied native functions.
 ///
-/// These are passed to [`meow_vm_bytecode_verifier::BytecodeVerifier::new`] so
-/// the verifier can type-check call sites for adapter natives.
+/// These are passed to [`meow_vm_bytecode_verifier::verify`] so the verifier
+/// can type-check call sites for adapter natives.
 pub fn adapter_native_signatures() -> Vec<NativeSignature> {
+    let id_type = Type::Struct(MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string());
     vec![
-        NativeSignature::new("meow_vm_fresh_id", vec![], Some(Type::Address)),
+        NativeSignature::new("meow_vm_fresh_id", vec![], Some(id_type.clone())),
         NativeSignature::new(
             "meow_vm_transfer",
-            vec![NativeParam::AnyObject, NativeParam::Concrete(Type::Address)],
+            vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
             None,
         ),
-        NativeSignature::new("meow_vm_destroy", vec![NativeParam::AnyObject], None),
+        NativeSignature::new(
+            "meow_vm_destroy",
+            vec![NativeParam::Concrete(id_type)],
+            None,
+        ),
         NativeSignature::new("meow_vm_sender", vec![], Some(Type::Address)),
         NativeSignature::new("meow_vm_rand", vec![], Some(Type::U64)),
         NativeSignature::new("meow_vm_timestamp", vec![], Some(Type::U64)),
+    ]
+}
+
+/// Returns the compiler-level native signatures for adapter-supplied native functions.
+///
+/// These are passed to [`meow_vm_compiler::Compiler::compile`] so the type checker
+/// can validate call sites for adapter natives in source code.
+pub fn adapter_native_sigs_for_compiler() -> Vec<NativeSig> {
+    let id_type = Type::Struct("meow_object::Id".to_string());
+    vec![
+        NativeSig {
+            name: "meow_vm_fresh_id".to_string(),
+            params: vec![],
+            return_type: Some(id_type.clone()),
+        },
+        NativeSig {
+            name: "meow_vm_transfer".to_string(),
+            params: vec![None, Some(Type::Address)],
+            return_type: None,
+        },
+        NativeSig {
+            name: "meow_vm_destroy".to_string(),
+            params: vec![Some(id_type)],
+            return_type: None,
+        },
+        NativeSig {
+            name: "meow_vm_sender".to_string(),
+            params: vec![],
+            return_type: Some(Type::Address),
+        },
+        NativeSig {
+            name: "meow_vm_rand".to_string(),
+            params: vec![],
+            return_type: Some(Type::U64),
+        },
+        NativeSig {
+            name: "meow_vm_timestamp".to_string(),
+            params: vec![],
+            return_type: Some(Type::U64),
+        },
     ]
 }
 
@@ -30,14 +81,19 @@ pub fn adapter_native_signatures() -> Vec<NativeSignature> {
 /// Binds each built-in native to a closure that captures the shared `Context`,
 /// and returns the resulting `Vec<NativeFnEntry>` for registration with the VM.
 pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
+    let id_type = Type::Struct(MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string());
+
     let fresh_id = {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_fresh_id".to_string(),
-            param_count: 0,
+            params: vec![],
+            return_type: Some(id_type.clone()),
             gas_cost: 10, // 10 gas — ID derivation involves a hash computation
             func: Box::new(move |_| {
-                NativeResult::Return(Some(Value::Address(c.borrow_mut().next_fresh_id().into())))
+                let address = c.borrow_mut().next_fresh_id();
+                let id = MeowObjectId::from(address);
+                NativeResult::Return(Some(id.to_qualified_vm_value()))
             }),
         }
     };
@@ -46,7 +102,8 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_transfer".to_string(),
-            param_count: 2,
+            params: vec![None, Some(Type::Address)],
+            return_type: None,
             gas_cost: 20, // 20 gas — object ownership change writes to the execution context
             func: Box::new(move |mut args| {
                 // Args arrive in call order: (obj, owner). We pop from reversed stack order.
@@ -62,9 +119,9 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
                         ));
                     }
                 };
-                if !obj_val.is_object() {
+                if meow_object::object_id(&obj_val).is_none() {
                     return NativeResult::Error(format!(
-                        "meow_vm_transfer: expected Object, got {}",
+                        "meow_vm_transfer: expected struct with id: meow_object::Id as first field, got {}",
                         obj_val.type_name()
                     ));
                 }
@@ -78,18 +135,23 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_destroy".to_string(),
-            param_count: 1,
+            params: vec![Some(id_type.clone())],
+            return_type: None,
             gas_cost: 10, // 10 gas — object deletion is cheaper than transfer (no owner update)
             func: Box::new(move |args| {
-                let obj_val = args.into_iter().next().unwrap();
-                if !obj_val.is_object() {
-                    return NativeResult::Error(format!(
-                        "meow_vm_destroy: expected Object, got {}",
-                        obj_val.type_name()
-                    ));
+                let id_val = args.into_iter().next().unwrap();
+                let id = convert::value_to_rust::<MeowObjectId>(&id_val);
+
+                match id {
+                    Ok(id) => {
+                        c.borrow_mut().destroy(*id.inner());
+                        NativeResult::Return(None)
+                    }
+                    Err(_) => NativeResult::Error(format!(
+                        "meow_vm_destroy: expected meow_object::Id struct with inner: address, got {}",
+                        id_val.type_name()
+                    )),
                 }
-                c.borrow_mut().destroy(obj_val);
-                NativeResult::Return(None)
             }),
         }
     };
@@ -98,7 +160,8 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_sender".to_string(),
-            param_count: 0,
+            params: vec![],
+            return_type: Some(Type::Address),
             gas_cost: 1, // 1 gas — cheap lookup of a pre-loaded context field
             func: Box::new(move |_| {
                 NativeResult::Return(Some(Value::Address(c.borrow().sender().into())))
@@ -110,7 +173,8 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_rand".to_string(),
-            param_count: 0,
+            params: vec![],
+            return_type: Some(Type::U64),
             gas_cost: 10, // 10 gas — random generation involves a hash computation
             func: Box::new(move |_| {
                 NativeResult::Return(Some(Value::U64(c.borrow_mut().next_rand())))
@@ -122,7 +186,8 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_timestamp".to_string(),
-            param_count: 0,
+            params: vec![],
+            return_type: Some(Type::U64),
             gas_cost: 1, // 1 gas — cheap lookup of a pre-loaded context field
             func: Box::new(move |_| NativeResult::Return(Some(Value::U64(c.borrow().timestamp())))),
         }
@@ -141,31 +206,57 @@ mod tests {
     use crate::{context::Context, external_context::DEFAULT_RAND_SEED};
 
     #[test]
-    fn adapter_signatures_match_build_natives() {
+    fn all_native_collections_are_consistent() {
         let ctx = Rc::new(RefCell::new(Context::new(
             Address::ZERO,
             Digest::ZERO,
             DEFAULT_RAND_SEED,
             0,
         )));
-        let sigs = adapter_native_signatures();
+        let verifier_sigs = adapter_native_signatures();
+        let compiler_sigs = adapter_native_sigs_for_compiler();
         let entries = build_natives(ctx);
 
-        let sig_names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();
+        let verifier_names: Vec<&str> = verifier_sigs.iter().map(|s| s.name.as_str()).collect();
+        let compiler_names: Vec<&str> = compiler_sigs.iter().map(|s| s.name.as_str()).collect();
         let entry_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(
-            sig_names, entry_names,
-            "adapter_native_signatures and build_natives must list functions in the same order"
+            verifier_names, entry_names,
+            "verifier sigs and build_natives must list functions in the same order"
+        );
+        assert_eq!(
+            compiler_names, entry_names,
+            "compiler sigs and build_natives must list functions in the same order"
         );
 
-        for (sig, entry) in sigs.iter().zip(entries.iter()) {
+        for ((vsig, csig), entry) in verifier_sigs
+            .iter()
+            .zip(compiler_sigs.iter())
+            .zip(entries.iter())
+        {
             assert_eq!(
-                sig.params.len(),
-                entry.param_count,
-                "param count mismatch for '{}': verifier expects {}, VM expects {}",
-                sig.name,
-                sig.params.len(),
-                entry.param_count,
+                vsig.params.len(),
+                entry.params.len(),
+                "verifier/VM param count mismatch for '{}'",
+                entry.name
+            );
+            assert_eq!(
+                csig.params.len(),
+                entry.params.len(),
+                "compiler/VM param count mismatch for '{}'",
+                entry.name
+            );
+            assert_eq!(
+                vsig.return_type.is_some(),
+                entry.return_type.is_some(),
+                "verifier/VM return type presence mismatch for '{}'",
+                entry.name
+            );
+            assert_eq!(
+                csig.return_type.is_some(),
+                entry.return_type.is_some(),
+                "compiler/VM return type presence mismatch for '{}'",
+                entry.name
             );
         }
     }

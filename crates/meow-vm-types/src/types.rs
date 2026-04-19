@@ -13,9 +13,6 @@ pub enum Type {
     Str,
     /// A user-defined struct referenced by name.
     Struct(String),
-    /// A user-defined object referenced by name.
-    /// Objects must have `id: address` as their first field.
-    Object(String),
     /// A tuple of types — used for multi-value function returns.
     Tuple(Vec<Type>),
 }
@@ -39,7 +36,7 @@ impl Type {
             Self::U64 => "u64".to_string(),
             Self::Address => "address".to_string(),
             Self::Str => "string".to_string(),
-            Self::Struct(n) | Self::Object(n) => n.clone(),
+            Self::Struct(n) => n.clone(),
             Self::Tuple(types) => {
                 let inner: Vec<String> = types.iter().map(|t| t.name()).collect();
                 format!("({})", inner.join(", "))
@@ -52,25 +49,10 @@ impl Type {
         matches!(self, Self::Bool | Self::U64 | Self::Address | Self::Str)
     }
 
-    /// Returns true if this type can be used as a struct/object field type.
-    /// Primitives and (non-object) structs are allowed; objects and tuples are not.
+    /// Returns true if this type can be used as a struct field type.
+    /// Primitives and structs are allowed; tuples are not.
     pub fn is_valid_field_type(&self) -> bool {
         self.is_primitive() || matches!(self, Self::Struct(_))
-    }
-}
-
-/// Returns true if `ty` is, or contains, an object type.
-///
-/// `structs` is used to resolve `Type::Struct(name)` — the compiler emits
-/// `Type::Struct` for all named types in function signatures, so checking
-/// whether the name refers to an `is_object` definition requires the
-/// struct list from the declaring module.
-pub fn type_contains_object(ty: &Type, structs: &[StructDef]) -> bool {
-    match ty {
-        Type::Object(_) => true,
-        Type::Struct(name) => structs.iter().any(|s| s.name == *name && s.is_object),
-        Type::Tuple(types) => types.iter().any(|t| type_contains_object(t, structs)),
-        _ => false,
     }
 }
 
@@ -91,21 +73,14 @@ pub enum Value {
     Str(String),
     /// Returned by void functions to keep the stack balanced.
     Void,
-    /// A user-defined struct value. Freely copyable (value semantics).
+    /// A user-defined struct value. Move semantics — Load consumes the slot.
     Struct {
         type_name: String,
         /// Fields in struct-definition order.
         fields: Vec<(String, Value)>,
     },
-    /// A user-defined object value. Move semantics — Load consumes the slot.
-    /// The first field must always be `id: Address`.
-    Object {
-        type_name: String,
-        /// Fields in struct-definition order (first field is always `id: address`).
-        fields: Vec<(String, Value)>,
-    },
     /// A tuple of values — produced by `MakeTuple`, consumed by `UnpackTuple`.
-    /// Uses move semantics if any element is an Object.
+    /// Uses move semantics if any element is a Struct.
     Tuple(Vec<Value>),
 }
 
@@ -118,7 +93,7 @@ impl Value {
             Self::Address(_) => "address",
             Self::Str(_) => "str",
             Self::Void => "void",
-            Self::Struct { type_name, .. } | Self::Object { type_name, .. } => type_name,
+            Self::Struct { type_name, .. } => type_name,
             Self::Tuple(_) => "tuple",
         }
     }
@@ -163,27 +138,11 @@ impl Value {
         }
     }
 
-    /// Returns the `id` field value from an Object.
-    pub fn object_id(&self) -> Option<Address> {
-        match self {
-            Self::Object { fields, .. } => fields
-                .iter()
-                .find(|(name, _)| name == "id")
-                .and_then(|(_, v)| v.as_address()),
-            _ => None,
-        }
-    }
-
-    /// Returns true if this is an Object value.
-    pub fn is_object(&self) -> bool {
-        matches!(self, Self::Object { .. })
-    }
-
     /// Returns true if this value uses move semantics.
-    /// Objects always use move semantics. Tuples use move semantics if any element does.
+    /// Structs always use move semantics. Tuples use move semantics if any element does.
     pub fn uses_move_semantics(&self) -> bool {
         match self {
-            Self::Object { .. } => true,
+            Self::Struct { .. } => true,
             Self::Tuple(values) => values.iter().any(|v| v.uses_move_semantics()),
             _ => false,
         }
@@ -198,7 +157,7 @@ impl std::fmt::Display for Value {
             Self::Address(a) => write!(f, "{}", a),
             Self::Str(s) => write!(f, "\"{}\"", s),
             Self::Void => write!(f, "void"),
-            Self::Struct { type_name, fields } | Self::Object { type_name, fields } => {
+            Self::Struct { type_name, fields } => {
                 let fields_str = fields
                     .iter()
                     .map(|(name, value)| format!("{}: {}", name, value))
@@ -218,7 +177,7 @@ impl std::fmt::Display for Value {
     }
 }
 
-/// A field in a struct or object definition.
+/// A field in a struct definition.
 /// All fields are private — only accessible within the module that declares the type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FieldDef {
@@ -228,16 +187,13 @@ pub struct FieldDef {
     pub ty: Type,
 }
 
-/// Schema of a user-defined struct or object.
+/// Schema of a user-defined struct.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructDef {
-    /// The struct or object name.
+    /// The struct name.
     pub name: String,
     /// Fields in declaration order.
     pub fields: Vec<FieldDef>,
-    /// True if declared with the `object` keyword.
-    /// Object structs must have `id: address` as their first field.
-    pub is_object: bool,
     /// True if this type is accessible from modules other than the one that declared it.
     pub is_public: bool,
 }

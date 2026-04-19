@@ -31,6 +31,23 @@ fn tuple_return_mixed_types() {
     .expect("tuple return with mixed primitive types must compile");
 }
 
+#[test]
+fn tuple_return_with_struct() {
+    utils::compile(
+        r#"
+            mod test;
+            struct Token { value: u64 }
+            pub fn split(t: Token) -> (Token, Token) {
+                let half = t.value / 2;
+                t.value = half;
+                let t2 = Token { value: half };
+                (t, t2)
+            }
+        "#,
+    )
+    .expect("struct types in tuple return must compile");
+}
+
 //
 // ─── Tuple destructuring ───
 //

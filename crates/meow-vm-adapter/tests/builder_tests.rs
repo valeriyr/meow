@@ -1,8 +1,12 @@
 use std::str::FromStr;
 
 use meow_types::{
-    address::Address, config::NATIVE_FUNCTION_NAMES,
-    system_framework::meow_coin::MEOW_COIN_MODULE_PATH,
+    address::Address,
+    config::NATIVE_FUNCTION_NAMES,
+    system_framework::{
+        meow_coin::MEOW_COIN_MODULE_PATH,
+        meow_object::{MEOW_OBJECT_MODULE_ADDRESS, MEOW_OBJECT_MODULE_PATH},
+    },
 };
 use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
 use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
@@ -17,7 +21,7 @@ fn build_module_successful() {
         mod test;
 
         struct Point { x: u64, y: u64 }
-        object Token { id: address, amount: u64 }
+        struct Token { id: address, amount: u64 }
 
         fn make(x: u64, y: u64) -> Point { Point { x: x, y: y } }
     "#;
@@ -31,11 +35,10 @@ fn build_module_successful() {
     assert!(function.return_type.is_some());
 
     let point = module.get_struct("Point").unwrap();
-    assert!(!point.is_object);
     assert_eq!(point.fields.len(), 2);
 
     let token = module.get_struct("Token").unwrap();
-    assert!(token.is_object);
+    assert_eq!(token.fields.len(), 2);
 }
 
 #[test]
@@ -50,9 +53,17 @@ fn build_module_name_comes_from_source_declaration() {
 
 #[test]
 fn build_module_from_file_successful() {
-    let module = builder::build_from_file(MEOW_COIN_MODULE_PATH, &[]).unwrap();
+    let meow_object_module = builder::build_from_file(MEOW_OBJECT_MODULE_PATH, &[]).unwrap();
 
-    assert_eq!(module.name, "meow_coin");
+    assert_eq!(meow_object_module.name, "meow_object");
+
+    let meow_coin_module = builder::build_from_file(
+        MEOW_COIN_MODULE_PATH,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .unwrap();
+
+    assert_eq!(meow_coin_module.name, "meow_coin");
 }
 
 #[test]

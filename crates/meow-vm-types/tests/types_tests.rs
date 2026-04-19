@@ -86,7 +86,6 @@ fn struct_def_field_index() {
                 ty: Type::Address,
             },
         ],
-        is_object: false,
         is_public: true,
     };
     assert_eq!(def.field_index("a"), Some(0));
@@ -104,7 +103,6 @@ fn struct_def_name() {
     let def = StructDef {
         name: "Bar".to_string(),
         fields: vec![],
-        is_object: false,
         is_public: false,
     };
     assert_eq!(def.name, "Bar");
@@ -124,7 +122,6 @@ fn struct_def_fields() {
                 ty: Type::U64,
             },
         ],
-        is_object: false,
         is_public: true,
     };
     assert_eq!(def.fields.len(), 2);

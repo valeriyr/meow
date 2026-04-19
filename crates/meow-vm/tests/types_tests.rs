@@ -3,7 +3,11 @@ mod utils;
 use std::str::FromStr;
 
 use meow_vm::gas_meter::GasMeter;
-use meow_vm_types::{address::Address, types::Value};
+use meow_vm_types::{
+    address::Address,
+    natives::{NativeFnEntry, NativeResult},
+    types::{Type, Value},
+};
 
 //
 // ─── Address ───
@@ -143,9 +147,6 @@ fn string_parameter_round_trip() {
 
 #[test]
 fn string_passed_to_native() {
-    use meow_vm::{NativeFnEntry, NativeResult};
-    use utils::vm_with_natives;
-
     let src = r#"
         mod test;
         pub fn send_msg() { log_native("hello from meow"); }
@@ -154,14 +155,15 @@ fn string_passed_to_native() {
     let ptr = received_ptr.clone();
     let log = NativeFnEntry {
         name: "log_native".to_string(),
-        param_count: 1,
+        params: vec![Some(Type::Str)],
+        return_type: None,
         gas_cost: 0,
         func: Box::new(move |args| {
             *ptr.lock().unwrap() = args[0].as_str().unwrap_or("").to_string();
             NativeResult::Return(None)
         }),
     };
-    let vm = vm_with_natives(src, vec![log]);
+    let vm = utils::vm_with_natives(src, vec![log]);
     let mut gas = GasMeter::unlimited();
     vm.call("send_msg", vec![], &mut gas).unwrap();
     assert_eq!(*received_ptr.lock().unwrap(), "hello from meow");

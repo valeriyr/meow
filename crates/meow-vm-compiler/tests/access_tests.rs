@@ -84,33 +84,6 @@ fn same_module_struct_construction_accepted() {
 }
 
 //
-// ─── Cross-module object construction rejected ───
-//
-
-#[test]
-fn cross_module_object_construction_rejected() {
-    let err = with_dep(
-        r#"
-            mod coin;
-            pub object Coin { id: address, balance: u64 }
-        "#,
-        r#"
-            mod bad;
-            use coin@0x01;
-            fn forge(id: address) {
-                let c = coin::Coin { id: id, balance: 1000 };
-            }
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot construct")),
-        "expected cross-module construction error, got: {err:?}"
-    );
-}
-
-//
 // ─── Private struct is not visible cross-module ───
 //
 
@@ -165,29 +138,6 @@ fn field_read_from_other_module_rejected() {
     assert!(
         matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
         "expected private-field error, got: {err:?}"
-    );
-}
-
-#[test]
-fn field_read_on_object_from_other_module_rejected() {
-    let err = with_dep(
-        r#"
-            mod coin;
-            pub object Coin { id: address, balance: u64 }
-        "#,
-        r#"
-            mod user;
-            use coin@0x01;
-            fn read_balance(c: coin::Coin) -> u64 {
-                c.balance
-            }
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
-        "expected private-field error on object, got: {err:?}"
     );
 }
 
@@ -257,52 +207,6 @@ fn field_write_in_same_module_accepted() {
         "#,
     )
     .expect("same-module field write must be accepted");
-}
-
-#[test]
-fn object_field_write_from_other_module_rejected() {
-    let err = with_dep(
-        r#"
-            mod coin;
-            pub object Coin { id: address, balance: u64 }
-        "#,
-        r#"
-            mod user;
-            use coin@0x01;
-            fn mutate(c: coin::Coin) {
-                c.balance = 99;
-            }
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot be written")),
-        "expected cross-module write error, got: {err:?}"
-    );
-}
-
-//
-// ─── Object `id` field is immutable everywhere ───
-//
-
-#[test]
-fn object_id_write_in_same_module_rejected() {
-    let err = utils::compile(
-        r#"
-            mod coin;
-            object Coin { id: address, balance: u64 }
-            fn bad(c: Coin, new_id: address) {
-                c.id = new_id;
-            }
-        "#,
-    )
-    .unwrap_err();
-
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("immutable")),
-        "expected id-immutability error, got: {err:?}"
-    );
 }
 
 //

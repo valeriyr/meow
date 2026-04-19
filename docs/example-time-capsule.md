@@ -21,13 +21,15 @@ Create `time-capsule.meow`:
 
 mod time_capsule;
 
+use meow_object@0x01;
+
 // A time-locked message stored on-chain.
-//   id          — unique on-chain address, set at creation and immutable.
+//   id          — unique on-chain identity, set at creation and immutable.
 //   owner       — the address allowed to reclaim, transfer, or open this capsule.
 //   unlock_time — Unix milliseconds after which open is permitted.
 //   message     — the sealed message; readable in the execution result after open.
-pub object Capsule {
-    id: address,
+pub struct Capsule {
+    id: meow_object::Id,
     owner: address,
     unlock_time: u64,
     message: string
@@ -50,14 +52,16 @@ pub fn seal(message: string, delay_ms: u64) {
 // Aborts with code 1 if the current block timestamp has not yet reached unlock_time.
 pub fn open(capsule: Capsule) {
     meow_vm_abort(meow_vm_timestamp() >= capsule.unlock_time, 1, "Capsule is not ready to open yet");
-    meow_vm_destroy(capsule);
+    let Capsule { id, .. } = capsule;
+    meow_vm_destroy(id);
 }
 
 // Destroys the capsule without waiting for the unlock time.
 // Aborts with code 2 if the transaction sender is not the capsule owner.
 pub fn reclaim(capsule: Capsule) {
     meow_vm_abort(capsule.owner == meow_vm_sender(), 2, "Only the owner can reclaim");
-    meow_vm_destroy(capsule);
+    let Capsule { id, .. } = capsule;
+    meow_vm_destroy(id);
 }
 
 // Transfers the capsule to a new owner. Updates capsule.owner so the new owner

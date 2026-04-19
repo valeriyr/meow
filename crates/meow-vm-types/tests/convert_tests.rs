@@ -1,5 +1,5 @@
 use meow_vm_types::{
-    convert::{error::ConversionError, object_from_rust, struct_from_rust, value_to_rust},
+    convert::{VmTypeNames, error::ConversionError, struct_from_rust, value_to_rust},
     types::Value,
 };
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ struct Point {
     x: u64,
     y: u64,
 }
+impl VmTypeNames for Point {}
 
 #[test]
 fn struct_from_value() {
@@ -53,32 +54,6 @@ fn struct_from_value() {
         ],
     };
     assert_eq!(value_to_rust::<Point>(&val).unwrap(), Point { x: 3, y: 7 });
-}
-
-//
-// ─── Object ───
-//
-
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
-struct MeowCoin {
-    id: [u8; 32],
-    balance: u64,
-}
-
-#[test]
-fn object_from_value() {
-    let id = [0x01u8; 32];
-    let val = Value::Object {
-        type_name: "MeowCoin".to_string(),
-        fields: vec![
-            ("id".to_string(), Value::Address(id.into())),
-            ("balance".to_string(), Value::U64(100)),
-        ],
-    };
-    assert_eq!(
-        value_to_rust::<MeowCoin>(&val).unwrap(),
-        MeowCoin { id, balance: 100 }
-    );
 }
 
 //
@@ -95,17 +70,18 @@ struct Coin {
     id: AddressWrapper,
     balance: u64,
 }
+impl VmTypeNames for Coin {}
 
 #[test]
-fn object_from_rust_with_address_newtype() {
+fn struct_from_rust_with_address_newtype() {
     let id = [0x42u8; 32];
     let coin = Coin {
         id: AddressWrapper(id),
         balance: 100,
     };
     assert_eq!(
-        object_from_rust(&coin).unwrap(),
-        Value::Object {
+        struct_from_rust(&coin).unwrap(),
+        Value::Struct {
             type_name: "Coin".to_string(),
             fields: vec![
                 ("id".to_string(), Value::Address(id.into())),
@@ -122,8 +98,89 @@ fn round_trip_with_address_newtype() {
         id: AddressWrapper(id),
         balance: 77,
     };
-    let value = object_from_rust(&original).unwrap();
+    let value = struct_from_rust(&original).unwrap();
     assert_eq!(value_to_rust::<Coin>(&value).unwrap(), original);
+}
+
+//
+// ─── VmTypeNames — type-name translation ───
+//
+
+// Simulates a struct from another module (e.g. `meow_object::Id`).
+// Its Serialize impl uses the short local name "ObjectId".
+#[derive(Serialize)]
+struct ObjectId {
+    inner: [u8; 32],
+}
+
+// Simulates a struct whose field type comes from another module.
+// VmTypeNames maps "ObjectId" → the address-qualified bytecode name.
+#[derive(Serialize)]
+struct Token {
+    id: ObjectId,
+    amount: u64,
+}
+impl VmTypeNames for Token {
+    fn type_names() -> &'static [(&'static str, &'static str)] {
+        &[(
+            "ObjectId",
+            "@0x0000000000000000000000000000000000000000000000000000000000000001::ObjectId",
+        )]
+    }
+}
+
+#[test]
+fn struct_from_rust_translates_nested_type_name() {
+    let addr = [0xAAu8; 32];
+    let token = Token {
+        id: ObjectId { inner: addr },
+        amount: 42,
+    };
+    let value = struct_from_rust(&token).unwrap();
+
+    assert_eq!(
+        value,
+        Value::Struct {
+            type_name: "Token".to_string(),
+            fields: vec![
+                (
+                    "id".to_string(),
+                    Value::Struct {
+                        type_name: "@0x0000000000000000000000000000000000000000000000000000000000000001::ObjectId".to_string(),
+                        fields: vec![("inner".to_string(), Value::Address(addr.into()))],
+                    },
+                ),
+                ("amount".to_string(), Value::U64(42)),
+            ],
+        }
+    );
+}
+
+#[test]
+fn struct_from_rust_without_mapping_keeps_local_name() {
+    // Same Token struct but accessed via a type with no translation — verifies
+    // that the mapping only applies when VmTypeNames is implemented.
+    #[derive(Serialize)]
+    struct PlainToken {
+        id: ObjectId,
+        amount: u64,
+    }
+    impl VmTypeNames for PlainToken {}
+    let addr = [0xBBu8; 32];
+    let token = PlainToken {
+        id: ObjectId { inner: addr },
+        amount: 7,
+    };
+    let value = struct_from_rust(&token).unwrap();
+
+    // id field type name is the local "ObjectId", not translated
+    let Value::Struct { ref fields, .. } = value else {
+        panic!("expected Object")
+    };
+    let Value::Struct { ref type_name, .. } = fields[0].1 else {
+        panic!("expected Struct for id")
+    };
+    assert_eq!(type_name, "ObjectId");
 }
 
 //
@@ -146,34 +203,10 @@ fn struct_from_rust_produces_struct_value() {
 }
 
 #[test]
-fn object_from_rust_produces_object_value() {
-    let id = [0x02u8; 32];
-    let coin = MeowCoin { id, balance: 50 };
-    assert_eq!(
-        object_from_rust(&coin).unwrap(),
-        Value::Object {
-            type_name: "MeowCoin".to_string(),
-            fields: vec![
-                ("id".to_string(), Value::Address(id.into())),
-                ("balance".to_string(), Value::U64(50)),
-            ],
-        }
-    );
-}
-
-#[test]
 fn round_trip_struct() {
     let original = Point { x: 10, y: 20 };
     let value = struct_from_rust(&original).unwrap();
     assert_eq!(value_to_rust::<Point>(&value).unwrap(), original);
-}
-
-#[test]
-fn round_trip_object() {
-    let id = [0xFFu8; 32];
-    let original = MeowCoin { id, balance: 999 };
-    let value = object_from_rust(&original).unwrap();
-    assert_eq!(value_to_rust::<MeowCoin>(&value).unwrap(), original);
 }
 
 #[test]
@@ -182,6 +215,7 @@ fn unsupported_type_returns_error() {
     struct WithSeq {
         items: Vec<u64>,
     }
+    impl VmTypeNames for WithSeq {}
     let v = WithSeq {
         items: vec![1, 2, 3],
     };
@@ -192,26 +226,30 @@ fn unsupported_type_returns_error() {
 }
 
 #[test]
-fn object_from_rust_rejects_non_address_first_field() {
+fn struct_from_rust_accepts_any_first_field() {
+    // Layout constraints (id: address first) are adapter-level, not enforced here.
     #[derive(Serialize)]
-    struct BadObject {
+    struct AnyObject {
         balance: u64,
     }
-    let v = BadObject { balance: 10 };
+    impl VmTypeNames for AnyObject {}
+    let v = AnyObject { balance: 10 };
     assert!(matches!(
-        object_from_rust(&v).unwrap_err(),
-        ConversionError::UnsupportedType(msg) if msg.contains("first field") && msg.contains("[u8; 32]")
+        struct_from_rust(&v).unwrap(),
+        meow_vm_types::types::Value::Struct { .. }
     ));
 }
 
 #[test]
-fn object_from_rust_rejects_empty_struct() {
+fn struct_from_rust_accepts_empty_struct() {
+    // No structural constraints enforced at this level.
     #[derive(Serialize)]
     struct Empty {}
+    impl VmTypeNames for Empty {}
     let v = Empty {};
     assert!(matches!(
-        object_from_rust(&v).unwrap_err(),
-        ConversionError::UnsupportedType(msg) if msg.contains("at least one field")
+        struct_from_rust(&v).unwrap(),
+        meow_vm_types::types::Value::Struct { .. }
     ));
 }
 
@@ -225,6 +263,7 @@ fn struct_from_rust_rejects_f32() {
     struct WithFloat {
         value: f32,
     }
+    impl VmTypeNames for WithFloat {}
     let v = WithFloat { value: 1.0 };
     assert!(matches!(
         struct_from_rust(&v).unwrap_err(),
@@ -238,6 +277,7 @@ fn struct_from_rust_rejects_option() {
     struct WithOption {
         maybe: Option<u64>,
     }
+    impl VmTypeNames for WithOption {}
     // Option::None serializes via serialize_none.
     let v_none = WithOption { maybe: None };
     assert!(matches!(
@@ -260,6 +300,7 @@ fn tuple_of_wrong_length_rejected() {
     struct WithSmallArray {
         tag: [u8; 4],
     }
+    impl VmTypeNames for WithSmallArray {}
     let v = WithSmallArray { tag: [1, 2, 3, 4] };
     assert!(matches!(
         struct_from_rust(&v).unwrap_err(),

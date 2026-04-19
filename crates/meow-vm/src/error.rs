@@ -31,7 +31,7 @@ pub enum VmError {
     #[error("too many dependency modules (max {0})")]
     TooManyDepModules(usize),
 
-    /// Attempted to use a variable whose Object value was already moved out.
+    /// Attempted to use a struct value after it was moved out of its slot.
     #[error("use after move: {0}")]
     UseAfterMove(String),
 
@@ -42,14 +42,6 @@ pub enum VmError {
     /// A native function returned an error (e.g. wrong argument type).
     #[error("native function error: {0}")]
     NativeError(String),
-
-    /// A native function expected an Object argument but received something else.
-    #[error("expected object argument: {0}")]
-    ObjectRequired(String),
-
-    /// An object is missing the required `id: address` first field.
-    #[error("invalid object definition '{0}': first field must be 'id: address'")]
-    InvalidObject(String),
 
     /// A private function was called from outside its module (e.g. directly from a transaction).
     #[error("function '{0}' is private — only `pub fn` can be called from outside the module")]

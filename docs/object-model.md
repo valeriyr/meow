@@ -67,7 +67,7 @@ During execution objects follow exactly one of four paths:
 | **Created** | `meow_vm_fresh_id()` allocates an ID; `meow_vm_transfer(obj, owner)` hands it to an owner | Added to store |
 | **Mutated in place** | Fields are updated; neither `transfer` nor `destroy` is called; executor writes it back to the original owner | Updated in store |
 | **Transferred** | `meow_vm_transfer(obj, new_owner)` | Updated in store with new owner |
-| **Destroyed** | `meow_vm_destroy(obj)` | Removed from store |
+| **Destroyed** | `meow_vm_destroy(obj.id)` | Removed from store |
 
 An object created and destroyed within the same transaction has no net effect on the store.
 
@@ -75,15 +75,16 @@ Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroy
 
 ## Object IDs
 
-In the Meow Language, every object struct must declare `id: address` as its first field:
+In the Meow Language, every on-chain object is a `struct` whose first field is `id: meow_object::Id` (from the built-in `meow_object` system module at address `0x01`):
 
-```
-object Hero { id: address, level: u64, experience: u64 }
+```meow
+use meow_object@0x01;
+struct Hero { id: meow_object::Id, level: u64, experience: u64 }
 ```
 
-At runtime the ID is populated by calling `meow_vm_fresh_id()`:
+At creation time the ID is obtained by calling `meow_vm_fresh_id()`, which returns a `meow_object::Id`:
 
-```
+```meow
 let hero = Hero { id: meow_vm_fresh_id(), level: 1, experience: 0 };
 ```
 

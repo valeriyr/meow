@@ -2,7 +2,7 @@ mod utils;
 use utils::*;
 
 use meow_vm_bytecode_verifier::VerificationError;
-use meow_vm_types::bytecode::Instruction;
+use meow_vm_types::{bytecode::Instruction, types::Type};
 
 //
 // ─── Happy paths ───
@@ -109,7 +109,7 @@ fn liveness_merge_conflict_rejected() {
     let mut module = compile(
         r#"
         mod m;
-        object Coin { id: address, value: u64 }
+        struct Coin { id: address, value: u64 }
         fn dummy() { return; }
     "#,
     );
@@ -119,11 +119,8 @@ fn liveness_merge_conflict_rejected() {
         .find(|f| f.name == "dummy")
         .unwrap();
     func.params = vec![
-        (
-            "c".to_string(),
-            meow_vm_types::types::Type::Object("Coin".to_string()),
-        ),
-        ("cond".to_string(), meow_vm_types::types::Type::Bool),
+        ("c".to_string(), Type::Struct("Coin".to_string())),
+        ("cond".to_string(), Type::Bool),
     ];
     func.return_type = None;
     func.local_count = 2;

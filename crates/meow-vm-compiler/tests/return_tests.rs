@@ -42,20 +42,6 @@ fn implicit_return_with_arithmetic() {
 }
 
 #[test]
-fn implicit_return_with_object_constructor() {
-    utils::compile(
-        r#"
-            mod test;
-            object Coin { id: address, balance: u64 }
-            pub fn mint(balance: u64) -> Coin {
-                Coin { id: meow_vm_fresh_id(), balance: balance }
-            }
-        "#,
-    )
-    .expect("implicit return of object constructor must compile");
-}
-
-#[test]
 fn implicit_return_without_return_type_compiles() {
     utils::compile(
         r#"

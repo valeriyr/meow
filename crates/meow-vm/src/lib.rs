@@ -5,8 +5,7 @@
 //!
 //! ## Types
 //! - Primitives: `bool`, `u64`, `address` ([u8; 32]) — freely copyable
-//! - `struct` — user-defined, value semantics (freely copyable)
-//! - `object` — user-defined, move semantics; must have `id: address` first field
+//! - `struct` — user-defined, move semantics; must be explicitly consumed, passed on, or returned
 //!
 //! ## Quick start
 //!
@@ -27,7 +26,7 @@
 //!     }
 //! "#;
 //!
-//! let module = Compiler::compile(source, &[], CompilerConfig::default()).unwrap();
+//! let module = Compiler::compile(source, &[], &[], CompilerConfig::default()).unwrap();
 //! let vm = Vm::new(module, vec![], GasSchedule::default(), HashMap::new(), VmConfig::default());
 //! let mut gas = GasMeter::new(1_000);
 //!
@@ -44,7 +43,12 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 
 use meow_vm_types::module_ref;
-use meow_vm_types::{address::Address, config::VmConfig, types::Value};
+use meow_vm_types::natives::{NativeFnEntry, NativeResult};
+use meow_vm_types::{
+    address::Address,
+    config::VmConfig,
+    types::{Type, Value},
+};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
 
@@ -54,32 +58,6 @@ use crate::gas_schedule::GasSchedule;
 
 /// An error that can occur during VM execution.
 pub type Result<T> = std::result::Result<T, VmError>;
-
-//
-// ─── Native functions ───
-//
-
-/// Result returned by a native function.
-pub enum NativeResult {
-    /// The function completed normally. `None` means void (a `Void` value will be pushed).
-    Return(Option<Value>),
-    /// The function aborted execution (e.g. meow_vm_abort).
-    Abort { code: u64, message: String },
-    /// The function encountered an error (e.g. wrong argument type).
-    Error(String),
-}
-
-/// A registered native function entry.
-pub struct NativeFnEntry {
-    /// The function name as referenced in bytecode.
-    pub name: String,
-    /// The number of parameters this function expects.
-    pub param_count: usize,
-    /// The gas cost charged when this function is called.
-    pub gas_cost: u64,
-    /// The function implementation.
-    pub func: Box<dyn Fn(Vec<Value>) -> NativeResult>,
-}
 
 //
 // ─── Execution result ───
@@ -181,34 +159,27 @@ impl Vm {
                 }
             };
         }
-        // Inject a default meow_vm_abort implementation if the caller didn't supply one.
-        native_map
-            .entry("meow_vm_abort".to_string())
-            .or_insert_with(|| NativeFnEntry {
-                name: "meow_vm_abort".to_string(),
-                param_count: 3,
-                gas_cost: 0,
-                func: Box::new(|mut args| {
-                    let condition = match args[0] {
-                        Value::Bool(b) => b,
-                        _ => {
-                            return NativeResult::Error(
-                                "meow_vm_abort: first argument must be bool".into(),
-                            );
-                        }
-                    };
-                    if condition {
-                        NativeResult::Return(None)
-                    } else {
-                        let code = args[1].as_u64().unwrap_or(0);
-                        let message = args
-                            .remove(2)
-                            .into_str()
-                            .unwrap_or_else(|| "aborted".into());
-                        NativeResult::Abort { code, message }
-                    }
-                }),
-            });
+        // If the caller supplied their own meow_vm_abort, validate its signature.
+        if let Some(entry) = native_map.get(meow_vm_types::natives::MEOW_VM_ABORT) {
+            let expected: Vec<Option<Type>> = meow_vm_types::natives::meow_vm_abort_params()
+                .into_iter()
+                .map(Some)
+                .collect();
+            assert_eq!(
+                entry.params, expected,
+                "meow_vm_abort override has wrong parameter types; expected (bool, u64, str)"
+            );
+            assert!(
+                entry.return_type.is_none(),
+                "meow_vm_abort override must return void"
+            );
+        } else {
+            // Inject the default meow_vm_abort implementation if the caller didn't supply one.
+            native_map.insert(
+                meow_vm_types::natives::MEOW_VM_ABORT.to_string(),
+                meow_vm_types::natives::meow_vm_abort_entry(),
+            );
+        }
         Self {
             module,
             deps,
@@ -306,11 +277,11 @@ impl Vm {
                     }
                     let value = match &frame.locals[idx] {
                         Some(v) if v.uses_move_semantics() => {
-                            // Object: move out of slot.
+                            // Struct: move out of slot (move semantics).
                             frame.locals[idx].take().unwrap()
                         }
                         Some(v) => {
-                            // Primitive or Struct: copy.
+                            // Primitive: copy.
                             v.clone()
                         }
                         None => {
@@ -331,68 +302,34 @@ impl Vm {
                     frame.locals[idx] = Some(v);
                 }
 
-                Instruction::LoadField(slot, ref field) => {
+                Instruction::LoadField(slot, ref path) => {
                     let idx = slot as usize;
-                    let field_val = match frame.locals.get(idx).and_then(|o| o.as_ref()) {
-                        Some(Value::Struct { fields, .. }) | Some(Value::Object { fields, .. }) => {
-                            fields
-                                .iter()
-                                .find(|(n, _)| n == field)
-                                .map(|(_, v)| v.clone())
-                                .ok_or_else(|| VmError::UndefinedField {
-                                    type_name: frame.locals[idx]
-                                        .as_ref()
-                                        .map(|v| v.type_name().to_string())
-                                        .unwrap_or_default(),
-                                    field: field.clone(),
-                                })?
-                        }
-                        Some(other) => {
-                            return Err(VmError::TypeError(format!(
-                                "LoadField: expected struct/object, got {}",
-                                other.type_name()
-                            )));
-                        }
-                        None => {
-                            return Err(VmError::UseAfterMove(format!(
+                    let root = frame
+                        .locals
+                        .get(idx)
+                        .and_then(|o| o.as_ref())
+                        .ok_or_else(|| {
+                            VmError::UseAfterMove(format!(
                                 "local slot {slot} has already been moved"
-                            )));
-                        }
-                    };
+                            ))
+                        })?;
+                    let field_val = read_field_path(root, path)?;
                     frame.push(field_val);
                 }
 
-                Instruction::StoreField(slot, ref field) => {
+                Instruction::StoreField(slot, ref path) => {
                     let new_val = frame.pop()?;
                     let idx = slot as usize;
-                    match frame.locals.get_mut(idx).and_then(|o| o.as_mut()) {
-                        Some(Value::Struct { fields, .. }) | Some(Value::Object { fields, .. }) => {
-                            let entry = fields.iter_mut().find(|(n, _)| n == field);
-                            match entry {
-                                Some((_, v)) => *v = new_val,
-                                None => {
-                                    return Err(VmError::UndefinedField {
-                                        type_name: frame.locals[idx]
-                                            .as_ref()
-                                            .map(|v| v.type_name().to_string())
-                                            .unwrap_or_default(),
-                                        field: field.clone(),
-                                    });
-                                }
-                            }
-                        }
-                        Some(other) => {
-                            return Err(VmError::TypeError(format!(
-                                "StoreField: expected struct/object, got {}",
-                                other.type_name()
-                            )));
-                        }
-                        None => {
-                            return Err(VmError::UseAfterMove(format!(
+                    let root = frame
+                        .locals
+                        .get_mut(idx)
+                        .and_then(|o| o.as_mut())
+                        .ok_or_else(|| {
+                            VmError::UseAfterMove(format!(
                                 "local slot {slot} has already been moved"
-                            )));
-                        }
-                    }
+                            ))
+                        })?;
+                    write_field_path(root, path, new_val)?;
                 }
 
                 // ── Arithmetic ────────────────────────────────────────────────
@@ -491,25 +428,23 @@ impl Vm {
                     frame.push(Value::Bool(a || b));
                 }
 
-                // ── Struct / object operations ────────────────────────────────
+                // ── Struct operations ─────────────────────────────────────────
                 Instruction::NewStruct {
                     type_name,
                     field_names,
                 } => {
-                    let def = if let Some((dep_addr, struct_name)) =
-                        module_ref::parse_module_ref(&type_name)
+                    // Validate the struct definition exists.
+                    if let Some((dep_addr, struct_name)) = module_ref::parse_module_ref(&type_name)
                     {
                         self.deps
                             .get(&dep_addr)
                             .and_then(|m| m.get_struct(struct_name))
-                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?
+                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
                     } else {
                         context_module
                             .get_struct(&type_name)
-                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?
+                            .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
                     };
-                    let is_object = def.is_object;
-
                     // Pop values in reverse field order.
                     let mut fields: Vec<(String, Value)> = Vec::with_capacity(field_names.len());
                     for name in field_names.iter().rev() {
@@ -518,22 +453,13 @@ impl Vm {
                     }
                     fields.reverse();
 
-                    let value = if is_object {
-                        Value::Object { type_name, fields }
-                    } else {
-                        Value::Struct { type_name, fields }
-                    };
-                    frame.push(value);
+                    frame.push(Value::Struct { type_name, fields });
                 }
 
                 Instruction::GetField(field) => {
                     let v = frame.pop()?;
                     match v {
                         Value::Struct {
-                            ref type_name,
-                            ref fields,
-                        }
-                        | Value::Object {
                             ref type_name,
                             ref fields,
                         } => {
@@ -549,7 +475,35 @@ impl Vm {
                         }
                         other => {
                             return Err(VmError::TypeError(format!(
-                                "expected struct/object, got {}",
+                                "expected struct, got {}",
+                                other.type_name()
+                            )));
+                        }
+                    }
+                }
+
+                Instruction::UnpackStruct {
+                    ref field_names, ..
+                } => {
+                    let v = frame.pop()?;
+                    match v {
+                        Value::Struct { type_name, fields } => {
+                            let mut field_map: std::collections::HashMap<String, Value> =
+                                fields.into_iter().collect();
+                            // Push in reverse so first field ends up on top for first Store
+                            for name in field_names.iter().rev() {
+                                let fv = field_map.remove(name).ok_or_else(|| {
+                                    VmError::UndefinedField {
+                                        type_name: type_name.clone(),
+                                        field: name.clone(),
+                                    }
+                                })?;
+                                frame.push(fv);
+                            }
+                        }
+                        other => {
+                            return Err(VmError::TypeError(format!(
+                                "UnpackStruct: expected struct, got {}",
                                 other.type_name()
                             )));
                         }
@@ -613,7 +567,7 @@ impl Vm {
                             self.call_inner(&name, context_module, args, gas, depth + 1)?;
                         frame.push(ret.unwrap_or(Value::Void));
                     } else if let Some(native) = self.natives.get(&name) {
-                        let param_count = native.param_count;
+                        let param_count = native.params.len();
                         gas.charge(native.gas_cost)?;
 
                         let mut args: Vec<Value> = (0..param_count)
@@ -694,6 +648,76 @@ fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
         .as_u64()
         .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", r.type_name())))?;
     Ok(Value::U64(op(a, b)))
+}
+
+/// Traverse `path` through nested struct fields and return a clone of the terminal value.
+/// Never clones an intermediate struct — only the terminal primitive (or struct if at end).
+fn read_field_path(mut current: &Value, path: &[String]) -> Result<Value> {
+    for (i, field) in path.iter().enumerate() {
+        let fields = match current {
+            Value::Struct { fields, .. } => fields,
+            other => {
+                return Err(VmError::TypeError(format!(
+                    "LoadField: expected struct at path step {i}, got {}",
+                    other.type_name()
+                )));
+            }
+        };
+        current = fields
+            .iter()
+            .find(|(n, _)| n == field)
+            .map(|(_, v)| v)
+            .ok_or_else(|| VmError::UndefinedField {
+                type_name: current.type_name().to_string(),
+                field: field.clone(),
+            })?;
+    }
+    Ok(current.clone())
+}
+
+/// Traverse `path` through nested struct fields and overwrite the terminal field with `val`.
+fn write_field_path(mut current: &mut Value, path: &[String], val: Value) -> Result<()> {
+    let (last, prefix) = path.split_last().expect("path must not be empty");
+    for (i, field) in prefix.iter().enumerate() {
+        let type_name = current.type_name().to_string();
+        let fields = match current {
+            Value::Struct { fields, .. } => fields,
+            other => {
+                return Err(VmError::TypeError(format!(
+                    "StoreField: expected struct at path step {i}, got {}",
+                    other.type_name()
+                )));
+            }
+        };
+        current = fields
+            .iter_mut()
+            .find(|(n, _)| n == field)
+            .map(|(_, v)| v)
+            .ok_or_else(|| VmError::UndefinedField {
+                type_name,
+                field: field.clone(),
+            })?;
+    }
+    let type_name = current.type_name().to_string();
+    let fields = match current {
+        Value::Struct { fields, .. } => fields,
+        other => {
+            return Err(VmError::TypeError(format!(
+                "StoreField: expected struct for terminal write, got {}",
+                other.type_name()
+            )));
+        }
+    };
+    let entry =
+        fields
+            .iter_mut()
+            .find(|(n, _)| n == last)
+            .ok_or_else(|| VmError::UndefinedField {
+                type_name,
+                field: last.clone(),
+            })?;
+    entry.1 = val;
+    Ok(())
 }
 
 /// Returns `true` if `l < r` (unsigned comparison).

@@ -10,6 +10,7 @@ use meow_types::{
         object_type::ObjectType,
         object_version::ObjectVersion,
     },
+    system_framework::meow_object::{MEOW_OBJECT_ID_FIELD_NAME, MeowObjectId},
 };
 use meow_vm_types::types::Value;
 
@@ -31,8 +32,10 @@ fn object_to_vm_injects_id_as_first_field() {
     let val = object_to_vm_object_value(&obj).unwrap();
 
     let fields = vm_object_fields(&val);
-    assert_eq!(fields[0].0, "id");
-    assert_eq!(fields[0].1, Value::Address(OBJECT_ID.into()));
+    assert_eq!(fields[0].0, MEOW_OBJECT_ID_FIELD_NAME);
+    // id is injected as meow_object::Id { inner: address }
+    let expected = MeowObjectId::new(OBJECT_ID).to_qualified_vm_value();
+    assert_eq!(fields[0].1, expected);
 }
 
 #[test]
@@ -82,10 +85,13 @@ fn object_to_vm_fails_for_module_type() {
 
 #[test]
 fn vm_to_object_strips_id_from_content() {
-    let val = Value::Object {
+    let val = Value::Struct {
         type_name: "Foo".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(OBJECT_ID.into())),
+            (
+                MEOW_OBJECT_ID_FIELD_NAME.to_string(),
+                Value::Address(OBJECT_ID.into()),
+            ),
             ("balance".to_string(), Value::U64(99)),
         ],
     };
@@ -94,7 +100,9 @@ fn vm_to_object_strips_id_from_content() {
 
     let content_fields: Vec<(String, Value)> = bcs::from_bytes(obj.content()).unwrap();
     assert!(
-        content_fields.iter().all(|(n, _)| n != "id"),
+        content_fields
+            .iter()
+            .all(|(n, _)| n != MEOW_OBJECT_ID_FIELD_NAME),
         "id must not appear in content"
     );
     assert_eq!(content_fields.len(), 1);
@@ -103,10 +111,13 @@ fn vm_to_object_strips_id_from_content() {
 
 #[test]
 fn vm_to_object_sets_address_from_id_field() {
-    let val = Value::Object {
+    let val = Value::Struct {
         type_name: "Foo".to_string(),
         fields: vec![
-            ("id".to_string(), Value::Address(OBJECT_ID.into())),
+            (
+                MEOW_OBJECT_ID_FIELD_NAME.to_string(),
+                Value::Address(OBJECT_ID.into()),
+            ),
             ("balance".to_string(), Value::U64(1)),
         ],
     };
@@ -190,7 +201,7 @@ fn make_vm_to_object(val: &Value) -> Object {
 
 fn vm_object_fields(val: &Value) -> &Vec<(String, Value)> {
     match val {
-        Value::Object { fields, .. } => fields,
-        _ => panic!("expected Value::Object"),
+        Value::Struct { fields, .. } => fields,
+        _ => panic!("expected Value::Struct"),
     }
 }

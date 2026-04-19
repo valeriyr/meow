@@ -47,7 +47,7 @@ fn gas_meter_spent_and_remaining() {
 
 #[test]
 fn gas_is_spent_during_execution() {
-    let vm = utils::vm_with_natives(SRC, vec![]);
+    let vm = utils::vm_with_source(SRC);
     let mut gas = GasMeter::new(10_000);
     vm.call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)
         .unwrap();
@@ -56,7 +56,7 @@ fn gas_is_spent_during_execution() {
 
 #[test]
 fn out_of_gas_returns_error() {
-    let vm = utils::vm_with_natives(SRC, vec![]);
+    let vm = utils::vm_with_source(SRC);
     let mut gas = GasMeter::new(1);
     let err = vm
         .call("add", vec![Value::U64(1), Value::U64(2)], &mut gas)

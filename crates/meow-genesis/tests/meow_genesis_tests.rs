@@ -2,7 +2,10 @@ use meow_genesis::Genesis;
 use meow_types::{
     address::Address,
     object::{object_owner::ObjectOwner, object_type::ObjectType},
-    system_framework::meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
+    system_framework::{
+        meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
+        meow_object::MEOW_OBJECT_MODULE_ADDRESS,
+    },
 };
 
 #[test]
@@ -15,16 +18,20 @@ fn create_genesis() {
 
     let genesis = Genesis::build(&mint).unwrap();
 
-    assert_eq!(genesis.objects().len(), 4);
+    // meow_object module + meow_coin module + 3 coin objects
+    assert_eq!(genesis.objects().len(), 5);
 
-    let meow_module = &genesis.objects()[0];
+    let meow_object_module = &genesis.objects()[0];
+    assert_eq!(meow_object_module.address(), &MEOW_OBJECT_MODULE_ADDRESS);
+    assert_eq!(meow_object_module.type_(), &ObjectType::Module);
 
-    assert_eq!(meow_module.address(), &MEOW_COIN_MODULE_ADDRESS);
-    assert_eq!(meow_module.type_(), &ObjectType::Module);
+    let meow_coin_module = &genesis.objects()[1];
+    assert_eq!(meow_coin_module.address(), &MEOW_COIN_MODULE_ADDRESS);
+    assert_eq!(meow_coin_module.type_(), &ObjectType::Module);
 
-    let meow_coin1 = &genesis.objects()[1];
-    let meow_coin2 = &genesis.objects()[2];
-    let meow_coin3 = &genesis.objects()[3];
+    let meow_coin1 = &genesis.objects()[2];
+    let meow_coin2 = &genesis.objects()[3];
+    let meow_coin3 = &genesis.objects()[4];
 
     assert!(meow_coin::is_meow_coin_object(meow_coin1));
     assert!(meow_coin::is_meow_coin_object(meow_coin2));

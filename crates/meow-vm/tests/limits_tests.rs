@@ -26,6 +26,7 @@ fn dep_count_exceeding_limit_returns_error() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -36,6 +37,7 @@ fn dep_count_exceeding_limit_returns_error() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg.clone(),
     )
     .expect("b must compile");
@@ -46,6 +48,7 @@ fn dep_count_exceeding_limit_returns_error() {
             pub fn run() -> u64 { b::get() }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
+        &[],
         cfg,
     )
     .expect("main must compile");
@@ -83,6 +86,7 @@ fn dep_count_at_limit_succeeds() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -93,6 +97,7 @@ fn dep_count_at_limit_succeeds() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg.clone(),
     )
     .expect("b must compile");
@@ -103,6 +108,7 @@ fn dep_count_at_limit_succeeds() {
             pub fn run() -> u64 { b::get() }
         "#,
         &[(b_addr, &b_module), (c_addr, &c_module)],
+        &[],
         cfg,
     )
     .expect("main must compile");

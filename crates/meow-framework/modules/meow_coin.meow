@@ -1,71 +1,110 @@
-// meow_coin — The built-in Meow Coin module.
-//
-// Meow Coin is the native coin of MEOW. It is defined here and published at genesis
-// at the fixed address 0x01. Every genesis allocation creates one MeowCoin object
-// whose balance equals the allocated amount.
-//
-// All functions except mint are public and callable from transactions.
-// mint is private: it can only be invoked at genesis to create the initial supply.
+//! meow_coin — The built-in Meow Coin module.
+//!
+//! Meow Coin is the native coin of MEOW. It is defined here and published at genesis
+//! at the fixed address 0x10. Every genesis allocation creates one MeowCoin object
+//! whose balance equals the allocated amount.
+//!
+//! All functions except mint are public and callable from transactions.
+//! mint is private: it can only be invoked at genesis to create the initial supply.
 
 mod meow_coin;
 
-// A single Meow Coin.
-pub object MeowCoin { id: address, balance: u64 }
+use meow_object@0x01;
 
-// Creates a new `MeowCoin` with the given `balance` and transfers it to `owner`.
-// Private: callable only at genesis, not from user transactions.
+/// A single Meow Coin.
+pub struct MeowCoin {
+    id: meow_object::Id,
+    balance: u64
+}
+
+/// A Meow Coin balance.
+/// Makes it possible to store specific Meow Coin amount.
+pub struct MeowCoinBalance {
+    amount: u64
+}
+
+/// Creates a new `MeowCoin` with the given `balance` and transfers it to `owner`.
+/// Private: callable only at genesis, not from user transactions.
 fn mint(balance: u64, owner: address) {
-    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: balance };
+    let coin = MeowCoin {
+        id: meow_vm_fresh_id(),
+        balance: balance
+    };
     meow_vm_transfer(coin, owner);
 }
 
-// Returns the `coin` and its balance.
-// Use this to read the balance without consuming the coin.
+/// Returns the `coin` and its balance.
+/// Use this to read the balance without consuming the coin.
 pub fn balance(coin: MeowCoin) -> (MeowCoin, u64) {
     let b = coin.balance;
     (coin, b)
 }
 
-// Permanently destroys `coin`, removing it from chain state.
-// The balance is irrecoverably lost.
+/// Permanently destroys `coin`, removing it from chain state.
+/// The balance is irrecoverably lost.
 pub fn burn(coin: MeowCoin) {
-    meow_vm_destroy(coin);
+    let MeowCoin { id, .. } = coin;
+    meow_vm_destroy(id);
 }
 
-// Transfers the whole `coin` to a new owner.
+/// Transfers the whole `coin` to a new owner.
 pub fn transfer(coin: MeowCoin, to: address) {
     meow_vm_transfer(coin, to);
 }
 
-// Merges `from` into `to`: adds `from.balance` to `to.balance`, then destroys `from`.
-// Both coins must be owned by the transaction sender.
+/// Merges `from` into `to`: adds `from.balance` to `to.balance`, then destroys `from`.
+/// Both coins must be owned by the transaction sender.
 pub fn merge(from: MeowCoin, to: MeowCoin) {
     to.balance = to.balance + from.balance;
 
-    from.balance = 0;
-    meow_vm_destroy(from);
+    let MeowCoin { id, .. } = from;
+    meow_vm_destroy(id);
 }
 
-// Splits amount out of `from` and sends the new coin to the transaction sender.
-// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
+/// Splits amount out of `from` and sends the new coin to the transaction sender.
+/// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
 pub fn split(from: MeowCoin, amount: u64) {
     meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;
 
-    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: amount };
+    let coin = MeowCoin {
+        id: meow_vm_fresh_id(),
+        balance: amount
+    };
 
     meow_vm_transfer(coin, meow_vm_sender());
 }
 
-// Splits `amount` out of `from` and sends the new coin to `to`.
-// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
+/// Splits `amount` out of `from` and sends the new coin to `to`.
+/// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
 pub fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
-    meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
+    meow_vm_abort(from.balance  >= amount, 1, "The balance is insufficient");
 
-    from.balance = from.balance - amount;
+    from.balance  = from.balance  - amount;
 
-    let coin = MeowCoin { id: meow_vm_fresh_id(), balance: amount };
+    let coin = MeowCoin {
+        id: meow_vm_fresh_id(),
+        balance: amount
+    };
 
     meow_vm_transfer(coin, to);
+}
+
+/// Converts `coin` to a `MeowCoinBalance` instance.
+pub fn to_balance(coin: MeowCoin) -> MeowCoinBalance {
+    let MeowCoin { id, balance } = coin;
+    meow_vm_destroy(id);
+
+    MeowCoinBalance { amount: balance }
+}
+
+/// Converts `balance` to a `MeowCoin` instance.
+pub fn from_balance(balance: MeowCoinBalance) -> MeowCoin {
+    let MeowCoinBalance { amount } = balance;
+
+    MeowCoin {
+        id: meow_vm_fresh_id(),
+        balance: amount
+    }
 }

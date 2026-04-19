@@ -3,6 +3,7 @@
 //! Bridges the stack-based VM and blockchain transaction types, implementing
 //! transaction execution via `execute()` and module building via `build()`.
 
+mod bytecode_verifier;
 mod context;
 mod natives;
 

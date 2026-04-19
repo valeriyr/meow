@@ -24,7 +24,6 @@ enum AbstractType {
     Address,
     Str,
     Struct(String),
-    Object(String),
     /// Sentinel pushed by void-returning calls to keep the stack balanced.
     Void,
     /// A tuple of abstract types — produced by MakeTuple, consumed by UnpackTuple.
@@ -39,7 +38,6 @@ impl AbstractType {
             Self::Address => "address".to_string(),
             Self::Str => "str".to_string(),
             Self::Struct(n) => format!("struct({n})"),
-            Self::Object(n) => format!("object({n})"),
             Self::Void => "void".to_string(),
             Self::Tuple(types) => {
                 let inner: Vec<String> = types.iter().map(|t| t.display_name()).collect();
@@ -48,11 +46,11 @@ impl AbstractType {
         }
     }
 
-    /// Returns true if this type is or contains an Object (move semantics).
-    fn is_object(&self) -> bool {
+    /// Returns true if this type is linear (Struct — must be explicitly consumed).
+    fn is_linear(&self) -> bool {
         match self {
-            Self::Object(_) => true,
-            Self::Tuple(types) => types.iter().any(|t| t.is_object()),
+            Self::Struct(_) => true,
+            Self::Tuple(types) => types.iter().any(|t| t.is_linear()),
             _ => false,
         }
     }
@@ -65,32 +63,7 @@ fn from_type(ty: &Type) -> AbstractType {
         Type::Address => AbstractType::Address,
         Type::Str => AbstractType::Str,
         Type::Struct(n) => AbstractType::Struct(n.clone()),
-        Type::Object(n) => AbstractType::Object(n.clone()),
         Type::Tuple(types) => AbstractType::Tuple(types.iter().map(from_type).collect()),
-    }
-}
-
-/// Like `from_type` but resolves `Type::Struct(name)` to `AbstractType::Object`
-/// when the name refers to an `is_object` definition in `module`.
-/// This is necessary because the compiler emits `Type::Struct` for all named
-/// types in function signatures, regardless of whether they are object types.
-fn from_type_resolved(ty: &Type, module: &Module) -> AbstractType {
-    match ty {
-        Type::Struct(name) => {
-            if let Some(def) = module.get_struct(name)
-                && def.is_object
-            {
-                return AbstractType::Object(name.clone());
-            }
-            AbstractType::Struct(name.clone())
-        }
-        Type::Tuple(types) => AbstractType::Tuple(
-            types
-                .iter()
-                .map(|t| from_type_resolved(t, module))
-                .collect(),
-        ),
-        other => from_type(other),
     }
 }
 
@@ -182,8 +155,8 @@ fn merge(
         .zip(incoming.locals.iter())
         .enumerate()
     {
-        let a_obj = matches!(a, SlotState::Live(t) if t.is_object());
-        let b_obj = matches!(b, SlotState::Live(t) if t.is_object());
+        let a_obj = matches!(a, SlotState::Live(t) if t.is_linear());
+        let b_obj = matches!(b, SlotState::Live(t) if t.is_linear());
         if a_obj != b_obj {
             errors.push(VerificationError::LivenessMergeConflict {
                 function: fn_name.to_string(),
@@ -229,7 +202,7 @@ fn resolve_field_type(
     module: &Module,
 ) -> Option<AbstractType> {
     let type_name = match ty {
-        AbstractType::Struct(n) | AbstractType::Object(n) => n.as_str(),
+        AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
     if is_cross_module_type(type_name) {
@@ -240,11 +213,24 @@ fn resolve_field_type(
     Some(from_type(&field_def.ty))
 }
 
+/// Walk a field `path` from `ty` and return the type of the terminal field.
+fn resolve_field_path_type(
+    ty: &AbstractType,
+    path: &[String],
+    module: &Module,
+) -> Option<AbstractType> {
+    let mut current = ty.clone();
+    for step in path {
+        current = resolve_field_type(&current, step, module)?;
+    }
+    Some(current)
+}
+
 /// Check cross-module field read visibility.
 /// All fields are private — any cross-module field read is forbidden.
 fn check_field_read_visibility(ty: &AbstractType, field_name: &str) -> Option<VerificationError> {
     let type_name = match ty {
-        AbstractType::Struct(n) | AbstractType::Object(n) => n.as_str(),
+        AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
     if !is_cross_module_type(type_name) {
@@ -274,14 +260,14 @@ fn types_compatible(a: &AbstractType, b: &AbstractType) -> bool {
 fn native_param_matches(param: &NativeParam, ty: &AbstractType) -> bool {
     match param {
         NativeParam::Concrete(t) => from_type(t) == *ty,
-        NativeParam::AnyObject => ty.is_object(),
+        NativeParam::AnyStruct => matches!(ty, AbstractType::Struct(_)),
     }
 }
 
 fn native_param_display(param: &NativeParam) -> String {
     match param {
         NativeParam::Concrete(t) => from_type(t).display_name(),
-        NativeParam::AnyObject => "any Object".to_string(),
+        NativeParam::AnyStruct => "any struct".to_string(),
     }
 }
 
@@ -306,7 +292,7 @@ pub(crate) fn check_function(
     }
     let mut state = AbstractState::new(func.local_count as usize);
     for (i, (_, ty)) in func.params.iter().enumerate() {
-        state.locals[i] = SlotState::Live(from_type_resolved(ty, module));
+        state.locals[i] = SlotState::Live(from_type(ty));
     }
 
     // pending[pc] = incoming state arriving at instruction pc via a jump
@@ -349,7 +335,7 @@ pub(crate) fn check_function(
                     }
                     SlotState::Live(ty) => {
                         let ty = ty.clone();
-                        if ty.is_object() {
+                        if ty.is_linear() {
                             state.locals[slot] = SlotState::Dead; // move semantics
                         }
                         state.push(ty);
@@ -373,9 +359,9 @@ pub(crate) fn check_function(
                         continue;
                     }
                 };
-                // Overwriting a live Object slot is a resource leak
-                if matches!(&state.locals[slot], SlotState::Live(t) if t.is_object()) {
-                    errors.push(VerificationError::ObjectSlotOverwrite {
+                // Overwriting a live linear slot is a resource leak
+                if matches!(&state.locals[slot], SlotState::Live(t) if t.is_linear()) {
+                    errors.push(VerificationError::SlotOverwrite {
                         function: fn_name.clone(),
                         pc,
                         slot: slot as u8,
@@ -384,12 +370,12 @@ pub(crate) fn check_function(
                 state.locals[slot] = SlotState::Live(val);
             }
 
-            Instruction::LoadField(slot, field_name) => {
+            Instruction::LoadField(slot, path) => {
                 let slot = *slot as usize;
                 if slot >= state.locals.len() {
                     continue;
                 }
-                let holder_ty = match &state.locals[slot] {
+                let root_ty = match &state.locals[slot] {
                     SlotState::Dead => {
                         errors.push(VerificationError::UseAfterMove {
                             function: fn_name.clone(),
@@ -400,20 +386,9 @@ pub(crate) fn check_function(
                     }
                     SlotState::Live(ty) => ty.clone(),
                 };
-                match &holder_ty {
-                    AbstractType::Struct(_) | AbstractType::Object(_) => {}
-                    other => {
-                        errors.push(VerificationError::TypeMismatch {
-                            function: fn_name.clone(),
-                            pc,
-                            expected: "struct or object".to_string(),
-                            found: other.display_name(),
-                        });
-                        continue;
-                    }
-                }
-                // Visibility check for cross-module field reads
-                if let Some(mut err) = check_field_read_visibility(&holder_ty, field_name) {
+                // Visibility check: only the root type matters (cross-module access is
+                // always blocked at the first step; inner fields are local struct types).
+                if let Some(mut err) = check_field_read_visibility(&root_ty, &path[0]) {
                     if let VerificationError::CrossModulePrivateFieldRead {
                         function,
                         pc: err_pc,
@@ -425,13 +400,14 @@ pub(crate) fn check_function(
                     }
                     errors.push(err);
                 }
-                // Resolve field type; push Unknown (Address) if unresolvable
-                let field_ty = resolve_field_type(&holder_ty, field_name, module)
-                    .unwrap_or(AbstractType::Address); // conservative fallback
-                state.push(field_ty);
+                // Walk path: resolve type at each step, push terminal type.
+                let terminal_ty = resolve_field_path_type(&root_ty, path, module)
+                    .unwrap_or(AbstractType::Address);
+                state.push(terminal_ty);
+                // Slot stays live — LoadField never consumes the slot.
             }
 
-            Instruction::StoreField(slot, field_name) => {
+            Instruction::StoreField(slot, path) => {
                 let slot = *slot as usize;
                 if slot >= state.locals.len() {
                     continue;
@@ -447,7 +423,7 @@ pub(crate) fn check_function(
                         continue;
                     }
                 };
-                let holder_ty = match &state.locals[slot] {
+                let root_ty = match &state.locals[slot] {
                     SlotState::Dead => {
                         errors.push(VerificationError::UseAfterMove {
                             function: fn_name.clone(),
@@ -458,40 +434,34 @@ pub(crate) fn check_function(
                     }
                     SlotState::Live(ty) => ty.clone(),
                 };
-                match &holder_ty {
-                    AbstractType::Struct(n) | AbstractType::Object(n) => {
-                        if is_cross_module_type(n) {
-                            errors.push(VerificationError::CrossModuleFieldWrite {
-                                function: fn_name.clone(),
-                                pc,
-                                type_name: n.clone(),
-                                field: field_name.clone(),
-                            });
-                        } else {
-                            // Type-check: field value must match declared type
-                            if let Some(expected_ty) =
-                                resolve_field_type(&holder_ty, field_name, module)
-                                && !types_compatible(&val, &expected_ty)
-                            {
-                                errors.push(VerificationError::TypeMismatch {
-                                    function: fn_name.clone(),
-                                    pc,
-                                    expected: expected_ty.display_name(),
-                                    found: val.display_name(),
-                                });
-                            }
-                        }
-                    }
-                    other => {
+                // Cross-module write check (root type only).
+                let root_name = match &root_ty {
+                    AbstractType::Struct(n) => Some(n.clone()),
+                    _ => None,
+                };
+                if let Some(n) = &root_name
+                    && is_cross_module_type(n)
+                {
+                    errors.push(VerificationError::CrossModuleFieldWrite {
+                        function: fn_name.clone(),
+                        pc,
+                        type_name: n.clone(),
+                        field: path[0].clone(),
+                    });
+                } else {
+                    // Type-check: value must match declared type of terminal field.
+                    if let Some(expected_ty) = resolve_field_path_type(&root_ty, path, module)
+                        && !types_compatible(&val, &expected_ty)
+                    {
                         errors.push(VerificationError::TypeMismatch {
                             function: fn_name.clone(),
                             pc,
-                            expected: "struct or object".to_string(),
-                            found: other.display_name(),
+                            expected: expected_ty.display_name(),
+                            found: val.display_name(),
                         });
                     }
                 }
-                // Slot stays live — field updated in place
+                // Slot stays live — field updated in place.
             }
 
             // ── Arithmetic ────────────────────────────────────────────────
@@ -617,7 +587,7 @@ pub(crate) fn check_function(
                 state.push(AbstractType::Bool);
             }
 
-            // ── Struct / object construction ──────────────────────────────
+            // ── Struct construction ───────────────────────────────────────
             Instruction::NewStruct {
                 type_name,
                 field_names,
@@ -655,12 +625,7 @@ pub(crate) fn check_function(
                             }
                         }
                     }
-                    let result_ty = if def.is_object {
-                        AbstractType::Object(type_name.clone())
-                    } else {
-                        AbstractType::Struct(type_name.clone())
-                    };
-                    state.push(result_ty);
+                    state.push(AbstractType::Struct(type_name.clone()));
                 } else {
                     // Unknown type — pop placeholders and push Unknown
                     for _ in field_names {
@@ -676,11 +641,11 @@ pub(crate) fn check_function(
                         errors.push(VerificationError::StackUnderflow {
                             function: fn_name.clone(),
                             pc,
-                            expected: "struct or object".to_string(),
+                            expected: "struct".to_string(),
                         });
                     }
                     Some(ty) => match &ty {
-                        AbstractType::Struct(_) | AbstractType::Object(_) => {
+                        AbstractType::Struct(_) => {
                             let field_ty = resolve_field_type(&ty, field_name, module)
                                 .unwrap_or(AbstractType::Address);
                             state.push(field_ty);
@@ -689,7 +654,7 @@ pub(crate) fn check_function(
                             errors.push(VerificationError::TypeMismatch {
                                 function: fn_name.clone(),
                                 pc,
-                                expected: "struct or object".to_string(),
+                                expected: "struct".to_string(),
                                 found: other.display_name(),
                             });
                             state.push(AbstractType::Address); // push placeholder
@@ -705,8 +670,8 @@ pub(crate) fn check_function(
                     pc,
                     expected: "any".to_string(),
                 }),
-                Some(ty) if ty.is_object() => {
-                    errors.push(VerificationError::PopOnObject {
+                Some(ty) if ty.is_linear() => {
+                    errors.push(VerificationError::PopOnStruct {
                         function: fn_name.clone(),
                         pc,
                     });
@@ -720,8 +685,8 @@ pub(crate) fn check_function(
                     pc,
                     expected: "any".to_string(),
                 }),
-                Some(ty) if ty.is_object() => {
-                    errors.push(VerificationError::DupOnObject {
+                Some(ty) if ty.is_linear() => {
+                    errors.push(VerificationError::DupOnStruct {
                         function: fn_name.clone(),
                         pc,
                     });
@@ -798,6 +763,52 @@ pub(crate) fn check_function(
                 );
             }
 
+            Instruction::UnpackStruct {
+                type_name,
+                field_names,
+            } => {
+                if module_ref::parse_module_ref(type_name).is_some() {
+                    state.pop();
+                    for _ in field_names {
+                        state.push(AbstractType::U64);
+                    }
+                    continue;
+                }
+                match state.pop() {
+                    None => {
+                        errors.push(VerificationError::StackUnderflow {
+                            function: fn_name.clone(),
+                            pc,
+                            expected: "struct".to_string(),
+                        });
+                    }
+                    Some(ty) => match &ty {
+                        AbstractType::Struct(n) if n == type_name => {
+                            if let Some(def) = module.get_struct(type_name) {
+                                for field_def in def.fields.iter().rev() {
+                                    state.push(from_type(&field_def.ty));
+                                }
+                            } else {
+                                for _ in field_names {
+                                    state.push(AbstractType::U64);
+                                }
+                            }
+                        }
+                        other => {
+                            errors.push(VerificationError::TypeMismatch {
+                                function: fn_name.clone(),
+                                pc,
+                                expected: format!("struct({type_name})"),
+                                found: other.display_name(),
+                            });
+                            for _ in field_names {
+                                state.push(AbstractType::U64);
+                            }
+                        }
+                    },
+                }
+            }
+
             // ── Tuples ────────────────────────────────────────────────────
             Instruction::MakeTuple(n) => {
                 let n = *n as usize;
@@ -857,7 +868,7 @@ pub(crate) fn check_function(
 
             // ── Return ────────────────────────────────────────────────────
             Instruction::Return => {
-                check_return(func, pc, module, &state, &mut errors);
+                check_return(func, &state, &mut errors);
                 state.reachable = false;
             }
         }
@@ -874,11 +885,11 @@ pub(crate) fn check_function(
         errors.push(VerificationError::MissingReturn {
             function: fn_name.clone(),
         });
-        // Also check for unconsumed objects on the escaped path.
+        // Also check for unconsumed structs on the escaped path.
         if let Some(escaped) = jump_to_end {
             for (slot, local) in escaped.locals.iter().enumerate().skip(func.params.len()) {
-                if matches!(local, SlotState::Live(t) if t.is_object()) {
-                    errors.push(VerificationError::UnconsumedObject {
+                if matches!(local, SlotState::Live(t) if t.is_linear()) {
+                    errors.push(VerificationError::UnconsumedStruct {
                         function: fn_name.clone(),
                         slot: slot as u8,
                     });
@@ -911,8 +922,8 @@ fn check_call(
             && let Some(callee) = dep_mod.get_function(callee_name)
         {
             let return_type = callee.return_type.clone();
-            pop_and_check_params(&callee.params, name, pc, fn_name, module, state, errors);
-            push_return_type(return_type.as_ref(), dep_mod, state);
+            pop_and_check_params(&callee.params, name, pc, fn_name, state, errors);
+            push_return_type(return_type.as_ref(), state);
             return;
         }
         errors.push(VerificationError::UndefinedFunction {
@@ -930,8 +941,8 @@ fn check_call(
         // Clone what we need to avoid borrow of module while mutating state
         let params: Vec<(String, Type)> = callee.params.clone();
         let return_type: Option<Type> = callee.return_type.clone();
-        pop_and_check_params(&params, name, pc, fn_name, module, state, errors);
-        push_return_type(return_type.as_ref(), module, state);
+        pop_and_check_params(&params, name, pc, fn_name, state, errors);
+        push_return_type(return_type.as_ref(), state);
         return;
     }
 
@@ -973,7 +984,7 @@ fn check_call(
                 }
             }
         }
-        push_return_type(native.return_type.as_ref(), module, state);
+        push_return_type(native.return_type.as_ref(), state);
         return;
     }
 
@@ -989,7 +1000,6 @@ fn pop_and_check_params(
     callee: &str,
     pc: usize,
     fn_name: &str,
-    module: &Module,
     state: &mut AbstractState,
     errors: &mut Vec<VerificationError>,
 ) {
@@ -1011,7 +1021,7 @@ fn pop_and_check_params(
     args.reverse();
 
     for ((_, expected_ty), actual) in params.iter().zip(args.iter()) {
-        let expected = from_type_resolved(expected_ty, module);
+        let expected = from_type(expected_ty);
         if !types_compatible(actual, &expected) {
             errors.push(VerificationError::TypeMismatch {
                 function: fn_name.to_string(),
@@ -1023,9 +1033,9 @@ fn pop_and_check_params(
     }
 }
 
-fn push_return_type(return_type: Option<&Type>, module: &Module, state: &mut AbstractState) {
+fn push_return_type(return_type: Option<&Type>, state: &mut AbstractState) {
     match return_type {
-        Some(ty) => state.push(from_type_resolved(ty, module)),
+        Some(ty) => state.push(from_type(ty)),
         None => state.push(AbstractType::Void),
     }
 }
@@ -1034,13 +1044,7 @@ fn push_return_type(return_type: Option<&Type>, module: &Module, state: &mut Abs
 // ─── Return helper ───
 //
 
-fn check_return(
-    func: &Function,
-    _pc: usize,
-    module: &Module,
-    state: &AbstractState,
-    errors: &mut Vec<VerificationError>,
-) {
+fn check_return(func: &Function, state: &AbstractState, errors: &mut Vec<VerificationError>) {
     let fn_name = &func.name;
 
     match &func.return_type {
@@ -1059,7 +1063,7 @@ fn check_return(
             }
         }
         Some(declared) => {
-            let expected = from_type_resolved(declared, module);
+            let expected = from_type(declared);
             match state.stack.last() {
                 None => {
                     errors.push(VerificationError::ReturnTypeMismatch {
@@ -1080,13 +1084,13 @@ fn check_return(
         }
     }
 
-    // Unconsumed objects in non-param local slots.
-    // Param slots (0..params.len()) are exempt: a live object there means
+    // Unconsumed linear values (Struct) in non-param local slots.
+    // Param slots (0..params.len()) are exempt: a live struct there means
     // "mutated in place" — the effects system writes it back to its original owner.
     let param_count = func.params.len();
     for (slot, local) in state.locals.iter().enumerate().skip(param_count) {
-        if matches!(local, SlotState::Live(t) if t.is_object()) {
-            errors.push(VerificationError::UnconsumedObject {
+        if matches!(local, SlotState::Live(t) if t.is_linear()) {
+            errors.push(VerificationError::UnconsumedStruct {
                 function: fn_name.clone(),
                 slot: slot as u8,
             });

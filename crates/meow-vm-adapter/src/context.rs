@@ -1,4 +1,4 @@
-use meow_types::{address::Address, digest::Digest};
+use meow_types::{address::Address, digest::Digest, system_framework::meow_object::object_id};
 use meow_vm_types::types::Value;
 use rand::{RngCore, SeedableRng, rngs::StdRng};
 
@@ -16,8 +16,8 @@ pub struct Context {
     fresh_ids: Vec<Address>,
     /// Objects transferred out: (object_value, new_owner_address).
     transfers: Vec<(Value, Address)>,
-    /// Objects destroyed.
-    destroyed: Vec<Value>,
+    /// IDs of objects destroyed (the inner address from their meow_object::Id).
+    destroyed: Vec<Address>,
     /// Random number generator (needed for native functions that require randomness).
     random_generator: rand::rngs::StdRng,
     /// Block timestamp (Unix milliseconds) at the time the block was mined.
@@ -54,8 +54,8 @@ impl Context {
         &self.transfers
     }
 
-    /// Get the list of destroyed objects.
-    pub fn destroyed(&self) -> &[Value] {
+    /// Get the IDs of destroyed objects.
+    pub fn destroyed(&self) -> &[Address] {
         &self.destroyed
     }
 
@@ -72,19 +72,15 @@ impl Context {
     /// Record an object transfer to a new owner.
     pub fn transfer(&mut self, obj: Value, new_owner: Address) {
         debug_assert!(
-            matches!(obj, Value::Object { .. }),
+            object_id(&obj).is_some(),
             "Only object values can be transferred"
         );
         self.transfers.push((obj, new_owner));
     }
 
-    /// Record an object destruction.
-    pub fn destroy(&mut self, obj: Value) {
-        debug_assert!(
-            matches!(obj, Value::Object { .. }),
-            "Only object values can be destroyed"
-        );
-        self.destroyed.push(obj);
+    /// Record an object destruction by its ID address.
+    pub fn destroy(&mut self, id: Address) {
+        self.destroyed.push(id);
     }
 
     /// Get the next pseudo-random `u64` from the transaction's RNG sequence.
@@ -116,8 +112,8 @@ fn create_random_generator(tx_digest: Digest, rand_seed: RandSeed) -> StdRng {
 
 #[cfg(test)]
 mod tests {
-    use meow_types::{address::Address, digest::Digest};
-    use meow_vm_types::types::Value;
+    use meow_types::{address::Address, digest::Digest, system_framework::meow_coin::MeowCoin};
+    use meow_vm_types::{convert::struct_from_rust, types::Value};
 
     use crate::external_context::DEFAULT_RAND_SEED;
 
@@ -175,18 +171,13 @@ mod tests {
     #[test]
     fn destroy_is_recorded() {
         let mut ctx = make_ctx();
-        ctx.destroy(test_object());
+        ctx.destroy(Address::fill(1));
         assert_eq!(ctx.destroyed().len(), 1);
+        assert_eq!(ctx.destroyed()[0], Address::fill(1));
     }
 
     fn test_object() -> Value {
-        Value::Object {
-            type_name: "MeowCoin".to_string(),
-            fields: vec![
-                ("id".to_string(), Value::Address(Address::fill(1).into())),
-                ("balance".to_string(), Value::U64(100)),
-            ],
-        }
+        struct_from_rust(&MeowCoin::new(Address::fill(1), 100)).expect("MeowCoin must serialize")
     }
 
     #[test]

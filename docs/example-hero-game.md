@@ -21,14 +21,16 @@ Create `hero.meow`:
 
 mod hero;
 
+use meow_object@0x01;
+
 // An on-chain hero owned by a player.
-//   id         — unique on-chain address, set at creation and immutable.
+//   id         — unique on-chain identity, set at creation and immutable.
 //   name       — display name chosen at spawn; can be changed via rename.
 //   level      — starts at 1; increases as experience accumulates.
 //   experience — XP earned by winning duels; resets on each level-up.
 //   wins       — total number of duels won; never decreases.
-pub object Hero {
-    id: address,
+pub struct Hero {
+    id: meow_object::Id,
     name: string,
     level: u64,
     experience: u64,
@@ -92,7 +94,8 @@ pub fn transfer(hero: Hero, to: address) {
 
 // Permanently destroys the hero and removes it from chain state.
 pub fn retire(hero: Hero) {
-    meow_vm_destroy(hero);
+    let Hero { id, .. } = hero;
+    meow_vm_destroy(id);
 }
 ```
 

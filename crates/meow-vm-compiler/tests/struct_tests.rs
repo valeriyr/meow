@@ -77,17 +77,86 @@ fn struct_cycle_indirect_rejected() {
 }
 
 #[test]
-fn struct_field_cannot_be_an_object_type() {
+fn struct_id_field_is_arbitrary() {
+    // Unlike objects, structs have no special `id` field rule.
+    // A struct may have a field named `id` of any type, assigned to any value.
     let src = r#"
         mod test;
 
-        object Token { id: address, amount: u64 }
-        struct Wrapper { tok: Token }
+        struct Receipt { id: u64, amount: u64 }
 
-        fn make(id: address, amount: u64) {}
+        pub fn make(id: u64, amount: u64) -> Receipt { Receipt { id: id, amount: amount } }
+        pub fn get_id(r: Receipt) -> u64 { r.id }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
+fn struct_destructuring_compiles() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn sum(p: Point) -> u64 {
+            let Point { x, y } = p;
+            x + y
+        }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
+fn struct_destructuring_unknown_field_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn bad(p: Point) -> u64 {
+            let Point { x, z } = p;
+            x + z
+        }
     "#;
     assert!(matches!(
         utils::compile(src).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("which is an object")
+        CompilerError::Message(msg) if msg.contains("unknown field 'z'")
+    ));
+}
+
+#[test]
+fn struct_destructuring_missing_field_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn bad(p: Point) -> u64 {
+            let Point { x } = p;
+            x
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("missing binding for field 'y'") && msg.contains("..")
+    ));
+}
+
+#[test]
+fn struct_destructuring_cannot_discard_struct_field() {
+    let src = r#"
+        mod test;
+
+        struct Inner { value: u64 }
+        struct Outer { name: u64, data: Inner }
+
+        pub fn bad(o: Outer) -> u64 {
+            let Outer { name, .. } = o;
+            name
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("cannot discard") && msg.contains("'data'")
     ));
 }

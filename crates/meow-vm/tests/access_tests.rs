@@ -2,10 +2,12 @@ mod utils;
 
 use std::collections::HashMap;
 
-use meow_vm::{
-    NativeFnEntry, NativeResult, Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule,
+use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm_types::{
+    config::VmConfig,
+    natives::{NativeFnEntry, NativeResult},
+    types::Value,
 };
-use meow_vm_types::{config::VmConfig, types::Value};
 
 //
 // ─── Private function call rejected ───
@@ -83,8 +85,8 @@ fn calling_native_fn_directly_returns_native_function_call_direct_error() {
 
 #[test]
 fn calling_registered_native_fn_directly_is_rejected() {
-    // A caller-registered native (e.g. a transfer stub) must also be rejected when
-    // called directly via vm.call, not only the built-in meow_vm_abort.
+    // A caller-registered native must also be rejected when called directly via
+    // vm.call, not only the built-in meow_vm_abort.
     let module = utils::compile(
         r#"
             mod test;
@@ -92,9 +94,10 @@ fn calling_registered_native_fn_directly_is_rejected() {
         "#,
     );
     let native = NativeFnEntry {
-        name: "meow_vm_transfer".to_string(),
-        param_count: 2,
-        gas_cost: 1,
+        name: "my_native".to_string(),
+        params: vec![],
+        return_type: None,
+        gas_cost: 0,
         func: Box::new(|_| NativeResult::Return(None)),
     };
     let vm = Vm::new(
@@ -105,9 +108,9 @@ fn calling_registered_native_fn_directly_is_rejected() {
         VmConfig::default(),
     );
     let mut gas = GasMeter::unlimited();
-    let err = vm.call("meow_vm_transfer", vec![], &mut gas).unwrap_err();
+    let err = vm.call("my_native", vec![], &mut gas).unwrap_err();
     assert!(
-        matches!(err, VmError::NativeFunctionCallDirect(ref name) if name == "meow_vm_transfer"),
+        matches!(err, VmError::NativeFunctionCallDirect(ref name) if name == "my_native"),
         "expected NativeFunctionCallDirect, got: {err:?}"
     );
 }

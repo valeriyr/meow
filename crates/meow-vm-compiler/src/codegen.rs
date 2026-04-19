@@ -76,12 +76,16 @@ impl<'m> Codegen<'m> {
                 config,
             )?;
             cg.alloc_local(name.clone())?;
+            let ty = cg.translate_type(ty)?;
             // Record the source-level type name for type tracking.
             cg.local_types.insert(name.clone(), ty.name().to_string());
             params.push((name, ty));
         }
 
-        let return_type = ast_fn.return_type;
+        let return_type = ast_fn
+            .return_type
+            .map(|rt| cg.translate_type(rt))
+            .transpose()?;
 
         for stmt in ast_fn.body {
             cg.compile_stmt(stmt)?;
@@ -158,6 +162,21 @@ impl<'m> Codegen<'m> {
     ///
     /// Returns an error if `module_name` is used but not found in `dep_addresses`
     /// (i.e. the module was not declared via `use module_name;`).
+    /// Translate a [`Type`] so that any `Struct("dep_name::TypeName")` is converted
+    /// to `Struct("@<hex_address>::TypeName")`.  Other types pass through unchanged.
+    fn translate_type(&self, ty: Type) -> Result<Type> {
+        match ty {
+            Type::Struct(name) => Ok(Type::Struct(self.translate_name(&name)?)),
+            Type::Tuple(types) => Ok(Type::Tuple(
+                types
+                    .into_iter()
+                    .map(|t| self.translate_type(t))
+                    .collect::<Result<_>>()?,
+            )),
+            _ => Ok(ty),
+        }
+    }
+
     fn translate_name(&self, name: &str) -> Result<String> {
         if let Some((mod_name, rest)) = name.split_once("::") {
             match self.dep_addresses.get(mod_name) {
@@ -203,10 +222,8 @@ impl<'m> Codegen<'m> {
                     let dep_module = self.dep_modules.get(dep_addr)?;
                     let func = dep_module.get_function(fn_local_name)?;
                     func.return_type.as_ref().map(|t| match t {
-                        // Qualify struct/object return types with the dep module name.
-                        Type::Struct(local_name) | Type::Object(local_name) => {
-                            format!("{dep_name}::{local_name}")
-                        }
+                        // Qualify struct return types with the dep module name.
+                        Type::Struct(local_name) => format!("{dep_name}::{local_name}"),
                         _ => t.name().to_string(),
                     })
                 } else {
@@ -266,24 +283,9 @@ impl<'m> Codegen<'m> {
 
     /// Check that writing `field` on a value of the given type is allowed.
     ///
-    /// Rules:
-    /// - The `id` field of any object is always immutable (rejected everywhere).
-    /// - All other field writes from an external module are rejected.
-    /// - Within the declaring module, field writes are always allowed (except `id`).
+    /// Rejects any field write to a type declared in another module.
+    /// Within the declaring module, field writes are always allowed.
     fn check_field_write(&self, type_name: &str, field: &str) -> Result<()> {
-        // Look up the struct def — only needed for the object+id check.
-        let def = self.structs.iter().find(|s| s.name == type_name);
-
-        // Reject writes to the `id` field of any object.
-        if field == "id" {
-            let is_object = def.map(|d| d.is_object).unwrap_or(false);
-            if is_object {
-                return Err(CompilerError::Message(
-                    "field 'id' of an object is immutable and cannot be reassigned".to_string(),
-                ));
-            }
-        }
-
         // Reject all field writes from outside the declaring module.
         if Self::is_cross_module_type(type_name) {
             return Err(CompilerError::Message(format!(
@@ -330,33 +332,36 @@ impl<'m> Codegen<'m> {
             }
 
             Expr::FieldAccess { expr, field } => {
-                // Optimise: if the base is a local variable, use LoadField (no move).
-                // Otherwise, compile the expression (which may consume a value) then GetField.
-                if let Expr::Ident(ref name) = *expr
+                // Flatten nested FieldAccess chains rooted on a local variable into a
+                // single LoadField(slot, path) — this avoids cloning intermediate structs.
+                let (root_expr, mut path) = flatten_field_chain(*expr, field);
+                path.reverse(); // flatten_field_chain builds the path in reverse
+
+                if let Expr::Ident(ref name) = root_expr
                     && let Some(&slot) = self.locals.get(name)
                 {
-                    // Visibility check: reads of cross-module fields must be pub.
                     if let Some(type_name) = self.local_types.get(name).cloned() {
-                        self.check_field_read(&type_name, &field)?;
+                        self.check_field_read(&type_name, &path[0])?;
                     }
-                    self.emit(Instruction::LoadField(slot, field));
+                    self.emit(Instruction::LoadField(slot, path));
                     return Ok(());
                 }
-                // Fallback: compile base expression (may be consuming), then GetField.
-                // Type inference for field-read check in the fallback case.
-                if let Some(type_name) = self.infer_type(&expr) {
-                    self.check_field_read(&type_name, &field)?;
+                // Fallback: compile base expression, then GetField for each step.
+                if let Some(type_name) = self.infer_type(&root_expr) {
+                    self.check_field_read(&type_name, &path[0])?;
                 }
-                self.compile_expr(*expr)?;
-                self.emit(Instruction::GetField(field));
+                self.compile_expr(root_expr)?;
+                for step in path {
+                    self.emit(Instruction::GetField(step));
+                }
             }
 
             Expr::StructLit { name, fields } => {
-                // Cross-module struct/object construction is always forbidden.
+                // Cross-module struct construction is always forbidden.
                 if Self::is_cross_module_type(&name) {
                     return Err(CompilerError::Message(format!(
                         "cannot construct '{name}' outside its declaring module — \
-                         structs and objects can only be created where they are defined",
+                         structs can only be created where they are defined",
                     )));
                 }
 
@@ -369,22 +374,6 @@ impl<'m> Codegen<'m> {
                     .clone();
 
                 let mut literal_map: HashMap<String, Expr> = fields.into_iter().collect();
-
-                // Objects: the `id` field must be exactly `meow_vm_fresh_id()`.
-                if def.is_object {
-                    match literal_map.get("id") {
-                        Some(Expr::Call {
-                            name: fn_name,
-                            args,
-                        }) if fn_name == "meow_vm_fresh_id" && args.is_empty() => {}
-                        _ => {
-                            return Err(CompilerError::Message(format!(
-                                "object '{}': 'id' field must be initialized with meow_vm_fresh_id()",
-                                name
-                            )));
-                        }
-                    }
-                }
 
                 let field_names: Vec<String> = def.fields.iter().map(|f| f.name.clone()).collect();
                 for field_name in &field_names {
@@ -428,19 +417,6 @@ impl<'m> Codegen<'m> {
             Expr::Call { name, args } => {
                 // Access check for cross-module function calls.
                 self.check_fn_visibility(&name)?;
-
-                // Special restriction: meow_vm_destroy may only be called on objects
-                // declared in the current module.
-                if name == "meow_vm_destroy"
-                    && args.len() == 1
-                    && let Some(obj_type) = self.infer_type(&args[0])
-                    && Self::is_cross_module_type(&obj_type)
-                {
-                    return Err(CompilerError::Message(format!(
-                        "cannot destroy object of type '{obj_type}': \
-                                 objects can only be destroyed inside the module that declares them",
-                    )));
-                }
 
                 for arg in args {
                     self.compile_expr(arg)?;
@@ -533,36 +509,118 @@ impl<'m> Codegen<'m> {
                 }
             }
 
+            Stmt::LetStruct {
+                type_name,
+                bindings,
+                expr,
+                rest_discarded,
+            } => {
+                let def = self
+                    .structs
+                    .iter()
+                    .find(|s| s.name == type_name)
+                    .ok_or_else(|| CompilerError::Message(format!("unknown struct '{type_name}'")))?
+                    .clone();
+
+                let def_field_names: Vec<String> =
+                    def.fields.iter().map(|f| f.name.clone()).collect();
+
+                // Check for unknown fields (in source order for deterministic errors)
+                for (field_name, _) in &bindings {
+                    if !def_field_names.contains(field_name) {
+                        return Err(CompilerError::Message(format!(
+                            "struct destructuring of '{type_name}': unknown field '{field_name}'"
+                        )));
+                    }
+                }
+
+                let binding_map: HashMap<String, String> = bindings.into_iter().collect();
+
+                // Without `..`, all fields must be explicitly bound
+                if !rest_discarded {
+                    for field_name in &def_field_names {
+                        if !binding_map.contains_key(field_name) {
+                            return Err(CompilerError::Message(format!(
+                                "struct destructuring of '{type_name}': missing binding for field '{field_name}' (use `..` to discard remaining fields)"
+                            )));
+                        }
+                    }
+                }
+
+                self.compile_expr(expr)?;
+
+                let translated_type = self.translate_name(&type_name)?;
+                self.emit(Instruction::UnpackStruct {
+                    type_name: translated_type,
+                    field_names: def_field_names.clone(),
+                });
+
+                for field_name in &def_field_names {
+                    if let Some(binding_name) = binding_map.get(field_name) {
+                        let field_ty = def
+                            .fields
+                            .iter()
+                            .find(|f| &f.name == field_name)
+                            .unwrap()
+                            .ty
+                            .name()
+                            .to_string();
+                        let slot = self.alloc_local(binding_name.clone())?;
+                        self.local_types.insert(binding_name.clone(), field_ty);
+                        self.emit(Instruction::Store(slot));
+                    } else {
+                        // rest_discarded: unbound field is dropped — forbidden for linear types
+                        let field_def = def.fields.iter().find(|f| &f.name == field_name).unwrap();
+                        if matches!(field_def.ty, Type::Struct(_)) {
+                            return Err(CompilerError::Message(format!(
+                                "struct destructuring of '{type_name}': cannot discard linear field '{field_name}' with `..`; bind it explicitly"
+                            )));
+                        }
+                        self.emit(Instruction::Pop);
+                    }
+                }
+            }
+
             Stmt::FieldAssign {
                 obj_name,
-                field,
+                field_path,
                 expr,
             } => {
                 let slot = self.locals.get(&obj_name).copied().ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{obj_name}'"))
                 })?;
 
-                // Visibility + immutability check.
+                // Visibility check on the first element of the path.
+                let first_field = &field_path[0];
                 if let Some(type_name) = self.local_types.get(&obj_name).cloned() {
-                    self.check_field_write(&type_name, &field)?;
-                } else {
-                    // Type unknown — still enforce the id-immutability rule by
-                    // checking if any object in scope has this slot and field == "id".
-                    // We do a conservative check: if field is "id", check if the slot
-                    // holds an object type we don't know about, reject to be safe.
-                    // (In practice, untyped locals almost never have field "id".)
-                    if field == "id" {
-                        return Err(CompilerError::Message(
-                            "field 'id' of an object is immutable and cannot be reassigned"
-                                .to_string(),
-                        ));
-                    }
+                    self.check_field_write(&type_name, first_field)?;
                 }
 
                 self.compile_expr(expr)?;
-                self.emit(Instruction::StoreField(slot, field));
+                self.emit(Instruction::StoreField(slot, field_path));
             }
         }
         Ok(())
+    }
+}
+
+/// Unwind a chain of `FieldAccess` nodes into `(root_expr, reversed_path)`.
+///
+/// `a.b.c` is represented as `FieldAccess { expr: FieldAccess { expr: Ident("a"), field: "b" }, field: "c" }`.
+/// This returns `(Ident("a"), ["c", "b"])` — caller must reverse the path before use.
+fn flatten_field_chain(expr: Expr, field: String) -> (Expr, Vec<String>) {
+    let mut path = vec![field];
+    let mut current = expr;
+    loop {
+        match current {
+            Expr::FieldAccess {
+                expr: inner,
+                field: f,
+            } => {
+                path.push(f);
+                current = *inner;
+            }
+            other => return (other, path),
+        }
     }
 }

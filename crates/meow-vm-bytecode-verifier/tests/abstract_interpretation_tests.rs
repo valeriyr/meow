@@ -267,6 +267,46 @@ fn call_unknown_function_rejected() {
 }
 
 //
+// ─── Struct type mismatch ───
+//
+
+#[test]
+fn unpack_wrong_struct_type_rejected() {
+    let mut module = compile(
+        r#"
+        mod m;
+        struct Point { x: u64, y: u64 }
+        struct Coin { balance: u64 }
+        fn f() -> u64 { 1 }
+    "#,
+    );
+    tamper(&mut module, "f", |code| {
+        *code = vec![
+            Instruction::PushU64(50),
+            Instruction::NewStruct {
+                type_name: "Coin".to_string(),
+                field_names: vec!["balance".to_string()],
+            },
+            Instruction::UnpackStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::Pop,
+            Instruction::Return,
+        ];
+    });
+    let errs = verify_errors(&module, &no_deps());
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::TypeMismatch { expected, found, .. }
+                if expected.contains("Point") && found.contains("Coin")
+        )),
+        "unpacking Coin as Point must be a type error, got: {errs:?}"
+    );
+}
+
+//
 // ─── Native arg errors ───
 //
 

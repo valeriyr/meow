@@ -20,8 +20,8 @@ pub struct RunResult {
     pub final_args: Vec<Option<Value>>,
     /// Objects transferred out during the call: `(object, new_owner)`.
     pub transfers: Vec<(Value, Address)>,
-    /// Objects destroyed during the call.
-    pub destroyed: Vec<Value>,
+    /// IDs of objects destroyed during the call.
+    pub destroyed: Vec<Address>,
     /// Gas spent during the call.
     pub gas_spent: u64,
 }

@@ -156,12 +156,13 @@ fn undeclared_module_reference_is_compile_error() {
 //
 
 #[test]
-fn cross_module_object_as_field_type_rejected() {
+fn cross_module_struct_as_field_type_accepted() {
+    // Cross-module struct types are allowed as field types.
     let coin_mod = utils::compile(
         r#"
             mod coin;
 
-            pub object Coin { id: address, balance: u64 }
+            pub struct Coin { id: address, balance: u64 }
         "#,
     )
     .expect("coin must compile");
@@ -174,10 +175,8 @@ fn cross_module_object_as_field_type_rejected() {
             struct Wrapper { c: coin::Coin }
             fn noop() {}
         "#;
-    assert!(matches!(
-        utils::compile_with_deps(src, &[(Address::from_str("0x40").unwrap(), &coin_mod)]).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("which is an object")
-    ));
+    utils::compile_with_deps(src, &[(Address::from_str("0x40").unwrap(), &coin_mod)])
+        .expect("cross-module struct as field type must be accepted");
 }
 
 //
@@ -197,6 +196,7 @@ fn missing_transitive_dep_is_rejected() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -207,6 +207,7 @@ fn missing_transitive_dep_is_rejected() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg.clone(),
     )
     .expect("b must compile");
@@ -220,6 +221,7 @@ fn missing_transitive_dep_is_rejected() {
                 fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module)],
+            &[],
             cfg,
         )
         .unwrap_err(),
@@ -240,6 +242,7 @@ fn complete_transitive_closure_is_accepted() {
             pub fn get() -> u64 { 1 }
         "#,
         &[],
+        &[],
         cfg.clone(),
     )
     .expect("c must compile");
@@ -250,6 +253,7 @@ fn complete_transitive_closure_is_accepted() {
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
+        &[],
         cfg.clone(),
     )
     .expect("b must compile");
@@ -262,6 +266,7 @@ fn complete_transitive_closure_is_accepted() {
                 fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
+            &[],
             cfg,
         )
         .is_ok()
@@ -288,6 +293,7 @@ fn circular_module_dep_is_compile_error() {
         Compiler::compile(
             "mod top;",
             &[(addr1, &mod_a), (addr2, &mod_b)],
+            &[],
             CompilerConfig::default(),
         )
         .unwrap_err(),

@@ -1,0 +1,23 @@
+//! meow_object — The built-in object identity module.
+//!
+//! Published at the fixed address 0x01.
+//!
+//! Every on-chain object must have an `id: meow_object::Id` field as its
+//! first field. The adapter uses this layout to identify structs that are
+//! objects vs plain data structs.
+//!
+//! Object IDs are opaque wrappers around a 32-byte address. They are created
+//! exclusively by `meow_vm_fresh_id()` — no other way to construct one is
+//! available — which guarantees that every object gets a unique, unforgeable
+//! identity derived from the transaction digest.
+
+mod meow_object;
+
+/// The unique identity of an on-chain object.
+///
+/// Wrap an `address` produced by `meow_vm_fresh_id()`. Treat this as an
+/// opaque token: the inner address is not meant to be read or manipulated
+/// directly by user code.
+pub struct Id {
+    inner: address
+}

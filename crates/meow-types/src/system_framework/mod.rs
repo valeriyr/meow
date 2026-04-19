@@ -1,6 +1,7 @@
 mod utils;
 
 pub mod meow_coin;
+pub mod meow_object;
 
 use std::collections::BTreeMap;
 

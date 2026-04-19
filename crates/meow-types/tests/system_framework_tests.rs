@@ -13,9 +13,15 @@ use meow_types::{
             deduct_gas_coin_balance, gas_meow_coin_balance, is_meow_coin, is_meow_coin_object,
             is_meow_coin_object_decl_ref,
         },
+        meow_object::{
+            MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MEOW_OBJECT_MODULE_ADDRESS, MeowObjectId,
+        },
     },
 };
-use meow_vm_types::{convert, types::Value};
+use meow_vm_types::{
+    convert::{self, struct_from_rust},
+    types::Value,
+};
 
 //
 // ─── System address tests ───
@@ -30,6 +36,38 @@ fn system_address_to_string() {
 }
 
 //
+// ─── MeowObjectId tests ───
+//
+
+#[test]
+fn meow_object_module_address_to_string() {
+    assert_eq!(
+        MEOW_OBJECT_MODULE_ADDRESS.to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+}
+
+#[test]
+fn meow_object_id_from_address_roundtrip() {
+    let addr = Address::fill(0xCD);
+    let id = MeowObjectId::from(addr);
+    assert_eq!(Address::from(id), addr);
+}
+
+#[test]
+fn meow_object_id_to_qualified_vm_value() {
+    let addr = Address::fill(0x01);
+    let val = MeowObjectId::new(addr).to_qualified_vm_value();
+    assert_eq!(
+        val,
+        Value::Struct {
+            type_name: MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string(),
+            fields: vec![("inner".to_string(), Value::Address(addr.into()))],
+        }
+    );
+}
+
+//
 // ─── MeowCoin tests ───
 //
 
@@ -37,7 +75,7 @@ fn system_address_to_string() {
 fn meow_coin_module_address_to_string() {
     assert_eq!(
         MEOW_COIN_MODULE_ADDRESS.to_string(),
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
     );
 }
 
@@ -63,23 +101,15 @@ fn round_trip_meow_coin() {
     let id = Address::fill(0xFFu8);
     let balance = 50;
 
-    let coin = Value::Object {
-        type_name: "MeowCoin".to_string(),
-        fields: vec![
-            ("id".to_string(), Value::Address(id.into())),
-            ("balance".to_string(), Value::U64(balance)),
-        ],
-    };
+    let rust_coin = MeowCoin::new(id, balance);
+    let coin = struct_from_rust(&rust_coin).expect("must convert to Value");
 
-    let rust_coin = convert::value_to_rust::<MeowCoin>(&coin).expect("must convert to Rust");
-
-    assert_eq!(rust_coin.id(), &id);
+    assert_eq!(rust_coin.id().inner(), &id);
     assert_eq!(rust_coin.balance(), balance);
 
-    assert_eq!(
-        coin,
-        convert::object_from_rust(&rust_coin).expect("must convert back to Value")
-    );
+    let restored = convert::value_to_rust::<MeowCoin>(&coin).expect("must round-trip back");
+    assert_eq!(restored.id().inner(), &id);
+    assert_eq!(restored.balance(), balance);
 }
 
 #[test]
@@ -155,8 +185,8 @@ fn test_other_object() -> Object {
 }
 
 fn test_meow_coin_object() -> Object {
-    let coin = MeowCoin::new(test_address(), 100);
-    let coin_value = convert::object_from_rust(&coin).expect("must convert to Value");
+    let coin_value =
+        struct_from_rust(&MeowCoin::new(test_address(), 100)).expect("must convert to Value");
 
     object_conversion::vm_object_value_to_object(
         &coin_value,

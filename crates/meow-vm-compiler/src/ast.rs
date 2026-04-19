@@ -82,16 +82,29 @@ pub enum Stmt {
         body: Vec<Stmt>,
         else_body: Option<Vec<Stmt>>,
     },
-    /// Field assignment: `ident.field = expr;`
+    /// Field assignment: `ident.field.field... = expr;`
     FieldAssign {
         obj_name: String,
-        field: String,
+        /// One or more field names forming the path (e.g. `["balance", "amount"]`).
+        field_path: Vec<String>,
         expr: Expr,
     },
     /// Destructuring let: `let (a, b) = expr;`
     LetTuple {
         names: Vec<String>,
         expr: Expr,
+    },
+    /// Struct destructuring: `let TypeName { field1, field2 } = expr;`
+    ///
+    /// When `rest_discarded` is `true`, a trailing `..` was present and any
+    /// unmentioned fields are silently discarded (popped after `UnpackStruct`).
+    LetStruct {
+        type_name: String,
+        /// Field bindings in source order. Each element is `(field_name, binding_name)`.
+        /// For `let Point { x, y } = p;` this is `[("x","x"), ("y","y")]`.
+        bindings: Vec<(String, String)>,
+        expr: Expr,
+        rest_discarded: bool,
     },
 }
 
@@ -107,13 +120,12 @@ pub struct AstFunction {
 
 #[derive(Debug, Clone)]
 pub struct AstStruct {
-    /// True if this struct/object is declared with `pub`.
+    /// True if declared with `pub`.
     pub is_public: bool,
     pub name: String,
     /// Fields in declaration order: (name, type).
     /// All fields are private — accessible only within the declaring module.
     pub fields: Vec<(String, Type)>,
-    pub is_object: bool,
 }
 
 #[derive(Debug, Clone)]

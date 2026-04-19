@@ -50,24 +50,6 @@ pub(crate) fn check_module(
                     context: format!("field in struct '{}'", s.name),
                 });
             }
-            if matches!(field.ty, Type::Object(_)) {
-                errors.push(VerificationError::ObjectAsFieldType {
-                    struct_name: s.name.clone(),
-                    field_name: field.name.clone(),
-                });
-            }
-        }
-        // Object first-field constraint
-        if s.is_object {
-            let first = s.fields.first();
-            let valid = first
-                .map(|f| f.name == "id" && f.ty == Type::Address)
-                .unwrap_or(false);
-            if !valid {
-                errors.push(VerificationError::ObjectMissingIdField {
-                    struct_name: s.name.clone(),
-                });
-            }
         }
     }
 
@@ -213,6 +195,41 @@ pub(crate) fn check_module(
                                     }
                                 }
                             },
+                        }
+                    }
+                }
+                Instruction::UnpackStruct {
+                    type_name,
+                    field_names,
+                } => {
+                    if module_ref::parse_module_ref(type_name).is_some() {
+                        errors.push(VerificationError::CrossModuleStructConstruction {
+                            function: f.name.clone(),
+                            pc,
+                            type_name: type_name.clone(),
+                        });
+                    } else {
+                        match module.get_struct(type_name) {
+                            None => {
+                                errors.push(VerificationError::UnknownStructType {
+                                    function: f.name.clone(),
+                                    pc,
+                                    type_name: type_name.clone(),
+                                });
+                            }
+                            Some(def) => {
+                                let expected: Vec<&str> =
+                                    def.fields.iter().map(|fd| fd.name.as_str()).collect();
+                                let given: Vec<&str> =
+                                    field_names.iter().map(|n| n.as_str()).collect();
+                                if expected != given {
+                                    errors.push(VerificationError::NewStructFieldMismatch {
+                                        function: f.name.clone(),
+                                        pc,
+                                        type_name: type_name.clone(),
+                                    });
+                                }
+                            }
                         }
                     }
                 }

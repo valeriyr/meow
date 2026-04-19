@@ -63,7 +63,7 @@ pub enum VerificationError {
     },
 
     //
-    // ─── Struct / object shape ───
+    // ─── Struct shape ───
     //
     #[error("function '{function}' at pc {pc}: NewStruct references unknown type '{type_name}'")]
     UnknownStructType {
@@ -80,17 +80,6 @@ pub enum VerificationError {
         pc: usize,
         type_name: String,
     },
-
-    #[error(
-        "struct '{struct_name}': field '{field_name}' has Object type which is not a valid field type"
-    )]
-    ObjectAsFieldType {
-        struct_name: String,
-        field_name: String,
-    },
-
-    #[error("object '{struct_name}': first field must be 'id: address'")]
-    ObjectMissingIdField { struct_name: String },
 
     //
     // ─── Visibility ───
@@ -155,7 +144,7 @@ pub enum VerificationError {
     StackMergeConflict { function: String, join_pc: usize },
 
     #[error(
-        "function '{function}': object liveness at join point pc {join_pc} differs between branch paths (slot {slot})"
+        "function '{function}': struct liveness at join point pc {join_pc} differs between branch paths (slot {slot})"
     )]
     LivenessMergeConflict {
         function: String,
@@ -174,9 +163,9 @@ pub enum VerificationError {
     MissingReturn { function: String },
 
     //
-    // ─── Object linearity ───
+    // ─── Struct linearity ───
     //
-    #[error("function '{function}' at pc {pc}: use-after-move of Object in slot {slot}")]
+    #[error("function '{function}' at pc {pc}: use-after-move of struct in slot {slot}")]
     UseAfterMove {
         function: String,
         pc: usize,
@@ -184,24 +173,24 @@ pub enum VerificationError {
     },
 
     #[error(
-        "function '{function}' at pc {pc}: Pop on Object value — objects must be transferred or destroyed"
+        "function '{function}' at pc {pc}: Pop on struct value — structs have move semantics and must be explicitly consumed"
     )]
-    PopOnObject { function: String, pc: usize },
+    PopOnStruct { function: String, pc: usize },
 
-    #[error("function '{function}' at pc {pc}: Dup on Object value — objects have move semantics")]
-    DupOnObject { function: String, pc: usize },
+    #[error("function '{function}' at pc {pc}: Dup on struct value — structs have move semantics")]
+    DupOnStruct { function: String, pc: usize },
 
     #[error(
-        "function '{function}' at pc {pc}: Store overwrites live Object in slot {slot} — consume the existing object first"
+        "function '{function}' at pc {pc}: Store overwrites live struct in slot {slot} — consume the existing value first"
     )]
-    ObjectSlotOverwrite {
+    SlotOverwrite {
         function: String,
         pc: usize,
         slot: u8,
     },
 
-    #[error("function '{function}': Object in slot {slot} was not consumed before Return")]
-    UnconsumedObject { function: String, slot: u8 },
+    #[error("function '{function}': struct in slot {slot} was not consumed before Return")]
+    UnconsumedStruct { function: String, slot: u8 },
 
     //
     // ─── Call resolution ───

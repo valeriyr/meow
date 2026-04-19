@@ -1,12 +1,19 @@
 use std::collections::HashMap;
 
-use meow_types::{address::Address, identifier::Identifier, system_framework::meow_coin::MeowCoin};
+use meow_types::{
+    address::Address,
+    identifier::Identifier,
+    system_framework::{
+        meow_coin::MeowCoin,
+        meow_object::{MEOW_OBJECT_MODULE_ADDRESS, MEOW_OBJECT_MODULE_PATH},
+    },
+};
 use meow_vm_adapter::{
     builder,
     runner::{self, RunResult, VmError},
 };
 use meow_vm_types::{
-    convert::{object_from_rust, value_to_rust},
+    convert::{struct_from_rust, value_to_rust},
     module::Module,
     types::Value,
 };
@@ -17,7 +24,7 @@ use meow_vm_types::{
 
 #[test]
 fn compile_meow_coin() {
-    builder::build(MEOW_COIN_SRC, &[]).expect("compilation must succeed");
+    let _ = meow_coin_module();
 }
 
 #[test]
@@ -45,7 +52,7 @@ fn burn_destroys_coin() {
 
         assert_eq!(result.destroyed.len(), 1);
         assert!(result.transfers.is_empty());
-        assert_eq!(result.gas_spent, 34);
+        assert_eq!(result.gas_spent, 39);
     }
 }
 
@@ -192,6 +199,42 @@ fn balance_returns_coin_and_balance() {
 }
 
 #[test]
+fn to_balance_converts_coin_to_balance() {
+    let result = run("to_balance", vec![make_coin(Address::fill(0xAA), 250)])
+        .expect("to_balance must succeed");
+
+    let rv = result.return_value.expect("must have return value");
+    let Value::Struct {
+        type_name,
+        ref fields,
+    } = rv
+    else {
+        panic!("expected Struct return value, got: {rv:?}");
+    };
+    assert_eq!(type_name, "MeowCoinBalance");
+    assert_eq!(
+        fields.iter().find(|(k, _)| k == "amount").map(|(_, v)| v),
+        Some(&Value::U64(250))
+    );
+
+    assert_eq!(result.destroyed.len(), 1, "coin must be destroyed");
+    assert!(result.transfers.is_empty());
+    assert_eq!(result.gas_spent, 52);
+}
+
+#[test]
+fn from_balance_converts_balance_to_coin() {
+    let balance_val = meow_coin_balance(150);
+    let result = run("from_balance", vec![balance_val]).expect("from_balance must succeed");
+
+    let rv = result.return_value.expect("must have return value");
+    assert_eq!(coin_balance(&rv), 150);
+    assert!(result.destroyed.is_empty());
+    assert!(result.transfers.is_empty());
+    assert_eq!(result.gas_spent, 50);
+}
+
+#[test]
 fn merge_combines_balances() {
     let from = make_coin(Address::fill(0x11), 60);
     let to = make_coin(Address::fill(0x22), 40);
@@ -204,7 +247,7 @@ fn merge_combines_balances() {
     assert!(result.final_args[0].is_none(), "from must be consumed");
     let final_to = result.final_args[1].as_ref().expect("to must survive");
     assert_eq!(coin_balance(final_to), 100);
-    assert_eq!(result.gas_spent, 51);
+    assert_eq!(result.gas_spent, 50);
 }
 
 #[test]
@@ -250,12 +293,25 @@ fn split_with_exact_balance_zeroes_from() {
 
 const MEOW_COIN_SRC: &str = include_str!("../modules/meow_coin.meow");
 
+fn meow_object_module() -> Module {
+    builder::build_from_file(MEOW_OBJECT_MODULE_PATH, &[]).expect("meow_object.meow must compile")
+}
+
 fn meow_coin_module() -> Module {
-    builder::build(MEOW_COIN_SRC, &[]).expect("meow_coin.meow must compile")
+    let meow_object = meow_object_module();
+    builder::build(MEOW_COIN_SRC, &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object)])
+        .expect("meow_coin.meow must compile")
 }
 
 fn make_coin(id: Address, balance: u64) -> Value {
-    object_from_rust(&MeowCoin::new(id, balance)).expect("MeowCoin must convert to Value")
+    struct_from_rust(&MeowCoin::new(id, balance)).expect("MeowCoin must convert to Value")
+}
+
+fn meow_coin_balance(amount: u64) -> Value {
+    Value::Struct {
+        type_name: "MeowCoinBalance".to_string(),
+        fields: vec![("amount".to_string(), Value::U64(amount))],
+    }
 }
 
 fn coin_balance(v: &Value) -> u64 {

@@ -412,58 +412,6 @@ fn cross_module_deeply_nested_structs() {
 }
 
 //
-// ─── Cross-module object: constructor function + getter ───
-//
-// Objects can only be constructed inside the declaring module.
-// Cross-module callers must use constructor functions provided by the dep module.
-//
-
-#[test]
-fn cross_module_object_via_constructor_and_getter() {
-    let a10 = Address::from_str("0x10").unwrap();
-    let coin = utils::compile(
-        r#"
-            mod coin;
-
-            pub object Coin { id: address, balance: u64 }
-
-            pub fn mint(balance: u64) -> Coin {
-                Coin { id: meow_vm_fresh_id(), balance: balance }
-            }
-            pub fn get_balance(c: Coin) -> u64 { c.balance }
-        "#,
-    );
-
-    let user = utils::compile_with_deps(
-        &format!(
-            r#"
-                mod user;
-
-                use coin@{};
-
-                pub fn make_and_read(balance: u64) -> u64 {{
-                    let c = coin::mint(balance);
-                    coin::get_balance(c)
-                }}
-            "#,
-            a10
-        ),
-        &[(a10, &coin)],
-    );
-
-    let vm = utils::vm_with_deps_and_natives(
-        user,
-        HashMap::from([(a10, coin)]),
-        vec![utils::fresh_id_native()],
-    );
-    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
-    let result = vm
-        .call("make_and_read", vec![Value::U64(100)], &mut gas)
-        .unwrap();
-    assert_eq!(result.return_value, Some(Value::U64(100)));
-}
-
-//
 // ─── Chained calls: caller → dep A → dep B ───
 //
 

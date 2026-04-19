@@ -7,11 +7,11 @@
 pub struct CompilerConfig {
     /// Maximum character length of any identifier (module, function, struct, field, or variable name).
     max_identifier_len: usize,
-    /// Maximum number of struct/object definitions in a module.
+    /// Maximum number of struct definitions in a module.
     max_structs: usize,
     /// Maximum number of functions in a module.
     max_functions: usize,
-    /// Maximum number of fields in a struct or object definition.
+    /// Maximum number of fields in a struct definition.
     max_fields: usize,
     /// Maximum number of parameters in a function.
     max_params: usize,
@@ -39,7 +39,7 @@ impl CompilerConfig {
         self.max_identifier_len
     }
 
-    /// Returns the maximum number of struct/object definitions allowed in a module.
+    /// Returns the maximum number of struct definitions allowed in a module.
     pub fn max_structs(&self) -> usize {
         self.max_structs
     }
@@ -49,7 +49,7 @@ impl CompilerConfig {
         self.max_functions
     }
 
-    /// Returns the maximum number of fields allowed in a struct or object definition.
+    /// Returns the maximum number of fields allowed in a struct definition.
     pub fn max_fields(&self) -> usize {
         self.max_fields
     }

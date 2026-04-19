@@ -4,18 +4,21 @@
 //!
 //! Serializes a `Value` with BCS-compatible byte layout, then deserializes as `T`.
 //!
-//! # `struct_from_rust` / `object_from_rust` — Rust → Value
+//! # `struct_from_rust` — Rust → Value
 //!
-//! Uses a custom `serde::Serializer` to convert a `T: Serialize` directly into
-//! a `Value` without any template or BCS round-trip. Field names are preserved.
+//! Uses a custom `serde::Serializer` to convert a `T: Serialize + VmTypeNames` directly
+//! into a `Value` without any template or BCS round-trip. Field names are preserved.
+//! Implement [`VmTypeNames`] to translate cross-module struct type names; types that
+//! need no translation can use the default (empty) implementation.
 //!
 //! ```rust
 //! use meow_vm_types::types::Value;
-//! use meow_vm_types::convert::{value_to_rust, struct_from_rust};
+//! use meow_vm_types::convert::{value_to_rust, struct_from_rust, VmTypeNames};
 //! use serde::{Deserialize, Serialize};
 //!
 //! #[derive(Debug, PartialEq, Serialize, Deserialize)]
 //! struct Point { x: u64, y: u64 }
+//! impl VmTypeNames for Point {}
 //!
 //! let point = Point { x: 3, y: 7 };
 //! let value = struct_from_rust(&point).unwrap();
@@ -42,28 +45,42 @@ pub type Result<T> = std::result::Result<T, ConversionError>;
 ///
 /// Serializes the value to BCS bytes first, then deserializes as `T`.
 /// `T` must derive or implement `serde::Deserialize` with fields in the
-/// same order as the `Value`'s struct/object fields.
+/// same order as the `Value`'s struct fields.
 pub fn value_to_rust<T: DeserializeOwned>(value: &Value) -> Result<T> {
     let bytes = bcs::to_bytes(&ValueToRust(value))?;
     Ok(bcs::from_bytes(&bytes)?)
 }
 
+/// Provides address-qualified type-name translations for cross-module struct fields.
+///
+/// Implement this for types whose fields include structs from other modules, so that
+/// [`struct_from_rust`] can translate local names (e.g. `"Id"`) to the bytecode-qualified
+/// names the VM expects (e.g. `"@0x0001::Id"`).
+///
+/// Types that need no translation can use the default implementation:
+/// ```rust
+/// use meow_vm_types::convert::VmTypeNames;
+/// struct Point { x: u64, y: u64 }
+/// impl VmTypeNames for Point {}
+/// ```
+pub trait VmTypeNames {
+    fn type_names() -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+}
+
 /// Convert a Rust type into a [`Value::Struct`].
 ///
 /// Uses serde's data model to capture the struct name and field names directly.
-/// `T` must derive or implement `serde::Serialize`.
+/// `T` must derive or implement `serde::Serialize` and [`VmTypeNames`].
+/// Types that need no cross-module type-name translation can use the default
+/// `VmTypeNames` implementation.
 ///
-/// Only structs with named fields are supported. For object values (with `id: [u8; 32]`
-/// as the first field), use [`object_from_rust`].
-pub fn struct_from_rust<T: Serialize>(val: &T) -> Result<Value> {
-    val.serialize(ValueSerializer { is_object: false })
-}
-
-/// Convert a Rust type into a [`Value::Object`].
-///
-/// Same as [`struct_from_rust`] but produces `Value::Object` instead of `Value::Struct`.
-pub fn object_from_rust<T: Serialize>(val: &T) -> Result<Value> {
-    val.serialize(ValueSerializer { is_object: true })
+/// Only structs with named fields are supported.
+pub fn struct_from_rust<T: Serialize + VmTypeNames>(val: &T) -> Result<Value> {
+    val.serialize(ValueSerializer {
+        type_names: T::type_names(),
+    })
 }
 
 //
@@ -78,7 +95,7 @@ pub fn object_from_rust<T: Serialize>(val: &T) -> Result<Value> {
 /// - `Value::U64(n)`         → same bytes as `u64`
 /// - `Value::Address(a)`     → same bytes as `[u8; 32]`
 /// - `Value::Str(s)`         → same bytes as `String`
-/// - `Value::Struct/Object`  → fields serialized in order, same as a Rust struct
+/// - `Value::Struct`         → fields serialized in order, same as a Rust struct
 struct ValueToRust<'a>(&'a Value);
 
 impl Serialize for ValueToRust<'_> {
@@ -96,7 +113,7 @@ impl Serialize for ValueToRust<'_> {
                 use serde::ser::Error;
                 Err(S::Error::custom("tuple value cannot be serialized to BCS"))
             }
-            Value::Struct { fields, .. } | Value::Object { fields, .. } => {
+            Value::Struct { fields, .. } => {
                 // BCS structs are just their fields concatenated in order.
                 // serialize_tuple produces the same layout as serialize_struct in BCS.
                 let mut tuple = s.serialize_tuple(fields.len())?;
@@ -110,7 +127,7 @@ impl Serialize for ValueToRust<'_> {
 }
 
 struct ValueSerializer {
-    is_object: bool,
+    type_names: &'static [(&'static str, &'static str)],
 }
 
 type SerResult = std::result::Result<Value, ConversionError>;
@@ -152,10 +169,16 @@ impl serde::Serializer for ValueSerializer {
         )))
     }
     fn serialize_struct(self, name: &'static str, len: usize) -> Result<StructSerializer> {
+        let translated = self
+            .type_names
+            .iter()
+            .find(|(from, _)| *from == name)
+            .map(|(_, to)| *to)
+            .unwrap_or(name);
         Ok(StructSerializer {
-            type_name: name.to_string(),
+            type_name: translated.to_string(),
             fields: Vec::with_capacity(len),
-            is_object: self.is_object,
+            type_names: self.type_names,
         })
     }
     fn serialize_tuple(self, len: usize) -> Result<TupleSerializer> {
@@ -254,7 +277,7 @@ impl serde::Serializer for ValueSerializer {
 struct StructSerializer {
     type_name: String,
     fields: Vec<(String, Value)>,
-    is_object: bool,
+    type_names: &'static [(&'static str, &'static str)],
 }
 
 impl SerializeStruct for StructSerializer {
@@ -266,37 +289,18 @@ impl SerializeStruct for StructSerializer {
         key: &'static str,
         value: &T,
     ) -> std::result::Result<(), Self::Error> {
-        let v = value.serialize(ValueSerializer { is_object: false })?;
+        let v = value.serialize(ValueSerializer {
+            type_names: self.type_names,
+        })?;
         self.fields.push((key.to_string(), v));
         Ok(())
     }
 
     fn end(self) -> SerResult {
-        if self.is_object {
-            match self.fields.first() {
-                Some((_, Value::Address(_))) => {}
-                Some((name, _)) => {
-                    return Err(ConversionError::UnsupportedType(format!(
-                        "object first field '{}' must be Address ([u8; 32])",
-                        name
-                    )));
-                }
-                None => {
-                    return Err(ConversionError::UnsupportedType(
-                        "object must have at least one field (id: [u8; 32])".into(),
-                    ));
-                }
-            }
-            Ok(Value::Object {
-                type_name: self.type_name,
-                fields: self.fields,
-            })
-        } else {
-            Ok(Value::Struct {
-                type_name: self.type_name,
-                fields: self.fields,
-            })
-        }
+        Ok(Value::Struct {
+            type_name: self.type_name,
+            fields: self.fields,
+        })
     }
 }
 
@@ -318,7 +322,7 @@ impl SerializeTuple for TupleSerializer {
         &mut self,
         value: &T,
     ) -> std::result::Result<(), Self::Error> {
-        let v = value.serialize(ValueSerializer { is_object: false })?;
+        let v = value.serialize(ValueSerializer { type_names: &[] })?;
         self.elements.push(v);
         Ok(())
     }

@@ -2,23 +2,24 @@
 
 use std::collections::HashMap;
 
-use meow_vm::{NativeFnEntry, NativeResult, Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_compiler::Compiler;
 use meow_vm_types::{
     address::Address,
     config::{CompilerConfig, VmConfig},
     module::Module,
+    natives::{NativeFnEntry, NativeResult, NativeSig},
     types::Value,
 };
 
 /// Compile a source snippet. Panics if compilation fails.
 pub fn compile(source: &str) -> Module {
-    Compiler::compile(source, &[], CompilerConfig::default()).expect("compilation failed")
+    Compiler::compile(source, &[], &[], CompilerConfig::default()).expect("compilation failed")
 }
 
 /// Compile a module that depends on `deps`. Panics if compilation fails.
 pub fn compile_with_deps(source: &str, deps: &[(Address, &Module)]) -> Module {
-    Compiler::compile(source, deps, CompilerConfig::default()).expect("compilation failed")
+    Compiler::compile(source, deps, &[], CompilerConfig::default()).expect("compilation failed")
 }
 
 /// Builds a `Vm` with a module and no deps.
@@ -43,10 +44,25 @@ pub fn vm_with_deps(module: Module, deps: HashMap<Address, Module>) -> Vm {
     )
 }
 
+/// Build a `Vm` from source.
+pub fn vm_with_source(source: &str) -> Vm {
+    vm_with_natives(source, vec![])
+}
+
 /// Build a `Vm` from source with the given native functions.
 pub fn vm_with_natives(source: &str, natives: Vec<NativeFnEntry>) -> Vm {
+    let native_sigs: Vec<NativeSig> = natives
+        .iter()
+        .map(|n| NativeSig {
+            name: n.name.clone(),
+            params: n.params.clone(),
+            return_type: n.return_type.clone(),
+        })
+        .collect();
+    let module = Compiler::compile(source, &[], &native_sigs, CompilerConfig::default())
+        .expect("compilation failed");
     Vm::new(
-        compile(source),
+        module,
         natives,
         GasSchedule::default(),
         HashMap::new(),
@@ -83,19 +99,11 @@ pub fn run(source: &str, fn_name: &str, args: Vec<Value>) -> Option<Value> {
 // ─── Common native functions ───
 //
 
-pub fn fresh_id_native() -> NativeFnEntry {
-    NativeFnEntry {
-        name: "meow_vm_fresh_id".to_string(),
-        param_count: 0,
-        gas_cost: 1,
-        func: Box::new(|_| NativeResult::Return(Some(Value::Address(Address::ZERO)))),
-    }
-}
-
 pub fn consume_native(name: &str) -> NativeFnEntry {
     NativeFnEntry {
         name: name.to_string(),
-        param_count: 1,
+        params: vec![None], // any struct
+        return_type: None,
         gas_cost: 1,
         func: Box::new(|_| NativeResult::Return(None)),
     }

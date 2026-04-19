@@ -5,8 +5,8 @@ use meow_vm_types::types::Type;
 pub enum NativeParam {
     /// A specific concrete Meow type.
     Concrete(Type),
-    /// Any Object value — used by meow_vm_transfer and meow_vm_destroy.
-    AnyObject,
+    /// Any struct value — used by `meow_vm_transfer` to accept any struct argument.
+    AnyStruct,
 }
 
 /// Type signature for a native function, used by the verifier to type-check

@@ -12,7 +12,7 @@ use meow_types::{
 };
 use meow_vm_compiler::Compiler;
 
-use crate::{Module, builder::error::BuilderError};
+use crate::{Module, builder::error::BuilderError, natives};
 
 /// The result type related to the builder.
 pub type Result<T> = std::result::Result<T, BuilderError>;
@@ -101,7 +101,12 @@ fn compile(source: &str, deps: &[(Address, &Module)]) -> Result<Module> {
         .map(|(addr, m)| ((*addr).into(), *m))
         .collect::<Vec<_>>();
 
-    let module = Compiler::compile(source, &deps, config::compiler_config())?;
+    let module = Compiler::compile(
+        source,
+        &deps,
+        &natives::adapter_native_sigs_for_compiler(),
+        config::compiler_config(),
+    )?;
 
     let module_size = bcs::serialized_size(&module).expect("module serialization is infallible");
 

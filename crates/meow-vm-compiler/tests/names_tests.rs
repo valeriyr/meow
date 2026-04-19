@@ -60,19 +60,6 @@ fn invalid_struct_name_rejected() {
 }
 
 #[test]
-fn invalid_object_name_rejected() {
-    // The parser won't accept a leading digit as an object name at all.
-    let src = r#"
-            mod test;
-            object 2bad { id: address } fn f() {}
-        "#;
-    assert!(matches!(
-        utils::compile(src).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("expected identifier")
-    ));
-}
-
-#[test]
 fn invalid_param_name_rejected() {
     // The parser won't accept a leading digit as a parameter name at all.
     let src = r#"
@@ -122,7 +109,7 @@ fn config_supplied_reserved_names_are_rejected() {
         );
         assert!(
             matches!(
-                Compiler::compile(&src, &[], config.clone()).unwrap_err(),
+                Compiler::compile(&src, &[], &[], config.clone()).unwrap_err(),
                 CompilerError::Message(msg) if msg.contains("reserved for a built-in native function")
             ),
             "config-reserved name '{name}' must be rejected"

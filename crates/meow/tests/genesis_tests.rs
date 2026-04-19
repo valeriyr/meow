@@ -36,12 +36,29 @@ fn build_with_single_allocation_creates_module_and_coin() {
     .run()
     .unwrap();
 
-    // One module object + one coin object.
-    assert_eq!(output.objects.len(), 2);
+    // meow_object module + meow_coin module + one coin object.
+    assert_eq!(output.objects.len(), 3);
     assert_eq!(output.objects[0].type_, "module");
     assert_eq!(
-        output.objects[1].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000001::MeowCoin"
+        output.objects[0].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    assert_eq!(output.objects[1].type_, "module");
+    assert_eq!(
+        output.objects[1].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
+    );
+    assert_eq!(
+        output.objects[2].type_,
+        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+    );
+    assert_eq!(
+        output.objects[2]
+            .content
+            .as_ref()
+            .and_then(|c| c.get("balance"))
+            .map(String::as_str),
+        Some("500")
     );
 }
 
@@ -64,25 +81,58 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     .run()
     .unwrap();
 
-    // One module object + three coin objects.
-    assert_eq!(output.objects.len(), 4);
+    // meow_object module + meow_coin module + three coin objects.
+    assert_eq!(output.objects.len(), 5);
     assert_eq!(output.objects[0].type_, "module");
     assert_eq!(
-        output.objects[1].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000001::MeowCoin"
+        output.objects[0].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    assert_eq!(output.objects[1].type_, "module");
+    assert_eq!(
+        output.objects[1].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
     );
     assert_eq!(
         output.objects[2].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000001::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+    );
+    assert_eq!(
+        output.objects[2]
+            .content
+            .as_ref()
+            .and_then(|c| c.get("balance"))
+            .map(String::as_str),
+        Some("100")
     );
     assert_eq!(
         output.objects[3].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000001::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+    );
+    assert_eq!(
+        output.objects[3]
+            .content
+            .as_ref()
+            .and_then(|c| c.get("balance"))
+            .map(String::as_str),
+        Some("200")
+    );
+    assert_eq!(
+        output.objects[4].type_,
+        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+    );
+    assert_eq!(
+        output.objects[4]
+            .content
+            .as_ref()
+            .and_then(|c| c.get("balance"))
+            .map(String::as_str),
+        Some("300")
     );
 }
 
 #[test]
-fn build_with_empty_allocations_creates_only_the_module() {
+fn build_with_empty_allocations_creates_only_modules() {
     let tmp = TempDir::new().unwrap();
     let allocations = write_allocations(&tmp, &[]);
 
@@ -93,8 +143,18 @@ fn build_with_empty_allocations_creates_only_the_module() {
     .run()
     .unwrap();
 
-    assert_eq!(output.objects.len(), 1);
+    // meow_object module + meow_coin module.
+    assert_eq!(output.objects.len(), 2);
     assert_eq!(output.objects[0].type_, "module");
+    assert_eq!(
+        output.objects[0].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    assert_eq!(output.objects[1].type_, "module");
+    assert_eq!(
+        output.objects[1].address,
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
+    );
 }
 
 #[test]

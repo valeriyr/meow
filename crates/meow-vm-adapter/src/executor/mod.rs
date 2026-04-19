@@ -7,6 +7,7 @@ pub mod error;
 
 use std::{cell::RefCell, rc::Rc};
 
+use meow_types::system_framework::meow_object;
 use meow_types::{
     address::Address,
     config::{self, MAX_BCS_SERIALIZED_MODULE_SIZE},
@@ -21,11 +22,15 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_bytecode_verifier::BytecodeVerifier;
-use meow_vm_types::{config::VmConfig, module::Module, types::type_contains_object};
+use meow_vm_types::{
+    config::VmConfig,
+    module::Module,
+    types::{StructDef, Type},
+};
 
 use crate::{
-    context::Context, executor::error::ExecutorError, external_context::ExternalContext, natives,
+    bytecode_verifier, context::Context, executor::error::ExecutorError,
+    external_context::ExternalContext, natives,
 };
 
 /// Gas cost per byte of module bytecode when publishing.
@@ -160,7 +165,7 @@ fn execute_meow_call(
     if func
         .return_type
         .as_ref()
-        .is_some_and(|rt| type_contains_object(rt, &module.structs))
+        .is_some_and(|rt| return_type_contains_object(rt, &module.structs))
     {
         return ExecutionResult::failure(
             format!(
@@ -262,9 +267,12 @@ fn execute_meow_module_publish(
     let deps_ref: std::collections::HashMap<_, _> = deps.iter().map(|(a, m)| (*a, m)).collect();
 
     let adapter_natives = natives::adapter_native_signatures();
-    if let Err(errors) = BytecodeVerifier::new(adapter_natives, config::compiler_config())
-        .verify(&module_val, &deps_ref)
-    {
+    if let Err(errors) = meow_vm_bytecode_verifier::verify(
+        &module_val,
+        &deps_ref,
+        &adapter_natives,
+        &config::compiler_config(),
+    ) {
         let msg = errors
             .iter()
             .map(|e| e.to_string())
@@ -272,6 +280,18 @@ fn execute_meow_module_publish(
             .join("; ");
         return ExecutionResult::failure(
             format!("bytecode verification failed: {msg}"),
+            *tx_digest,
+        );
+    }
+
+    if let Err(errors) = bytecode_verifier::verify(&module_val, &deps_ref, &adapter_natives) {
+        let msg = errors
+            .iter()
+            .map(|e| e.to_string())
+            .collect::<Vec<_>>()
+            .join("; ");
+        return ExecutionResult::failure(
+            format!("adapter bytecode verification failed: {msg}"),
             *tx_digest,
         );
     }
@@ -296,4 +316,17 @@ fn execute_meow_module_publish(
         vec![],
         vec![],
     )
+}
+
+/// Returns true if the given return type contains an object struct, directly or nested in a tuple.
+fn return_type_contains_object(ty: &Type, structs: &[StructDef]) -> bool {
+    match ty {
+        Type::Struct(name) => structs
+            .iter()
+            .any(|s| s.name == *name && meow_object::is_object_struct(s)),
+        Type::Tuple(types) => types
+            .iter()
+            .any(|t| return_type_contains_object(t, structs)),
+        _ => false,
+    }
 }

@@ -9,9 +9,9 @@ pub struct GasSchedule {
     push_str: u64,
     /// Cost of a local variable load or store (`Load`/`Store`).
     load_store: u64,
-    /// Cost of borrowing a field from a struct or object slot via `LoadField`.
+    /// Cost of borrowing a field from a struct slot via `LoadField`.
     load_field: u64,
-    /// Cost of writing a value back into a field of a struct or object slot via `StoreField`.
+    /// Cost of writing a value back into a field of a struct slot via `StoreField`.
     store_field: u64,
     /// Cost of addition, subtraction, or multiplication (`Add`, `Sub`, `Mul`).
     add_sub_mul: u64,
@@ -25,9 +25,9 @@ pub struct GasSchedule {
     logic: u64,
     /// Base cost charged once per `NewStruct` instruction, before per-field costs.
     new_struct_base: u64,
-    /// Additional cost charged per field when constructing a struct or object.
+    /// Additional cost charged per field when constructing a struct.
     new_struct_per_field: u64,
-    /// Cost of extracting a field from a struct or object value on the stack via `GetField`.
+    /// Cost of extracting a field from a struct value on the stack via `GetField`.
     get_field: u64,
     /// Cost of stack manipulation instructions (`Pop`, `Dup`).
     stack: u64,
@@ -103,6 +103,7 @@ impl GasSchedule {
 
             Instruction::MakeTuple(n) => *n as u64,
             Instruction::UnpackTuple(n) => *n as u64,
+            Instruction::UnpackStruct { field_names, .. } => field_names.len() as u64,
         }
     }
 }

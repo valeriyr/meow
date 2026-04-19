@@ -41,17 +41,15 @@ pub fn validate_function_name(name: &str, config: &CompilerConfig) -> Result<()>
     Ok(())
 }
 
-/// Basic per-struct validation: identifier names, field count, and object first-field rule.
+/// Basic per-struct validation: identifier names and field count.
 /// Field *type* cross-references are checked separately in [`validate_struct_refs`].
 pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<()> {
-    let kind = if def.is_object { "object" } else { "struct" };
-
-    validate_identifier(&def.name, &format!("{kind} name"), config)?;
+    validate_identifier(&def.name, "struct name", config)?;
 
     let max_fields = config.max_fields();
     if def.fields.len() > max_fields {
         return Err(CompilerError::Message(format!(
-            "{kind} '{}': too many fields ({} > limit of {})",
+            "struct '{}': too many fields ({} > limit of {})",
             def.name,
             def.fields.len(),
             max_fields,
@@ -61,29 +59,16 @@ pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<(
     for (field_name, ty) in &def.fields {
         validate_identifier(
             field_name,
-            &format!("field in {kind} '{}'", def.name),
+            &format!("field in struct '{}'", def.name),
             config,
         )?;
         if !ty.is_valid_field_type() {
             return Err(CompilerError::Message(format!(
-                "{kind} '{}': field '{field_name}' has type '{}' which is not allowed as a field type — \
-                 only primitives (bool, u64, address, string) and non-object structs are allowed",
+                "struct '{}': field '{field_name}' has type '{}' which is not allowed as a field type — \
+                 only primitives (bool, u64, address, string) and structs are allowed",
                 def.name,
                 ty.name()
             )));
-        }
-    }
-
-    // Objects must have `id: address` as their first field.
-    if def.is_object {
-        match def.fields.first() {
-            Some((name, Type::Address)) if name == "id" => {}
-            _ => {
-                return Err(CompilerError::Message(format!(
-                    "object '{}': first field must be 'id: address'",
-                    def.name
-                )));
-            }
         }
     }
 
@@ -99,6 +84,45 @@ pub fn ast_fields_to_field_defs(fields: &[(String, Type)]) -> Vec<FieldDef> {
             ty: ty.clone(),
         })
         .collect()
+}
+
+/// Translate cross-module type names in struct field definitions from source-level
+/// `dep_name::TypeName` form to address-qualified `@<hex>::TypeName` form.
+///
+/// This must be called after validation (which uses source-level names for lookups)
+/// so that the stored struct definitions match the address-qualified names used in
+/// bytecode instructions and native signatures.
+pub fn translate_struct_field_types(
+    structs: &mut [StructDef],
+    dep_addresses: &HashMap<String, Address>,
+) {
+    for def in structs.iter_mut() {
+        for field in def.fields.iter_mut() {
+            field.ty = translate_type(&field.ty, dep_addresses);
+        }
+    }
+}
+
+/// Translate a `Struct(name)` type in `dep_name::TypeName` form to
+/// `Struct("@<hex_address>::TypeName")`. Other types pass through unchanged.
+fn translate_type(ty: &Type, dep_addresses: &HashMap<String, Address>) -> Type {
+    match ty {
+        Type::Struct(name) => {
+            if let Some((mod_name, type_name)) = name.split_once("::")
+                && let Some(addr) = dep_addresses.get(mod_name)
+            {
+                return Type::Struct(format!("@{addr}::{type_name}"));
+            }
+            ty.clone()
+        }
+        Type::Tuple(types) => Type::Tuple(
+            types
+                .iter()
+                .map(|t| translate_type(t, dep_addresses))
+                .collect(),
+        ),
+        _ => ty.clone(),
+    }
 }
 
 /// Detect circular import dependencies among the provided dep modules.
@@ -183,24 +207,14 @@ pub fn validate_struct_refs(
     let known_struct_names: HashSet<&str> = all_structs.iter().map(|s| s.name.as_str()).collect();
 
     for def in local_structs {
-        let kind = if def.is_object { "object" } else { "struct" };
         for field in &def.fields {
-            if let Type::Struct(sname) = &field.ty {
-                // Reject objects used as struct field types.
-                if let Some(referenced) = all_structs.iter().find(|s| s.name == *sname) {
-                    if referenced.is_object {
-                        return Err(CompilerError::Message(format!(
-                            "{kind} '{}': field '{}' has type '{sname}' which is an object — \
-                             objects cannot be used as struct field types",
-                            def.name, field.name,
-                        )));
-                    }
-                } else if !known_struct_names.contains(sname.as_str()) {
-                    return Err(CompilerError::Message(format!(
-                        "{kind} '{}': field '{}' references unknown struct '{sname}'",
-                        def.name, field.name,
-                    )));
-                }
+            if let Type::Struct(sname) = &field.ty
+                && !known_struct_names.contains(sname.as_str())
+            {
+                return Err(CompilerError::Message(format!(
+                    "struct '{}': field '{}' references unknown struct '{sname}'",
+                    def.name, field.name,
+                )));
             }
         }
     }

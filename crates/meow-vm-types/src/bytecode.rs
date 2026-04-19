@@ -22,14 +22,18 @@ pub enum Instruction {
     // ─── Local variables ───
     //
     /// Copy/move the value at local slot `n` onto the stack.
-    /// For Object values: moves (consumes the slot). For all others: copies.
+    /// For Struct values: moves (consumes the slot). For all others: copies.
     Load(u8),
     /// Pop the stack top and store it in local slot `n`.
     Store(u8),
-    /// Read a field from local slot `n` WITHOUT consuming it. Push field value.
-    LoadField(u8, String),
-    /// Pop a value and write it into a field of local slot `n` WITHOUT consuming the slot.
-    StoreField(u8, String),
+    /// Read through a field path from local slot `n` WITHOUT consuming it. Push terminal value.
+    ///
+    /// `path` is a non-empty list of field names traversed in order (e.g. `["balance", "amount"]`).
+    /// Every intermediate field must be a struct; the terminal value is pushed onto the stack.
+    LoadField(u8, Vec<String>),
+    /// Pop a value and write it into the terminal field reached by `path` on local slot `n`,
+    /// WITHOUT consuming the slot. Every intermediate field must be a struct.
+    StoreField(u8, Vec<String>),
 
     //
     // ─── Arithmetic ───
@@ -60,18 +64,25 @@ pub enum Instruction {
     Or,
 
     //
-    // ─── Struct / Object operations ───
+    // ─── Struct operations ───
     //
     /// Pop `field_names.len()` values (pushed in field-definition order),
-    /// then construct a struct or object and push it.
+    /// then construct a struct and push it.
     NewStruct {
         type_name: String,
         /// Field names in struct-definition order.
         field_names: Vec<String>,
     },
-    /// Pop a struct/object from the stack, push the value of the named field.
-    /// This is a consuming operation — the struct/object is gone after this.
+    /// Pop a struct from the stack, push the value of the named field.
+    /// This is a consuming operation — the struct is gone after this.
     GetField(String),
+    /// Pop a struct from the stack and push all its fields in definition order,
+    /// with the first field ending up on top (inverse of `NewStruct`).
+    /// Used to implement struct destructuring: `let TypeName { f1, f2 } = expr;`
+    UnpackStruct {
+        type_name: String,
+        field_names: Vec<String>,
+    },
 
     //
     // ─── Stack manipulation ───

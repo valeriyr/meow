@@ -7,6 +7,7 @@ use meow_types::{
         Object, object_conversion, object_owner::ObjectOwner, object_type::ObjectType,
         object_version::ObjectVersion,
     },
+    system_framework::meow_object,
 };
 use meow_vm::VmCallResult;
 
@@ -56,13 +57,9 @@ pub fn collect_object_effects(
     let transferred_ids: BTreeSet<Address> = ctx
         .transfers()
         .iter()
-        .filter_map(|(v, _)| v.object_id().map(Into::into))
+        .filter_map(|(v, _)| meow_object::object_id(v))
         .collect();
-    let destroyed_ids: BTreeSet<Address> = ctx
-        .destroyed()
-        .iter()
-        .filter_map(|v| v.object_id().map(Into::into))
-        .collect();
+    let destroyed_ids: BTreeSet<Address> = ctx.destroyed().iter().copied().collect();
     let fresh_ids: BTreeSet<Address> = ctx.fresh_ids().iter().copied().collect();
 
     // Validate that all fresh IDs were accounted for (transferred or destroyed).
@@ -88,10 +85,8 @@ pub fn collect_object_effects(
 
     // Collect transferred objects.
     for (obj_val, owner) in ctx.transfers() {
-        let id: Address = obj_val
-            .object_id()
-            .expect("transferred object must have an ID")
-            .into();
+        let id: Address =
+            meow_object::object_id(obj_val).expect("transferred object must have an ID");
 
         let (version, is_fresh) = if fresh_ids.contains(&id) {
             (ObjectVersion::ONE, true)
@@ -119,29 +114,22 @@ pub fn collect_object_effects(
     }
 
     // Collect destroyed objects.
-    for obj_val in ctx.destroyed() {
-        let id: Address = obj_val
-            .object_id()
-            .expect("destroyed object must have an ID")
-            .into();
-
+    for id in ctx.destroyed() {
         // If object was created and destroyed in the same execution session, it should not appear in the destroyed list — skip it.
-        if !fresh_ids.contains(&id) {
+        if !fresh_ids.contains(id) {
             let original = input_by_addr
-                .get(&id)
+                .get(id)
                 .expect("destroyed object must be found in inputs");
             let version = versioning::bump_version(original);
 
-            destroyed_objects.push(
-                object_conversion::vm_object_value_to_object(
-                    obj_val,
-                    *original.owner(),
-                    *tx_digest,
-                    version,
-                    module_address,
-                )
-                .expect("VM object value is expected to be convertible to object"),
-            );
+            destroyed_objects.push(Object::new(
+                *original.address(),
+                *original.owner(),
+                *tx_digest,
+                version,
+                original.type_().clone(),
+                original.content().to_vec(),
+            ));
         }
     }
 
@@ -152,10 +140,8 @@ pub fn collect_object_effects(
             _ => continue, // consumed (moved to transfer/destroy)
         };
 
-        let id: Address = final_val
-            .object_id()
-            .expect("surviving object must have an ID")
-            .into();
+        let id: Address =
+            meow_object::object_id(final_val).expect("surviving object must have an ID");
 
         // Skip if already handled as a transferred input.
         if transferred_ids.contains(&id) || destroyed_ids.contains(&id) {

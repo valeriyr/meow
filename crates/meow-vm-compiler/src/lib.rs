@@ -6,6 +6,7 @@
 mod ast;
 mod codegen;
 mod parser;
+mod type_checker;
 mod validator;
 
 pub mod error;
@@ -18,6 +19,7 @@ use meow_vm_types::{
     address::Address,
     config::CompilerConfig,
     module::Module,
+    natives::NativeSig,
     types::{StructDef, Type},
 };
 
@@ -41,7 +43,9 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// ```text
 /// mod my_module;
 ///
-/// object Coin { id: address, value: u64 }
+/// use meow_object@0x01;
+///
+/// pub struct Coin { id: meow_object::Id, balance: u64 }
 /// struct Point { x: u64, y: u64 }
 ///
 /// fn add(a: u64, b: u64) -> u64 {
@@ -51,18 +55,19 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 ///
 /// ## Supported features
 /// - `mod NAME;` declaration — must be the first item in source
-/// - Primitive types: `bool`, `u64`, `address`
+/// - Primitive types: `bool`, `u64`, `address`, `string`
 /// - Address literals: `@0x02` (left-padded to 32 bytes)
-/// - User-defined structs with primitive-typed fields (and nested struct fields)
-/// - User-defined objects with `id: address` as first field
-/// - Functions with parameters and an optional return type (including `Object`)
+/// - User-defined structs with move semantics (primitive and nested struct fields)
+/// - Functions with parameters and an optional return type
 /// - `let` bindings, `return` statements
 /// - `if` / `else` statements
+/// - Struct destructuring: `let Name { field, .. } = value;`
+/// - Tuple destructuring: `let (a, b) = expr;`
 /// - Field assignment: `obj.field = expr;`
 /// - Binary operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`
 /// - Unary operator: `!` (boolean not)
 /// - Field access: `expr.field`
-/// - Struct/object literals: `Foo { field: expr, … }`
+/// - Struct literals: `Foo { field: expr, … }`
 /// - Function calls: `foo(arg, …)` (module or native)
 /// - String literals: `"..."`
 /// - Cross-module dependencies via `use module_name@0x...;` and qualified names `module_name::TypeOrFn`
@@ -100,6 +105,7 @@ impl Compiler {
     pub fn compile(
         source: &str,
         deps: &[(Address, &Module)],
+        native_sigs: &[NativeSig],
         config: CompilerConfig,
     ) -> Result<Module> {
         let (items, module_name, use_decls) = Self::parse_and_extract(source)?;
@@ -113,7 +119,7 @@ impl Compiler {
         let max_structs = config.max_structs();
         if struct_count > max_structs {
             return Err(CompilerError::Message(format!(
-                "too many struct/object definitions: {} > limit of {}",
+                "too many struct definitions: {} > limit of {}",
                 struct_count, max_structs,
             )));
         }
@@ -205,14 +211,13 @@ impl Compiler {
         let mut module = Module::new(&module_name);
         module.imports = import_addresses;
 
-        // First pass: collect struct/object definitions with basic per-struct validation.
+        // First pass: collect struct definitions with basic per-struct validation.
         for item in &items {
             if let AstItem::Struct(ast_struct) = item {
                 validator::validate_struct_def(ast_struct, &config)?;
                 module.structs.push(StructDef {
                     name: ast_struct.name.clone(),
                     fields: validator::ast_fields_to_field_defs(&ast_struct.fields),
-                    is_object: ast_struct.is_object,
                     is_public: ast_struct.is_public,
                 });
             }
@@ -242,7 +247,6 @@ impl Compiler {
                         .map(move |s| StructDef {
                             name: format!("{}::{}", dep_name, s.name),
                             fields: s.fields.clone(),
-                            is_object: s.is_object,
                             is_public: true,
                         }),
                 )
@@ -251,7 +255,12 @@ impl Compiler {
             .collect();
 
         // Cross-reference + cycle detection (after all local structs are collected).
+        // Validation uses source-level names (e.g. "meow_object::Id") that match dep_structs.
         validator::validate_struct_refs(&module.structs, &dep_structs, &config)?;
+
+        // Translate cross-module field types to address-qualified form (e.g. "@0x1::Id") so
+        // that the stored struct definitions match bytecode instructions and native signatures.
+        validator::translate_struct_field_types(&mut module.structs, &dep_addresses);
 
         // Build combined struct list (local + qualified dep structs) for codegen.
         let mut all_structs = module.structs.clone();
@@ -268,6 +277,57 @@ impl Compiler {
                 _ => None,
             })
             .collect();
+
+        let local_fn_param_types: HashMap<String, Vec<Type>> = items
+            .iter()
+            .filter_map(|item| match item {
+                AstItem::Fn(f) => Some((
+                    f.name.clone(),
+                    f.params.iter().map(|(_, ty)| ty.clone()).collect(),
+                )),
+                _ => None,
+            })
+            .collect();
+
+        // Type-check all functions before codegen.
+        {
+            let ast_structs: Vec<&crate::ast::AstStruct> = items
+                .iter()
+                .filter_map(|i| {
+                    if let AstItem::Struct(s) = i {
+                        Some(s)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            let ast_fns: Vec<&crate::ast::AstFunction> = items
+                .iter()
+                .filter_map(|i| {
+                    if let AstItem::Fn(f) = i {
+                        Some(f)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            // Build the full set of native signatures visible to the type checker.
+            // meow_vm_abort is always injected by the VM (in Vm::new), so the compiler
+            // always knows its signature. Caller-provided sigs follow and may override it.
+            let mut all_native_sigs: Vec<NativeSig> =
+                vec![meow_vm_types::natives::meow_vm_abort_sig()];
+            all_native_sigs.extend_from_slice(native_sigs);
+
+            type_checker::check(
+                &ast_structs,
+                &dep_addresses,
+                &dep_modules,
+                &all_native_sigs,
+                &local_fn_param_types,
+                &local_fn_return_types,
+                &ast_fns,
+            )?;
+        }
 
         // Second pass: compile functions.
         for item in items {

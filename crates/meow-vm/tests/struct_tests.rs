@@ -68,6 +68,36 @@ fn struct_value_semantics() {
 }
 
 #[test]
+fn struct_id_field_is_arbitrary() {
+    // Structs have no special `id` field rule. A field named `id` can hold any
+    // type and be assigned any value — unlike objects which require `id: address`
+    // initialized with meow_vm_fresh_id().
+    let src = r#"
+        mod test;
+
+        struct Receipt { id: u64, amount: u64 }
+
+        pub fn make(id: u64, amount: u64) -> Receipt { Receipt { id: id, amount: amount } }
+        pub fn get_id(r: Receipt) -> u64 { r.id }
+    "#;
+    let vm = utils::vm(utils::compile(src));
+    let mut gas = GasMeter::unlimited();
+
+    let receipt = vm
+        .call("make", vec![Value::U64(99), Value::U64(500)], &mut gas)
+        .unwrap()
+        .return_value
+        .unwrap();
+
+    assert_eq!(
+        vm.call("get_id", vec![receipt], &mut gas)
+            .unwrap()
+            .return_value,
+        Some(Value::U64(99))
+    );
+}
+
+#[test]
 fn struct_field_mutation() {
     let src = r#"
         mod test;
@@ -272,6 +302,150 @@ fn nested_struct_value_semantics() {
     assert_eq!(
         utils::run(src, "read_twice", vec![outer]),
         Some(Value::U64(42))
+    );
+}
+
+//
+// ─── Struct destructuring ───
+//
+
+#[test]
+fn struct_destructuring_binds_fields() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn sum(p: Point) -> u64 {
+            let Point { x, y } = p;
+            x + y
+        }
+    "#;
+    let point = Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(3)),
+            ("y".to_string(), Value::U64(7)),
+        ],
+    };
+    assert_eq!(utils::run(src, "sum", vec![point]), Some(Value::U64(10)));
+}
+
+#[test]
+fn struct_destructuring_single_field() {
+    let src = r#"
+        mod test;
+
+        struct Wrapper { value: u64 }
+
+        pub fn unwrap(w: Wrapper) -> u64 {
+            let Wrapper { value } = w;
+            value
+        }
+    "#;
+    let w = Value::Struct {
+        type_name: "Wrapper".to_string(),
+        fields: vec![("value".to_string(), Value::U64(42))],
+    };
+    assert_eq!(utils::run(src, "unwrap", vec![w]), Some(Value::U64(42)));
+}
+
+#[test]
+fn struct_destructuring_rest_discards_unbound_fields() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn get_x(p: Point) -> u64 {
+            let Point { x, .. } = p;
+            x
+        }
+    "#;
+    let point = Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(5)),
+            ("y".to_string(), Value::U64(99)),
+        ],
+    };
+    assert_eq!(utils::run(src, "get_x", vec![point]), Some(Value::U64(5)));
+}
+
+#[test]
+fn struct_destructuring_all_discarded() {
+    // `{ .. }` consumes the struct without binding any fields
+    let src = r#"
+        mod test;
+
+        struct Event { code: u64, value: u64 }
+
+        pub fn consume(e: Event) {
+            let Event { .. } = e;
+            return;
+        }
+    "#;
+    let event = Value::Struct {
+        type_name: "Event".to_string(),
+        fields: vec![
+            ("code".to_string(), Value::U64(1)),
+            ("value".to_string(), Value::U64(42)),
+        ],
+    };
+    assert_eq!(utils::run(src, "consume", vec![event]), None);
+}
+
+#[test]
+fn struct_destructuring_binds_only_non_first_field() {
+    let src = r#"
+        mod test;
+
+        struct Triple { a: u64, b: u64, c: u64 }
+
+        pub fn get_c(t: Triple) -> u64 {
+            let Triple { c, .. } = t;
+            c
+        }
+    "#;
+    let triple = Value::Struct {
+        type_name: "Triple".to_string(),
+        fields: vec![
+            ("a".to_string(), Value::U64(1)),
+            ("b".to_string(), Value::U64(2)),
+            ("c".to_string(), Value::U64(3)),
+        ],
+    };
+    assert_eq!(utils::run(src, "get_c", vec![triple]), Some(Value::U64(3)));
+}
+
+#[test]
+fn struct_destructuring_then_reconstruct() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn swap(p: Point) -> Point {
+            let Point { x, y } = p;
+            Point { x: y, y: x }
+        }
+    "#;
+    let point = Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(3)),
+            ("y".to_string(), Value::U64(7)),
+        ],
+    };
+    assert_eq!(
+        utils::run(src, "swap", vec![point]),
+        Some(Value::Struct {
+            type_name: "Point".to_string(),
+            fields: vec![
+                ("x".to_string(), Value::U64(7)),
+                ("y".to_string(), Value::U64(3))
+            ],
+        })
     );
 }
 

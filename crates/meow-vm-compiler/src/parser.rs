@@ -54,7 +54,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
 
     let kw = |s: &'static str| text::ascii::keyword(s).padded().ignored();
 
-    // Type parser: primitives, struct/object names, and qualified names (`module::Type`).
+    // Type parser: primitives, struct names, and qualified names (`module::Type`).
     let ty = text::ascii::ident()
         .map(|s: &str| s.to_string())
         .then(
@@ -395,23 +395,63 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
             .then_ignore(just(';').padded())
             .map(|(name, e)| Stmt::Reassign { name, expr: e });
 
-        // Field assignment: `ident.field = expr;`
+        // Field assignment: `ident.field.field... = expr;`
         let field_assign = ident
-            .then_ignore(just('.').padded())
-            .then(ident)
+            .then(
+                just('.')
+                    .padded()
+                    .ignore_then(ident)
+                    .repeated()
+                    .at_least(1)
+                    .collect::<Vec<_>>(),
+            )
             .then_ignore(just('=').padded())
             .then(expr.clone())
             .then_ignore(just(';').padded())
-            .map(|((obj_name, field), e)| Stmt::FieldAssign {
+            .map(|((obj_name, field_path), e)| Stmt::FieldAssign {
                 obj_name,
-                field,
+                field_path,
                 expr: e,
             });
 
+        // Struct destructuring: `let TypeName { field1, field2 } = expr;`
+        // A binding is either `field_name` (shorthand, binds to same name)
+        // or `field_name: binding_name` (rename).
+        // A trailing `..` discards all unmentioned fields.
+        let struct_binding = ident
+            .then(just(':').padded().ignore_then(ident).or_not())
+            .map(|(field, rename)| {
+                let binding = rename.unwrap_or_else(|| field.clone());
+                (field, binding)
+            });
+        // Parses `{ .. }`, `{ a, b }`, or `{ a, b, .. }`.
+        // Returns `(bindings, rest_discarded)`.
+        let struct_body = just("..").padded().to((vec![], true)).or(struct_binding
+            .separated_by(just(',').padded())
+            .at_least(1)
+            .collect::<Vec<_>>()
+            .then(just(',').padded().ignore_then(just("..").padded()).or_not())
+            .map(|(bindings, rest)| (bindings, rest.is_some())));
+        let let_struct_stmt = kw("let")
+            .ignore_then(ident) // type name
+            .then(struct_body.delimited_by(just('{').padded(), just('}').padded()))
+            .then_ignore(just('=').padded())
+            .then(expr.clone())
+            .then_ignore(just(';').padded())
+            .map(
+                |((type_name, (bindings, rest_discarded)), e)| Stmt::LetStruct {
+                    type_name,
+                    bindings,
+                    expr: e,
+                    rest_discarded,
+                },
+            );
+
         let expr_stmt = expr.clone().then_ignore(just(';').padded()).map(Stmt::Expr);
 
-        // let_tuple before let_stmt: both start with `let`, but let_tuple requires `(`
+        // let_struct and let_tuple before let_stmt: all start with `let`
         choice((
+            let_struct_stmt,
             let_tuple_stmt,
             let_stmt,
             return_stmt,
@@ -455,23 +495,6 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                 is_public,
                 name,
                 fields,
-                is_object: false,
-            })
-        })
-        .boxed();
-
-    // pub? object Foo { id: address, x: u64 }
-    let object_item: BoxedParser<'src, AstItem> = is_pub
-        .clone()
-        .then_ignore(kw("object"))
-        .then(ident)
-        .then(struct_body)
-        .map(|((is_public, name), fields)| {
-            AstItem::Struct(AstStruct {
-                is_public,
-                name,
-                fields,
-                is_object: true,
             })
         })
         .boxed();
@@ -545,7 +568,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .boxed();
 
     let item: BoxedParser<'src, AstItem> =
-        choice((module_decl, use_item, struct_item, object_item, fn_item)).boxed();
+        choice((module_decl, use_item, struct_item, fn_item)).boxed();
 
     item.repeated().collect::<Vec<_>>().padded()
 }
