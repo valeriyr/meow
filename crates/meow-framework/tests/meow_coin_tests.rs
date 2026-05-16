@@ -10,6 +10,7 @@ use meow_types::{
 };
 use meow_vm_adapter::{
     builder,
+    external_context::ExternalContext,
     runner::{self, RunResult, VmError},
 };
 use meow_vm_types::{
@@ -322,10 +323,22 @@ fn coin_balance(v: &Value) -> u64 {
 
 pub fn run(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
-    runner::run(meow_coin_module(), &fn_name, args, HashMap::new())
+    runner::run(
+        meow_coin_module(),
+        &fn_name,
+        args,
+        HashMap::new(),
+        ExternalContext::default(),
+    )
 }
 
 pub fn run_privileged(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
-    runner::run_privileged(meow_coin_module(), &fn_name, args, HashMap::new())
+    runner::run_privileged(
+        meow_coin_module(),
+        &fn_name,
+        args,
+        HashMap::new(),
+        ExternalContext::default(),
+    )
 }

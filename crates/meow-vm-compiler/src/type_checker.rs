@@ -232,12 +232,6 @@ impl<'m> TypeChecker<'m> {
                 Ok(Type::Bool)
             }
             BinOp::Eq | BinOp::Ne => {
-                if matches!(lty, Type::Struct(_) | Type::Tuple(_)) {
-                    return Err(self.type_err(format!(
-                        "type '{}' cannot be compared with == or !=",
-                        type_display(&lty)
-                    )));
-                }
                 self.expect_type(&rty, &lty, "right operand of equality")?;
                 Ok(Type::Bool)
             }

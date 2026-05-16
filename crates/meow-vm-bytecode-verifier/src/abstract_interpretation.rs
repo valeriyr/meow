@@ -646,6 +646,18 @@ pub(crate) fn check_function(
                     }
                     Some(ty) => match &ty {
                         AbstractType::Struct(_) => {
+                            if let Some(mut err) = check_field_read_visibility(&ty, field_name) {
+                                if let VerificationError::CrossModulePrivateFieldRead {
+                                    function,
+                                    pc: err_pc,
+                                    ..
+                                } = &mut err
+                                {
+                                    *function = fn_name.clone();
+                                    *err_pc = pc;
+                                }
+                                errors.push(err);
+                            }
                             let field_ty = resolve_field_type(&ty, field_name, module)
                                 .unwrap_or(AbstractType::Address);
                             state.push(field_ty);

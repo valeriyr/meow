@@ -19,7 +19,7 @@ use crate::{
 pub struct Transaction {
     /// The transaction sender address.
     sender: Address,
-    /// The MEOW coin to be used for paying the transaction fee.
+    /// The Meow Coin to be used for paying the transaction fee.
     /// Acts as a nonce of the transaction.
     gas_coin: ObjectRef,
     /// The transaction type.

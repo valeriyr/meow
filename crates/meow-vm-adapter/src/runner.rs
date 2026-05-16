@@ -1,10 +1,10 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use meow_types::{address::Address, config, identifier::Identifier};
+use meow_types::{address::Address, config, digest::Digest, identifier::Identifier};
 use meow_vm::{Vm, gas_meter::GasMeter, gas_schedule::GasSchedule};
 use meow_vm_types::config::VmConfig;
 
-use crate::{Module, Value, context::Context, natives};
+use crate::{Module, Value, context::Context, external_context::ExternalContext, natives};
 
 pub use meow_vm::error::VmError;
 
@@ -32,11 +32,20 @@ pub fn run(
     fn_name: &Identifier,
     args: Vec<Value>,
     deps: HashMap<Address, Module>,
+    external_context: ExternalContext,
 ) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
     let vm_config = config::vm_config();
 
-    run_inner(module, fn_name, args, deps, &mut gas, vm_config)
+    run_inner(
+        module,
+        fn_name,
+        args,
+        deps,
+        &mut gas,
+        vm_config,
+        external_context,
+    )
 }
 
 /// Like [`run`] but uses the privileged VM config, which allows calling private functions.
@@ -46,11 +55,20 @@ pub fn run_privileged(
     fn_name: &Identifier,
     args: Vec<Value>,
     deps: HashMap<Address, Module>,
+    external_context: ExternalContext,
 ) -> Result<RunResult> {
     let mut gas = GasMeter::unlimited();
     let vm_config = config::vm_config_privileged();
 
-    run_inner(module, fn_name, args, deps, &mut gas, vm_config)
+    run_inner(
+        module,
+        fn_name,
+        args,
+        deps,
+        &mut gas,
+        vm_config,
+        external_context,
+    )
 }
 
 /// Run a compiled module function with a fixed context, real natives, and the given gas meter.
@@ -61,8 +79,14 @@ fn run_inner(
     deps: HashMap<Address, Module>,
     gas: &mut GasMeter,
     vm_config: VmConfig,
+    external_context: ExternalContext,
 ) -> Result<RunResult> {
-    let ctx = Rc::new(RefCell::new(Context::default()));
+    let ctx = Rc::new(RefCell::new(Context::new(
+        Address::ZERO,
+        Digest::ZERO,
+        *external_context.rand_seed(),
+        external_context.timestamp(),
+    )));
     let natives = natives::build_natives(ctx.clone());
     let deps = deps
         .into_iter()

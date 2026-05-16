@@ -140,5 +140,5 @@ Every module is verified automatically as part of `MeowModulePublish` — a modu
 
 | Example | What it covers |
 |---------|----------------|
-| [Hero game](example-hero-game.md) | Full lifecycle: write, test locally, publish, spawn, award XP, level up, transfer, retire |
-| [Time capsule](example-time-capsule.md) | Using `meow_vm_timestamp()` to lock an object until a future block time |
+| [Hero game](example-hero-game.md) | Full lifecycle: write, test locally, publish, `spawn`, award XP, level up, `duel`, `transfer`, `retire` |
+| [Timelock coin](example-timelock-coin.md) | Using `meow_vm_timestamp()` to lock a `MeowCoin` balance until a future block time |

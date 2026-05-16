@@ -95,6 +95,67 @@ fn struct_literal_unknown_field_rejected() {
 //
 
 #[test]
+fn equality_on_structs_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64, y: u64 }
+
+            fn same(a: Point, b: Point) -> bool {
+                a == b
+            }
+        "#,
+    )
+    .expect("struct equality must compile");
+}
+
+#[test]
+fn equality_struct_vs_primitive_rejected() {
+    let cases = [
+        (
+            r#"mod test; struct Point { x: u64 } fn bad(p: Point, n: u64) -> bool { p == n }"#,
+            "Point",
+            "u64",
+        ),
+        (
+            r#"mod test; struct Point { x: u64 } fn bad(p: Point, b: bool) -> bool { p == b }"#,
+            "Point",
+            "bool",
+        ),
+    ];
+    for (src, expected_ty, found_ty) in cases {
+        let err = utils::compile(src).unwrap_err();
+        assert!(
+            matches!(&err, CompilerError::Message(msg)
+                if msg.contains("expected") && msg.contains(expected_ty) && msg.contains(found_ty)),
+            "expected type mismatch mentioning '{expected_ty}' and '{found_ty}', got: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn equality_different_struct_types_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64, y: u64 }
+            struct Color { r: u64, g: u64, b: u64 }
+
+            fn bad(p: Point, c: Color) -> bool {
+                p == c
+            }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("expected") && msg.contains("Point") && msg.contains("Color")),
+        "expected type mismatch error, got: {err:?}"
+    );
+}
+
+#[test]
 fn undefined_variable_rejected() {
     let err = utils::compile(
         r#"
@@ -128,26 +189,6 @@ fn arithmetic_on_bool_rejected() {
         matches!(&err, CompilerError::Message(msg)
             if msg.contains("expected u64") && msg.contains("found bool")),
         "expected arithmetic type error, got: {err:?}"
-    );
-}
-
-#[test]
-fn equality_on_structs_rejected() {
-    let err = utils::compile(
-        r#"
-            mod test;
-
-            struct Point { x: u64, y: u64 }
-
-            fn bad(a: Point, b: Point) -> bool {
-                a == b
-            }
-        "#,
-    )
-    .unwrap_err();
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot be compared")),
-        "expected struct equality error, got: {err:?}"
     );
 }
 

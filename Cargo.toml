@@ -16,6 +16,7 @@ members = [
     "crates/meow-vm-adapter",
     "crates/meow-vm-bytecode-verifier",
     "crates/meow-vm-compiler",
+    "crates/meow-vm-examples",
     "crates/meow-vm-types",
     ]
 

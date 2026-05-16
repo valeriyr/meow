@@ -255,7 +255,7 @@ Reading a struct variable moves it out of the binding (the binding becomes dead)
 
 ### Comparison
 
-`==` `!=` — accepts two values of the same type; produces `bool`.  
+`==` `!=` — accepts two values of the same type; produces `bool`. Works on all types; structs and tuples are compared field by field.  
 `<` `<=` `>` `>=` — accepts two `u64` values; produces `bool`.
 
 ### Boolean logic

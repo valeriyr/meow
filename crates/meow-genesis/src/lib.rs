@@ -80,7 +80,7 @@ fn build_meow_coin_module(deps: &[(Address, &Module)]) -> Result<Object> {
     ))
 }
 
-/// Mints MEOW coins according to the provided minting instructions.
+/// Mints Meow Coins according to the provided minting instructions.
 fn mint_meow_coins(
     meow_object_module: Object,
     meow_coin_module: Object,

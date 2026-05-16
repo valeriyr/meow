@@ -1,0 +1,12 @@
+[package]
+name = "meow-vm-examples"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+description = "Runnable examples of Meow smart contracts"
+
+[dev-dependencies]
+meow-types.workspace = true
+meow-vm-adapter.workspace = true
+meow-vm-types.workspace = true

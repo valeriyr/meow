@@ -1,8 +1,8 @@
 # Meow Coin
 
-> The built-in system coin: transfer, split, merge, and burn.
+> The built-in system coin: `transfer`, `split`, `merge`, and `burn`.
 
-Meow Coin is the native coin of MEOW. It is defined in the built-in `meow_coin` module, published at genesis at the fixed address `0x01`. Every address that appears in `allocations.csv` starts with one `MeowCoin` object whose `balance` equals the allocated amount.
+Meow Coin is the native coin of MEOW. It is defined in the built-in `meow_coin` module, published at genesis at the fixed address `0x10`. Every address that appears in `allocations.csv` starts with one `MeowCoin` object whose `balance` equals the allocated amount.
 
 See [Contracts](contracts.md) for the language reference and call argument format.
 

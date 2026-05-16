@@ -450,6 +450,92 @@ fn struct_destructuring_then_reconstruct() {
 }
 
 //
+// ─── Equality ───
+//
+
+#[test]
+fn struct_eq() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn same(a: Point, b: Point) -> bool { a == b }
+    "#;
+    let make = |x, y| Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(x)),
+            ("y".to_string(), Value::U64(y)),
+        ],
+    };
+    assert_eq!(
+        utils::run(src, "same", vec![make(3, 7), make(3, 7)]),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        utils::run(src, "same", vec![make(3, 7), make(3, 8)]),
+        Some(Value::Bool(false))
+    );
+}
+
+#[test]
+fn struct_ne() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        pub fn different(a: Point, b: Point) -> bool { a != b }
+    "#;
+    let make = |x, y| Value::Struct {
+        type_name: "Point".to_string(),
+        fields: vec![
+            ("x".to_string(), Value::U64(x)),
+            ("y".to_string(), Value::U64(y)),
+        ],
+    };
+    assert_eq!(
+        utils::run(src, "different", vec![make(1, 2), make(1, 3)]),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        utils::run(src, "different", vec![make(1, 2), make(1, 2)]),
+        Some(Value::Bool(false))
+    );
+}
+
+#[test]
+fn struct_eq_nested_compares_recursively() {
+    let src = r#"
+        mod test;
+
+        struct Inner { v: u64 }
+        struct Outer { inner: Inner }
+
+        pub fn same(a: Outer, b: Outer) -> bool { a == b }
+    "#;
+    let make = |v| Value::Struct {
+        type_name: "Outer".to_string(),
+        fields: vec![(
+            "inner".to_string(),
+            Value::Struct {
+                type_name: "Inner".to_string(),
+                fields: vec![("v".to_string(), Value::U64(v))],
+            },
+        )],
+    };
+    assert_eq!(
+        utils::run(src, "same", vec![make(42), make(42)]),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        utils::run(src, "same", vec![make(42), make(99)]),
+        Some(Value::Bool(false))
+    );
+}
+
+//
 // ─── Utility functions ───
 //
 

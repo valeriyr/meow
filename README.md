@@ -73,7 +73,7 @@ crates/
 | [Adapter & Natives](docs/adapter.md) | Native functions, on-chain object lifecycle, bytecode verifier, gas metering |
 | [Meow Coin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
-| [Example: time capsule](docs/example-time-capsule.md) | Time-locked contract using `meow_vm_timestamp()` |
+| [Example: timelock coin](docs/example-timelock-coin.md) | Time-locked coin using `meow_vm_timestamp()` |
 | [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |
 | [Architecture](docs/architecture.md) | Crate map, data flow, and testing strategy |
 

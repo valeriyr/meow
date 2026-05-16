@@ -21,6 +21,7 @@
 | **meow-gossip-types** | Network-level shared types |
 | **meow-genesis** | Genesis file loading and validation |
 | **meow-framework** | Built-in modules (`meow_coin`) |
+| **meow-vm-examples** | Runnable example contracts with integration tests |
 | **meow-e2e-tests** | End-to-end, network, and security tests |
 
 ## Data Flow

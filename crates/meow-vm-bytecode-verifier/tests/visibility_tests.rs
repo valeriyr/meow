@@ -138,29 +138,47 @@ fn cross_module_struct_construction_rejected() {
 //
 
 #[test]
-fn cross_module_private_field_read_rejected() {
-    // The compiler blocks private field reads at source level. Injecting one via
-    // bytecode tamper requires a cross-module type in a local slot, which can only
-    // arrive through NewStruct — already blocked by CrossModuleStructConstruction.
-    // This test documents the limitation; coverage comes from the construction test.
+fn cross_module_private_field_read_via_load_field_rejected() {
+    // A cross-module struct can land on the stack via LoadField reading a
+    // same-module field whose *type* is cross-module (e.g. `hero.id` yields
+    // `dep::Id`). A subsequent GetField("inner") on it must be rejected.
     let addr = dep_addr();
     let dep = compile(
         r#"
-        mod dep;
-        pub struct Pair { a: u64, b: u64 }
-        fn noop() -> u64 { 0 }
-    "#,
+            mod dep;
+            pub struct Id { inner: u64 }
+        "#,
     );
-    let main = compile_with_deps(
+    // Compile a module that has a struct containing a dep::Id field.
+    // The compiler emits LoadField(slot, ["id"]) to read the field (same-module
+    // read, allowed). We then tamper to append GetField("inner") to read the
+    // private field of dep::Id directly from the stack.
+    let mut main = compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
-            pub fn f() -> u64 { 1 }
+
+            struct Wrapper { id: dep::Id }
+
+            pub fn get_id(w: Wrapper) -> dep::Id { w.id }
         "#,
         &[(addr, &dep)],
     );
-    let _ = dep;
-    let _ = main;
+    tamper(&mut main, "get_id", |code| {
+        // Remove the Return, append GetField("inner") then Return so the
+        // tampered function tries to read the private `inner` field.
+        code.retain(|i| !matches!(i, Instruction::Return));
+        code.push(Instruction::GetField("inner".to_string()));
+        code.push(Instruction::Return);
+    });
+
+    let deps = HashMap::from([(addr, &dep)]);
+    let errs = verify_errors(&main, &deps);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, VerificationError::CrossModulePrivateFieldRead { .. })),
+        "expected CrossModulePrivateFieldRead, got: {errs:?}"
+    );
 }
 
 //
