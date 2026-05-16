@@ -117,4 +117,4 @@ The store is a flat `BTreeMap<Address, Object>`. Each committed block applies it
 
 ## In the RPC
 
-Objects are returned by `GET /object/{addr}` and `GET /objects/{owner}`. The wire representation maps directly to the fields above. See [RPC API](rpc.md) for the full response shape.
+Objects are returned by `GET /object/{addr}`, `GET /objects_owned/{owner}`, and `GET /objects?address=...`. The wire representation maps directly to the fields above. See [RPC API](rpc.md) for the full response shape.

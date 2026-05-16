@@ -76,25 +76,35 @@ impl NodeClient {
         Err(Self::node_error(response).await)
     }
 
-    /// GET /object/:addr — fetch a live object by address.
+    /// GET /object/{addr} — fetch a live object by address.
     pub async fn get_object(&self, addr: &Address) -> Result<Option<Object>> {
         let url = self.base_url.join(&format!("object/{addr}"))?;
         self.get_optional(url).await
     }
 
-    /// GET /objects/:owner — fetch all the alive objects by owner address.
-    pub async fn get_objects(&self, owner: &Address) -> Result<Vec<Object>> {
-        let url = self.base_url.join(&format!("objects/{owner}"))?;
+    /// GET /objects?address=...&address=... — fetch live objects by a list of addresses.
+    pub async fn get_objects(&self, addresses: &[Address]) -> Result<Vec<Option<Object>>> {
+        let mut url = self.base_url.join("objects")?;
+        for addr in addresses {
+            url.query_pairs_mut()
+                .append_pair("address", &addr.to_string());
+        }
         self.get_list(url).await
     }
 
-    /// GET /transaction/:digest — fetch a committed transaction by digest.
+    /// GET /objects_owned/{owner} — fetch all live objects by owner address.
+    pub async fn get_objects_owned(&self, owner: &Address) -> Result<Vec<Object>> {
+        let url = self.base_url.join(&format!("objects_owned/{owner}"))?;
+        self.get_list(url).await
+    }
+
+    /// GET /transaction/{digest} — fetch a committed transaction by digest.
     pub async fn get_transaction(&self, digest: &Digest) -> Result<Option<SignedTransaction>> {
         let url = self.base_url.join(&format!("transaction/{digest}"))?;
         self.get_optional(url).await
     }
 
-    /// GET /transaction-result/:digest — fetch the execution result for a committed transaction.
+    /// GET /transaction-result/{digest} — fetch the execution result for a committed transaction.
     pub async fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
         let url = self
             .base_url
@@ -102,36 +112,27 @@ impl NodeClient {
         self.get_optional(url).await
     }
 
-    /// GET /blocks-since/:height — fetch committed blocks from the given height onwards.
+    /// GET /blocks-since/{height} — fetch committed blocks from the given height onwards.
     pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
         let url = self.base_url.join(&format!("blocks-since/{height}"))?;
         self.get_list(url).await
     }
 
     /// Sends a GET request and deserializes the JSON body on success.
-    /// Returns `Ok(None)` on 404 and `Err` on all other non-success status codes.
+    /// The server returns `null` when the resource is not found, which deserializes as `Ok(None)`.
     async fn get_optional<T: DeserializeOwned>(&self, url: Url) -> Result<Option<T>> {
         let response = self.inner.get(url).send().await?;
 
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(None);
-        }
-
         if response.status().is_success() {
-            return Ok(Some(response.json().await?));
+            return Ok(response.json().await?);
         }
 
         Err(Self::node_error(response).await)
     }
 
-    /// Sends a GET request and deserializes the JSON body on success.
-    /// Returns an empty `Vec` on 404 and `Err` on all other non-success status codes.
+    /// Sends a GET request and deserializes the JSON array body on success.
     async fn get_list<T: DeserializeOwned>(&self, url: Url) -> Result<Vec<T>> {
         let response = self.inner.get(url).send().await?;
-
-        if response.status() == reqwest::StatusCode::NOT_FOUND {
-            return Ok(Vec::new());
-        }
 
         if response.status().is_success() {
             return Ok(response.json().await?);

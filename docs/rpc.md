@@ -17,7 +17,8 @@ The `meow client` CLI commands and the `meow-node-client` library crate are both
 | `POST` | [`/submit-transaction`](#post-submit-transaction) | Add a signed transaction to the mempool |
 | `POST` | [`/simulate-transaction`](#post-simulate-transaction) | Simulate an unsigned transaction without committing it |
 | `GET` | [`/object/{addr}`](#get-objectaddr) | Fetch a single object by address |
-| `GET` | [`/objects/{owner}`](#get-objectsowner) | Fetch all objects owned by an address |
+| `GET` | [`/objects`](#get-objects) | Fetch objects by a list of addresses |
+| `GET` | [`/objects_owned/{owner}`](#get-objects_ownedowner) | Fetch all objects owned by an address |
 | `GET` | [`/transaction/{digest}`](#get-transactiondigest) | Fetch a committed transaction |
 | `GET` | [`/transaction-result/{digest}`](#get-transaction-resultdigest) | Fetch a transaction's execution result |
 | `GET` | [`/blocks-since/{height}`](#get-blocks-sinceheight) | Fetch all blocks from a given height |
@@ -138,10 +139,33 @@ Fetch the latest live object at an address.
 | Status | `code` | Cause |
 |--------|--------|-------|
 | `400` | `invalid_address` | `addr` is not a valid address |
-| `404` | `object_not_found` | No live object at that address |
 | `500` | `internal_error` | Unexpected error |
 
-## GET /objects/{owner}
+> **Not found:** returns `200` with a `null` body when no live object exists at that address.
+
+## GET /objects
+
+Fetch live objects for a list of addresses in one request. Each entry in the response corresponds positionally to the requested address — `null` means no live object exists at that address.
+
+**Query parameters:** one or more `address` values, each an `Address`. Maximum **100 addresses** per request.
+
+Example: `GET /objects?address=0xabc...&address=0xdef...`
+
+**Success (`200`):** array of nullable `Object` (same shape as `/object/{addr}`):
+
+```json
+[ { "address": "0xabc...", ... }, null, { "address": "0xdef...", ... } ]
+```
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `400` | `too_many_addresses` | More than 100 addresses in a single request |
+| `400` | `invalid_address` | One of the `address` values is not a valid address |
+| `500` | `internal_error` | Unexpected error |
+
+## GET /objects_owned/{owner}
 
 Fetch all live objects owned by an address. Returns an empty array when the owner has no objects.
 
@@ -169,8 +193,9 @@ Fetch a committed transaction by its digest.
 | Status | `code` | Cause |
 |--------|--------|-------|
 | `400` | `invalid_digest` | Not a valid base58 digest |
-| `404` | `transaction_not_found` | No committed transaction with that digest |
 | `500` | `internal_error` | Unexpected error |
+
+> **Not found:** returns `200` with a `null` body when no committed transaction has that digest.
 
 ## GET /transaction-result/{digest}
 
@@ -195,7 +220,7 @@ Fetch the execution result of a committed transaction.
 `gas_used` is the number of gas units consumed by the transaction.  
 Each objects array contains `Object` entries (same shape as `/object/{addr}`).
 
-**Errors:** same codes as `GET /transaction/{digest}`.
+**Errors:** same codes as `GET /transaction/{digest}`. Returns `200` with a `null` body when no result exists for that digest.
 
 ## GET /blocks-since/{height}
 

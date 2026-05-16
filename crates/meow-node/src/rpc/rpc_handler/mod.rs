@@ -73,37 +73,48 @@ impl RpcHandler {
     }
 
     /// Returns the latest live object at address.
-    pub async fn get_object(&self, address: &Address) -> Result<Option<Object>> {
+    pub async fn get_object(&self, address: &Address) -> Option<Object> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.head_store().get_object(address).cloned())
+        miner.head_store().get_object(address).cloned()
+    }
+
+    /// Returns live objects for each address in the list, preserving order.
+    /// Each entry is `None` if no live object exists at that address.
+    pub async fn get_objects(&self, addresses: &[Address]) -> Vec<Option<Object>> {
+        let miner = self.miner.lock().await;
+
+        addresses
+            .iter()
+            .map(|addr| miner.head_store().get_object(addr).cloned())
+            .collect()
     }
 
     /// Returns the latest live objects owned by the given address.
-    pub async fn get_objects(&self, owner: &Address) -> Result<Vec<Object>> {
+    pub async fn get_objects_owned(&self, owner: &Address) -> Vec<Object> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.head_store().get_objects(owner).cloned().collect())
+        miner.head_store().get_objects(owner).cloned().collect()
     }
 
     /// Returns a committed transaction by digest.
-    pub async fn get_transaction(&self, digest: &Digest) -> Result<Option<SignedTransaction>> {
+    pub async fn get_transaction(&self, digest: &Digest) -> Option<SignedTransaction> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.get_transaction(digest).cloned())
+        miner.get_transaction(digest).cloned()
     }
 
     /// Returns the execution result for a transaction digest if committed.
-    pub async fn get_transaction_result(&self, digest: &Digest) -> Result<Option<ExecutionResult>> {
+    pub async fn get_transaction_result(&self, digest: &Digest) -> Option<ExecutionResult> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.get_transaction_result(digest).cloned())
+        miner.get_transaction_result(digest).cloned()
     }
 
     /// Returns all blocks from the given height onwards (for chain synchronization).
-    pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
+    pub async fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         let miner = self.miner.lock().await;
 
-        Ok(miner.get_blocks_since(height))
+        miner.get_blocks_since(height)
     }
 }

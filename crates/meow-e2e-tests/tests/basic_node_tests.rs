@@ -89,12 +89,12 @@ async fn meow_call_transaction_is_mined_and_succeeds() {
 
 #[tokio::test]
 #[serial]
-async fn get_objects_returns_empty_for_unknown_owner() {
+async fn get_objects_owned_returns_empty_for_unknown_owner() {
     let node = TestNode::start_empty().await;
 
     let objects = node
         .client()
-        .get_objects(&Address::fill(0xCD))
+        .get_objects_owned(&Address::fill(0xCD))
         .await
         .unwrap();
 
@@ -103,11 +103,11 @@ async fn get_objects_returns_empty_for_unknown_owner() {
 
 #[tokio::test]
 #[serial]
-async fn get_objects_returns_genesis_coin_for_sender() {
+async fn get_objects_owned_returns_genesis_coin_for_sender() {
     let (_, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
     let node = TestNode::start_with_genesis(&genesis).await;
 
-    let objects = node.client().get_objects(&sender).await.unwrap();
+    let objects = node.client().get_objects_owned(&sender).await.unwrap();
 
     assert_eq!(
         objects.len(),
@@ -136,9 +136,9 @@ async fn published_module_is_immutable_and_not_owned_by_sender() {
     assert_eq!(*publish_result.status(), ExecutionStatus::Success);
 
     // Modules are immutable objects and are not owned by the sender,
-    // so even though the sender published it, it won't appear in get_objects.
+    // so even though the sender published it, it won't appear in get_objects_owned.
     // The sender still owns their genesis coin.
-    let objects = client.get_objects(&sender).await.unwrap();
+    let objects = client.get_objects_owned(&sender).await.unwrap();
 
     assert_eq!(
         objects.len(),
@@ -146,6 +146,81 @@ async fn published_module_is_immutable_and_not_owned_by_sender() {
         "sender should own only their genesis coin"
     );
     assert_eq!(objects[0].address(), &coin_addr);
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_returns_found_objects_and_none_for_unknown() {
+    let (_, _, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+
+    let unknown = Address::fill(0xAB);
+    let results = node
+        .client()
+        .get_objects(&[coin_addr, unknown])
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_some(), "known address should return Some");
+    assert_eq!(results[0].as_ref().unwrap().address(), &coin_addr);
+    assert!(results[1].is_none(), "unknown address should return None");
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_empty_list_returns_empty() {
+    let node = TestNode::start_empty().await;
+
+    let results = node.client().get_objects(&[]).await.unwrap();
+
+    assert!(results.is_empty());
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_returns_all_none_for_unknown_addresses() {
+    let node = TestNode::start_empty().await;
+
+    let unknown1 = Address::fill(0xAB);
+    let unknown2 = Address::fill(0xCD);
+    let results = node
+        .client()
+        .get_objects(&[unknown1, unknown2])
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_none());
+    assert!(results[1].is_none());
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_at_limit_succeeds() {
+    let node = TestNode::start_empty().await;
+    let addresses: Vec<Address> = (0u8..100).map(Address::fill).collect(); // exactly 100
+
+    let results = node.client().get_objects(&addresses).await.unwrap();
+
+    assert_eq!(results.len(), 100);
+    assert!(results.iter().all(|o| o.is_none()));
+}
+
+#[tokio::test]
+#[serial]
+async fn get_objects_too_many_addresses_returns_400() {
+    use meow_node_client::error::NodeClientError;
+
+    let node = TestNode::start_empty().await;
+    let addresses: Vec<Address> = (0u8..=100).map(Address::fill).collect(); // 101 addresses
+
+    let result = node.client().get_objects(&addresses).await;
+
+    assert!(
+        matches!(result, Err(NodeClientError::NodeError { status, .. }) if status == 400),
+        "expected 400 NodeError, got: {result:?}"
+    );
 }
 
 #[tokio::test]

@@ -14,7 +14,8 @@ use crate::outputs::{
 #[serde(untagged)]
 pub enum ClientCommandOutput {
     GetObject(Option<ObjectOutput>),
-    GetObjects(Vec<ObjectOutput>),
+    GetObjects(Vec<Option<ObjectOutput>>),
+    GetObjectsOwned(Vec<ObjectOutput>),
     GetTransaction(Option<TransactionOutput>),
     GetTransactionResult(Option<TransactionResultOutput>),
     SubmitTransaction(SubmitTransactionOutput),
@@ -31,8 +32,12 @@ impl ClientCommandOutput {
         ClientCommandOutput::GetObject(object.map(|o| o.into()))
     }
 
-    pub fn get_objects(objects: Vec<Object>) -> Self {
-        ClientCommandOutput::GetObjects(objects.into_iter().map(|o| o.into()).collect())
+    pub fn get_objects(objects: Vec<Option<Object>>) -> Self {
+        ClientCommandOutput::GetObjects(objects.into_iter().map(|o| o.map(|o| o.into())).collect())
+    }
+
+    pub fn get_objects_owned(objects: Vec<Object>) -> Self {
+        ClientCommandOutput::GetObjectsOwned(objects.into_iter().map(|o| o.into()).collect())
     }
 
     pub fn get_transaction(transaction: Option<SignedTransaction>) -> Self {

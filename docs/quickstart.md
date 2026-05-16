@@ -98,8 +98,11 @@ meow-node run --genesis genesis.bin \
 # Single object
 meow client get-object <OBJECT_ADDRESS>
 
-# All objects for an owner
-meow client get-objects <OWNER_ADDRESS>
+# Fetch specific objects by address (one or more)
+meow client get-objects <ADDR1> <ADDR2> ...
+
+# All objects owned by an address
+meow client get-objects-owned <OWNER_ADDRESS>
 
 # Committed transaction
 meow client get-transaction <TRANSACTION_DIGEST>

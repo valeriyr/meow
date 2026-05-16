@@ -20,8 +20,14 @@ pub enum ClientCommand {
         /// On-chain object address (hex, e.g. `0xabcd...`).
         address: Address,
     },
-    /// Fetch all the live objects from the node by owner address.
+    /// Fetch live objects from the node by a list of addresses.
     GetObjects {
+        /// Object addresses (hex, e.g. `0xabcd...`). One or more, space-separated.
+        #[arg(num_args = 1..)]
+        addresses: Vec<Address>,
+    },
+    /// Fetch all the live objects from the node by owner address.
+    GetObjectsOwned {
         /// Owner address (hex, e.g. `0xabcd...`).
         owner: Address,
     },
@@ -50,10 +56,15 @@ impl ClientCommand {
 
                 Ok(ClientCommandOutput::get_object(object))
             }
-            ClientCommand::GetObjects { owner } => {
-                let objects = client.get_objects(&owner).await?;
+            ClientCommand::GetObjects { addresses } => {
+                let objects = client.get_objects(&addresses).await?;
 
                 Ok(ClientCommandOutput::get_objects(objects))
+            }
+            ClientCommand::GetObjectsOwned { owner } => {
+                let objects = client.get_objects_owned(&owner).await?;
+
+                Ok(ClientCommandOutput::get_objects_owned(objects))
             }
             ClientCommand::GetTransaction { digest } => {
                 let transaction = client.get_transaction(&digest).await?;

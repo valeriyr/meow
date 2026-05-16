@@ -26,7 +26,7 @@ Moves the entire coin to another address.
 
 ```bash
 meow transaction meow-call \
-  --module 0x01 \
+  --module 0x10 \
   --function transfer \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -44,7 +44,7 @@ Splits `amount` out of the coin and sends the new coin to the recipient. The ori
 
 ```bash
 meow transaction meow-call \
-  --module 0x01 \
+  --module 0x10 \
   --function split_and_transfer \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -60,7 +60,7 @@ Creates a new coin with `amount` balance and sends it to the transaction sender.
 
 ```bash
 meow transaction meow-call \
-  --module 0x01 \
+  --module 0x10 \
   --function split \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -76,7 +76,7 @@ Adds the balance of `from` into `to` and destroys `from`. Both coins must be own
 
 ```bash
 meow transaction meow-call \
-  --module 0x01 \
+  --module 0x10 \
   --function merge \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -92,7 +92,7 @@ Destroys the coin permanently.
 
 ```bash
 meow transaction meow-call \
-  --module 0x01 \
+  --module 0x10 \
   --function burn \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \

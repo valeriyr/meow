@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -11,6 +11,7 @@ use meow_types::{
     digest::Digest,
     transaction::{SignedTransaction, Transaction},
 };
+
 use serde::Serialize;
 use tokio::{net::TcpListener, sync::watch};
 
@@ -21,6 +22,9 @@ use crate::rpc::{
 
 /// The result type related to the RPC service.
 pub type Result<T> = std::result::Result<T, RpcServiceError>;
+
+/// Maximum number of addresses accepted by a single `GET /objects` request.
+pub const MAX_GET_OBJECTS_ADDRESSES: usize = 100;
 
 /// Shared application state for RPC handlers.
 ///
@@ -73,7 +77,8 @@ pub async fn run(
 /// - `POST /submit-transaction` to submit a signed transaction.
 /// - `POST /simulate-transaction` to simulate an unsigned transaction without committing it.
 /// - `GET /object/{addr}` to fetch the latest live object by address.
-/// - `GET /objects/{owner}` to fetch all the live objects owned by an address.
+/// - `GET /objects?address=...&address=...` to fetch live objects by a list of addresses.
+/// - `GET /objects_owned/{owner}` to fetch all the live objects owned by an address.
 /// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
 /// - `GET /transaction-result/{digest}` to fetch an execution result by transaction digest.
 /// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards (for sync).
@@ -82,7 +87,8 @@ pub fn router(state: RpcState) -> Router {
         .route("/submit-transaction", post(submit_transaction))
         .route("/simulate-transaction", post(simulate_transaction))
         .route("/object/{addr}", get(get_object))
-        .route("/objects/{owner}", get(get_objects))
+        .route("/objects", get(get_objects))
+        .route("/objects_owned/{owner}", get(get_objects_owned))
         .route("/transaction/{digest}", get(get_transaction))
         .route("/transaction-result/{digest}", get(get_transaction_result))
         .route("/blocks-since/{height}", get(get_blocks_since))
@@ -102,50 +108,8 @@ async fn submit_transaction(
     match state.handler.submit_transaction(signed_transaction).await {
         Ok(()) => StatusCode::ACCEPTED.into_response(),
         Err(RpcHandlerError::MinerError(err)) => match err {
-            MinerError::MempoolError(err) => match err {
-                MempoolError::TransactionValidationError(err) => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_transaction",
-                    format!("invalid transaction: {err}"),
-                ),
-                MempoolError::DuplicateTransaction(digest) => error_response(
-                    StatusCode::CONFLICT,
-                    "duplicate_transaction",
-                    format!("duplicate transaction: {digest}"),
-                ),
-                MempoolError::ObjectNotFound(addr) => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!("invalid object reference: object not found: {addr}"),
-                ),
-                MempoolError::InvalidObjectVersion {
-                    address,
-                    expected,
-                    found,
-                } => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!(
-                        "invalid object reference: object {address} has invalid version: expected {expected}, found {found}"
-                    ),
-                ),
-                MempoolError::InvalidObjectDigest {
-                    address,
-                    expected,
-                    found,
-                } => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!(
-                        "invalid object reference: object {address} has invalid digest: expected {expected}, found {found}"
-                    ),
-                ),
-            },
-            MinerError::SimulationError(err) => error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "internal_error",
-                format!("internal error: {err}"),
-            ),
+            MinerError::MempoolError(err) => mempool_error_response(err),
+            MinerError::SimulationError(_) => unreachable!("submit_transaction never simulates"),
         },
     }
 }
@@ -163,45 +127,7 @@ async fn simulate_transaction(
     match state.handler.simulate_transaction(transaction).await {
         Ok(result) => (StatusCode::OK, Json(result)).into_response(),
         Err(RpcHandlerError::MinerError(err)) => match err {
-            MinerError::MempoolError(err) => match err {
-                MempoolError::TransactionValidationError(err) => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_transaction",
-                    format!("invalid transaction: {err}"),
-                ),
-                MempoolError::DuplicateTransaction(digest) => error_response(
-                    StatusCode::CONFLICT,
-                    "duplicate_transaction",
-                    format!("duplicate transaction: {digest}"),
-                ),
-                MempoolError::ObjectNotFound(addr) => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!("invalid object reference: object not found: {addr}"),
-                ),
-                MempoolError::InvalidObjectVersion {
-                    address,
-                    expected,
-                    found,
-                } => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!(
-                        "invalid object reference: object {address} has invalid version: expected {expected}, found {found}"
-                    ),
-                ),
-                MempoolError::InvalidObjectDigest {
-                    address,
-                    expected,
-                    found,
-                } => error_response(
-                    StatusCode::BAD_REQUEST,
-                    "invalid_object_reference",
-                    format!(
-                        "invalid object reference: object {address} has invalid digest: expected {expected}, found {found}"
-                    ),
-                ),
-            },
+            MinerError::MempoolError(err) => mempool_error_response(err),
             MinerError::SimulationError(err) => error_response(
                 StatusCode::BAD_REQUEST,
                 "simulation_error",
@@ -211,123 +137,102 @@ async fn simulate_transaction(
     }
 }
 
-/// GET /object/:addr — returns the live `Object` at the given address.
+/// GET /object/{addr} — returns the live `Object` at the given address, or `null` if not found.
 ///
-/// Returns `400` for invalid address format and `404` when not found.
+/// Returns `400` for invalid address format.
 async fn get_object(
     State(state): State<RpcState>,
     Path(address): Path<String>,
 ) -> impl IntoResponse {
-    let address: Address = match address.parse() {
-        Ok(a) => a,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_address",
-                format!("invalid address: {address} (expected 0x-prefixed hex address)"),
-            );
-        }
+    let address = match parse_address(&address) {
+        Ok(address) => address,
+        Err(response) => return response,
     };
-    match state.handler.get_object(&address).await {
-        Ok(Some(obj)) => Json(obj).into_response(),
-        Ok(None) => error_response(
-            StatusCode::NOT_FOUND,
-            "object_not_found",
-            format!("object not found: {address}"),
-        ),
-        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
-    }
+    Json(state.handler.get_object(&address).await).into_response()
 }
 
-/// GET /objects/:owner — returns all the live `Object`s owned by the given address.
+/// GET /objects?address=...&address=... — returns live `Object`s for the given addresses.
+///
+/// Each `address` query parameter must be a 0x-prefixed hex string. Returns `400` if any
+/// address is invalid or the number of addresses exceeds `MAX_GET_OBJECTS_ADDRESSES`.
+/// Each entry in the response is `null` if the object was not found.
+async fn get_objects(
+    State(state): State<RpcState>,
+    Query(params): Query<Vec<(String, String)>>,
+) -> impl IntoResponse {
+    let raw_addresses: Vec<&str> = params
+        .iter()
+        .filter(|(k, _)| k == "address")
+        .map(|(_, v)| v.as_str())
+        .collect();
+
+    if raw_addresses.len() > MAX_GET_OBJECTS_ADDRESSES {
+        return error_response(
+            StatusCode::BAD_REQUEST,
+            "too_many_addresses",
+            format!("too many addresses: limit is {MAX_GET_OBJECTS_ADDRESSES} per request"),
+        );
+    }
+    let mut addresses = Vec::new();
+    for raw in &raw_addresses {
+        let addr = match parse_address(raw) {
+            Ok(address) => address,
+            Err(response) => return response,
+        };
+        addresses.push(addr);
+    }
+    Json(state.handler.get_objects(&addresses).await).into_response()
+}
+
+/// GET /objects_owned/{owner} — returns all the live `Object`s owned by the given address.
 ///
 /// Returns `400` for invalid address format.
-async fn get_objects(
+async fn get_objects_owned(
     State(state): State<RpcState>,
     Path(owner): Path<String>,
 ) -> impl IntoResponse {
-    let owner: Address = match owner.parse() {
-        Ok(a) => a,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_address",
-                format!("invalid address: {owner} (expected 0x-prefixed hex address)"),
-            );
-        }
+    let owner = match parse_address(&owner) {
+        Ok(address) => address,
+        Err(response) => return response,
     };
-    match state.handler.get_objects(&owner).await {
-        Ok(objects) => Json(objects).into_response(),
-        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
-    }
+    Json(state.handler.get_objects_owned(&owner).await).into_response()
 }
 
-/// GET /transaction/:digest — returns the committed `SignedTransaction` by digest.
+/// GET /transaction/{digest} — returns the committed `SignedTransaction` by digest, or `null` if not found.
 ///
-/// Returns `400` for invalid digest format and `404` when not found.
+/// Returns `400` for invalid digest format.
 async fn get_transaction(
     State(state): State<RpcState>,
     Path(digest): Path<String>,
 ) -> impl IntoResponse {
-    let digest: Digest = match digest.parse() {
+    let digest = match parse_digest(&digest) {
         Ok(digest) => digest,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_digest",
-                format!("invalid digest: {digest} (expected base58 digest)"),
-            );
-        }
+        Err(response) => return response,
     };
-    match state.handler.get_transaction(&digest).await {
-        Ok(Some(tx)) => Json(tx).into_response(),
-        Ok(None) => error_response(
-            StatusCode::NOT_FOUND,
-            "transaction_not_found",
-            format!("transaction not found: {digest}"),
-        ),
-        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
-    }
+    Json(state.handler.get_transaction(&digest).await).into_response()
 }
 
-/// GET /transaction-result/:digest — returns the `ExecutionResult` for a committed transaction.
+/// GET /transaction-result/{digest} — returns the `ExecutionResult` for a committed transaction, or `null` if not found.
 ///
-/// Returns `400` for invalid digest format and `404` when not found.
+/// Returns `400` for invalid digest format.
 async fn get_transaction_result(
     State(state): State<RpcState>,
     Path(digest): Path<String>,
 ) -> impl IntoResponse {
-    let digest: Digest = match digest.parse() {
+    let digest = match parse_digest(&digest) {
         Ok(digest) => digest,
-        Err(_) => {
-            return error_response(
-                StatusCode::BAD_REQUEST,
-                "invalid_digest",
-                format!("invalid digest: {digest} (expected base58 digest)"),
-            );
-        }
+        Err(response) => return response,
     };
-    match state.handler.get_transaction_result(&digest).await {
-        Ok(Some(result)) => Json(result).into_response(),
-        Ok(None) => error_response(
-            StatusCode::NOT_FOUND,
-            "transaction_not_found",
-            format!("transaction not found: {digest}"),
-        ),
-        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
-    }
+    Json(state.handler.get_transaction_result(&digest).await).into_response()
 }
 
-/// GET /blocks-since/:height — returns all blocks from the given height onwards.
+/// GET /blocks-since/{height} — returns all blocks from the given height onwards.
 /// Used by nodes to synchronize the chain after joining the network.
 async fn get_blocks_since(
     State(state): State<RpcState>,
     Path(height): Path<u64>,
 ) -> impl IntoResponse {
-    match state.handler.get_blocks_since(height).await {
-        Ok(blocks) => Json(blocks).into_response(),
-        Err(RpcHandlerError::MinerError(err)) => unexpected_miner_error(err),
-    }
+    Json(state.handler.get_blocks_since(height).await).into_response()
 }
 
 /// Creates a uniform JSON error response body for all RPC endpoints.
@@ -346,11 +251,69 @@ fn error_response(
         .into_response()
 }
 
-/// Maps unexpected miner errors to a uniform JSON error response.
-fn unexpected_miner_error(err: MinerError) -> axum::response::Response {
-    error_response(
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "internal_error",
-        format!("unexpected miner error: {err}"),
-    )
+/// Parses a raw string into an `Address`, returning a `400` error response on failure.
+#[allow(clippy::result_large_err)]
+fn parse_address(raw: &str) -> std::result::Result<Address, axum::response::Response> {
+    raw.parse().map_err(|_| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_address",
+            format!("invalid address: {raw} (expected 0x-prefixed hex address)"),
+        )
+    })
+}
+
+/// Parses a raw string into a `Digest`, returning a `400` error response on failure.
+#[allow(clippy::result_large_err)]
+fn parse_digest(raw: &str) -> std::result::Result<Digest, axum::response::Response> {
+    raw.parse().map_err(|_| {
+        error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_digest",
+            format!("invalid digest: {raw} (expected base58 digest)"),
+        )
+    })
+}
+
+/// Maps a `MempoolError` to a structured HTTP error response.
+fn mempool_error_response(err: MempoolError) -> axum::response::Response {
+    match err {
+        MempoolError::TransactionValidationError(err) => error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_transaction",
+            format!("invalid transaction: {err}"),
+        ),
+        MempoolError::DuplicateTransaction(digest) => error_response(
+            StatusCode::CONFLICT,
+            "duplicate_transaction",
+            format!("duplicate transaction: {digest}"),
+        ),
+        MempoolError::ObjectNotFound(addr) => error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_object_reference",
+            format!("invalid object reference: object not found: {addr}"),
+        ),
+        MempoolError::InvalidObjectVersion {
+            address,
+            expected,
+            found,
+        } => error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_object_reference",
+            format!(
+                "invalid object reference: object {address} has invalid version: expected {expected}, found {found}"
+            ),
+        ),
+        MempoolError::InvalidObjectDigest {
+            address,
+            expected,
+            found,
+        } => error_response(
+            StatusCode::BAD_REQUEST,
+            "invalid_object_reference",
+            format!(
+                "invalid object reference: object {address} has invalid digest: expected {expected}, found {found}"
+            ),
+        ),
+    }
 }
