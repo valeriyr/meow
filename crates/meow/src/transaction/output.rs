@@ -31,11 +31,17 @@ impl TransactionCommandOutput {
         ))
     }
 
-    pub fn simulate(result: ExecutionResult) -> Self {
-        TransactionCommandOutput::Simulate(result.into())
+    pub fn simulate(result: ExecutionResult, with_object_content: bool) -> Self {
+        TransactionCommandOutput::Simulate(TransactionResultOutput::new(
+            result,
+            with_object_content,
+        ))
     }
 
-    pub fn execute_locally(result: ExecutionResult) -> Self {
-        TransactionCommandOutput::ExecuteLocally(result.into())
+    pub fn execute_locally(result: ExecutionResult, with_object_content: bool) -> Self {
+        TransactionCommandOutput::ExecuteLocally(TransactionResultOutput::new(
+            result,
+            with_object_content,
+        ))
     }
 }

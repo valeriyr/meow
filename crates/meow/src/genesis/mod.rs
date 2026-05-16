@@ -22,7 +22,7 @@ pub enum GenesisCommand {
 }
 
 impl GenesisCommand {
-    pub fn run(self) -> anyhow::Result<GenesisOutput> {
+    pub fn run(self, with_object_content: bool) -> anyhow::Result<GenesisOutput> {
         match self {
             GenesisCommand::Build {
                 allocations,
@@ -45,7 +45,7 @@ impl GenesisCommand {
 
                 std::fs::write(output, genesis_bytes)?;
 
-                Ok(GenesisOutput::from(genesis))
+                Ok(GenesisOutput::new(genesis, with_object_content))
             }
         }
     }

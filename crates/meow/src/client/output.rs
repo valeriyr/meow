@@ -28,24 +28,39 @@ pub struct SubmitTransactionOutput {
 }
 
 impl ClientCommandOutput {
-    pub fn get_object(object: Option<Object>) -> Self {
-        ClientCommandOutput::GetObject(object.map(|o| o.into()))
+    pub fn get_object(object: Option<Object>, with_object_content: bool) -> Self {
+        ClientCommandOutput::GetObject(object.map(|o| ObjectOutput::new(o, with_object_content)))
     }
 
-    pub fn get_objects(objects: Vec<Option<Object>>) -> Self {
-        ClientCommandOutput::GetObjects(objects.into_iter().map(|o| o.map(|o| o.into())).collect())
+    pub fn get_objects(objects: Vec<Option<Object>>, with_object_content: bool) -> Self {
+        ClientCommandOutput::GetObjects(
+            objects
+                .into_iter()
+                .map(|o| o.map(|o| ObjectOutput::new(o, with_object_content)))
+                .collect(),
+        )
     }
 
-    pub fn get_objects_owned(objects: Vec<Object>) -> Self {
-        ClientCommandOutput::GetObjectsOwned(objects.into_iter().map(|o| o.into()).collect())
+    pub fn get_objects_owned(objects: Vec<Object>, with_object_content: bool) -> Self {
+        ClientCommandOutput::GetObjectsOwned(
+            objects
+                .into_iter()
+                .map(|o| ObjectOutput::new(o, with_object_content))
+                .collect(),
+        )
     }
 
     pub fn get_transaction(transaction: Option<SignedTransaction>) -> Self {
         ClientCommandOutput::GetTransaction(transaction.map(|t| t.into()))
     }
 
-    pub fn get_transaction_result(result: Option<ExecutionResult>) -> Self {
-        ClientCommandOutput::GetTransactionResult(result.map(|r| r.into()))
+    pub fn get_transaction_result(
+        result: Option<ExecutionResult>,
+        with_object_content: bool,
+    ) -> Self {
+        ClientCommandOutput::GetTransactionResult(
+            result.map(|r| TransactionResultOutput::new(r, with_object_content)),
+        )
     }
 
     pub fn submit_transaction(digest: Digest) -> Self {

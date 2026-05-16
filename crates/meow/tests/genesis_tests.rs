@@ -18,7 +18,7 @@ fn build_creates_output_file() {
         allocations,
         output: output.clone(),
     }
-    .run()
+    .run(false)
     .unwrap();
 
     assert!(output.exists());
@@ -33,7 +33,7 @@ fn build_with_single_allocation_creates_module_and_coin() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(true)
     .unwrap();
 
     // meow_object module + meow_coin module + one coin object.
@@ -78,7 +78,7 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(true)
     .unwrap();
 
     // meow_object module + meow_coin module + three coin objects.
@@ -140,7 +140,7 @@ fn build_with_empty_allocations_creates_only_modules() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(false)
     .unwrap();
 
     // meow_object module + meow_coin module.
@@ -166,7 +166,7 @@ fn build_invalid_csv_line_returns_error() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(false)
     .unwrap_err();
 
     assert!(
@@ -185,7 +185,7 @@ fn build_invalid_address_in_csv_returns_error() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(false)
     .unwrap_err();
 
     assert!(
@@ -204,7 +204,7 @@ fn build_invalid_amount_in_csv_returns_error() {
         allocations,
         output: tmp.path().join("genesis.bin"),
     }
-    .run()
+    .run(false)
     .unwrap_err();
 
     assert!(

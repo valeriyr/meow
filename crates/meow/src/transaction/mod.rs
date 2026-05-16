@@ -106,6 +106,7 @@ impl TransactionCommand {
         self,
         client: &NodeClient,
         encoder: OutputEncoder,
+        with_object_content: bool,
     ) -> anyhow::Result<TransactionCommandOutput> {
         match self {
             TransactionCommand::Publish {
@@ -185,7 +186,10 @@ impl TransactionCommand {
 
                 let result = client.simulate_transaction(&transaction).await?;
 
-                Ok(TransactionCommandOutput::simulate(result))
+                Ok(TransactionCommandOutput::simulate(
+                    result,
+                    with_object_content,
+                ))
             }
             TransactionCommand::ExecuteLocally {
                 transaction,
@@ -208,7 +212,10 @@ impl TransactionCommand {
 
                 let result = executor::execute(&transaction, inputs, &execution_context)?;
 
-                Ok(TransactionCommandOutput::execute_locally(result))
+                Ok(TransactionCommandOutput::execute_locally(
+                    result,
+                    with_object_content,
+                ))
             }
         }
     }

@@ -68,7 +68,7 @@ async fn sign_invalid_base64_returns_error() {
         keystore_path: Some(keystore_path(&tmp)),
         transaction: "not valid base64 !!!".to_string(),
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
     .unwrap_err();
 
@@ -88,7 +88,7 @@ async fn sign_valid_base64_but_invalid_bcs_returns_error() {
         keystore_path: Some(keystore_path(&tmp)),
         transaction: junk,
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
     .unwrap_err();
 
@@ -107,7 +107,7 @@ async fn simulate_invalid_base64_returns_error() {
     let err = TransactionCommand::Simulate {
         transaction: "not valid base64 !!!".to_string(),
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
     .unwrap_err();
 
@@ -122,7 +122,7 @@ async fn simulate_valid_base64_but_invalid_bcs_returns_error() {
     let junk = general_purpose::STANDARD.encode(b"this is not a BCS-encoded Transaction");
 
     let err = TransactionCommand::Simulate { transaction: junk }
-        .run(&fake_client(), OutputEncoder::Base64)
+        .run(&fake_client(), OutputEncoder::Base64, false)
         .await
         .unwrap_err();
 
@@ -143,7 +143,7 @@ async fn execute_locally_invalid_base64_returns_error() {
         seed: Digest::ZERO,
         timestamp: None,
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
     .unwrap_err();
 
@@ -162,7 +162,7 @@ async fn execute_locally_valid_base64_but_invalid_bcs_returns_error() {
         seed: Digest::ZERO,
         timestamp: None,
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
     .unwrap_err();
 
@@ -196,7 +196,7 @@ async fn sign(tmp: &TempDir, tx: Transaction) -> anyhow::Result<TransactionComma
         keystore_path: Some(keystore_path(tmp)),
         transaction: tx_b64,
     }
-    .run(&fake_client(), OutputEncoder::Base64)
+    .run(&fake_client(), OutputEncoder::Base64, false)
     .await
 }
 

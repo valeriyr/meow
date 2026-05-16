@@ -11,7 +11,7 @@ async fn submit_transaction_invalid_base64_returns_error() {
     let err = ClientCommand::SubmitTransaction {
         transaction: "not valid base64 !!!".to_string(),
     }
-    .run(&fake_client())
+    .run(&fake_client(), false)
     .await
     .unwrap_err();
 
@@ -26,7 +26,7 @@ async fn submit_transaction_valid_base64_but_invalid_bcs_returns_error() {
     let junk = general_purpose::STANDARD.encode(b"this is not a BCS-encoded SignedTransaction");
 
     let err = ClientCommand::SubmitTransaction { transaction: junk }
-        .run(&fake_client())
+        .run(&fake_client(), false)
         .await
         .unwrap_err();
 

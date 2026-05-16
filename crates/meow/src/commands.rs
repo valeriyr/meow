@@ -62,6 +62,9 @@ pub enum Command {
         /// Encoding used when printing transaction payloads.
         #[arg(long, global = true, default_value_t = OutputEncoder::Base64)]
         encoder: OutputEncoder,
+        /// Include object field values in the output.
+        #[arg(long, global = true)]
+        print_object_content: bool,
         /// Subcommands.
         #[command(subcommand)]
         cmd: TransactionCommand,
@@ -71,6 +74,9 @@ pub enum Command {
         /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
+        /// Include object field values in the output.
+        #[arg(long, global = true)]
+        print_object_content: bool,
         /// Subcommands.
         #[command(subcommand)]
         cmd: GenesisCommand,
@@ -84,6 +90,9 @@ pub enum Command {
         /// Output format for command results.
         #[arg(long, global = true, default_value_t = DEFAULT_OUTPUT_FORMATTER)]
         formatter: OutputFormatter,
+        /// Include object field values in the output.
+        #[arg(long, global = true)]
+        print_object_content: bool,
         /// Subcommands.
         #[command(subcommand)]
         cmd: ClientCommand,
@@ -124,27 +133,33 @@ impl Command {
                 node,
                 formatter,
                 encoder,
+                print_object_content,
                 cmd,
             } => {
                 let client = NodeClient::with_url(node);
 
-                let output = cmd.run(&client, encoder).await?;
+                let output = cmd.run(&client, encoder, print_object_content).await?;
 
                 println!("{}", formatter.format(&output)?);
             }
-            Command::Genesis { formatter, cmd } => {
-                let output = cmd.run()?;
+            Command::Genesis {
+                formatter,
+                print_object_content,
+                cmd,
+            } => {
+                let output = cmd.run(print_object_content)?;
 
                 println!("{}", formatter.format(&output)?);
             }
             Command::Client {
                 node,
                 formatter,
+                print_object_content,
                 cmd,
             } => {
                 let client = NodeClient::with_url(node);
 
-                let output = cmd.run(&client).await?;
+                let output = cmd.run(&client, print_object_content).await?;
 
                 println!("{}", formatter.format(&output)?);
             }

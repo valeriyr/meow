@@ -10,13 +10,13 @@ pub struct GenesisOutput {
     pub objects: Vec<ObjectOutput>,
 }
 
-impl From<Genesis> for GenesisOutput {
-    fn from(genesis: Genesis) -> Self {
+impl GenesisOutput {
+    pub fn new(genesis: Genesis, with_object_content: bool) -> Self {
         GenesisOutput {
             objects: genesis
                 .objects()
                 .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
+                .map(|o| ObjectOutput::new(o.clone(), with_object_content))
                 .collect(),
         }
     }

@@ -14,8 +14,8 @@ pub struct TransactionResultOutput {
     pub destroyed: Vec<ObjectOutput>,
 }
 
-impl From<ExecutionResult> for TransactionResultOutput {
-    fn from(r: ExecutionResult) -> Self {
+impl TransactionResultOutput {
+    pub fn new(r: ExecutionResult, with_object_content: bool) -> Self {
         let status = match r.status() {
             ExecutionStatus::Success => "success".into(),
             ExecutionStatus::Failure(msg) => format!("failure: {msg}"),
@@ -27,17 +27,17 @@ impl From<ExecutionResult> for TransactionResultOutput {
             created: r
                 .created_objects()
                 .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
+                .map(|o| ObjectOutput::new(o.clone(), with_object_content))
                 .collect(),
             changed: r
                 .changed_objects()
                 .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
+                .map(|o| ObjectOutput::new(o.clone(), with_object_content))
                 .collect(),
             destroyed: r
                 .destroyed_objects()
                 .iter()
-                .map(|o| ObjectOutput::from(o.clone()))
+                .map(|o| ObjectOutput::new(o.clone(), with_object_content))
                 .collect(),
         }
     }

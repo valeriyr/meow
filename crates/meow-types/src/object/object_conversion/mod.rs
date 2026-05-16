@@ -1,5 +1,7 @@
 pub mod error;
 
+use std::collections::BTreeMap;
+
 use meow_vm_types::types::Value;
 
 use crate::{
@@ -70,4 +72,22 @@ pub fn vm_object_value_to_object(
         ObjectType::Object(object_decl_ref),
         content,
     ))
+}
+
+/// Decode any Object's content into a human-readable key-value map for display.
+///
+/// All on-chain objects store their fields as BCS-serialized `Vec<(String, Value)>`.
+/// Returns `None` for module objects (which contain bytecode, not field data).
+/// Keys are ordered alphabetically via `BTreeMap` for consistent output.
+pub fn extract_human_readable_content(object: &Object) -> Option<BTreeMap<String, String>> {
+    if !matches!(object.type_(), ObjectType::Object(_)) {
+        return None;
+    }
+    let fields: Vec<(String, Value)> = bcs::from_bytes(object.content()).ok()?;
+    Some(
+        fields
+            .into_iter()
+            .map(|(k, v)| (k, v.to_string()))
+            .collect(),
+    )
 }

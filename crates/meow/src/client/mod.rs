@@ -49,22 +49,32 @@ pub enum ClientCommand {
 }
 
 impl ClientCommand {
-    pub async fn run(self, client: &NodeClient) -> anyhow::Result<ClientCommandOutput> {
+    pub async fn run(
+        self,
+        client: &NodeClient,
+        with_object_content: bool,
+    ) -> anyhow::Result<ClientCommandOutput> {
         match self {
             ClientCommand::GetObject { address } => {
                 let object = client.get_object(&address).await?;
 
-                Ok(ClientCommandOutput::get_object(object))
+                Ok(ClientCommandOutput::get_object(object, with_object_content))
             }
             ClientCommand::GetObjects { addresses } => {
                 let objects = client.get_objects(&addresses).await?;
 
-                Ok(ClientCommandOutput::get_objects(objects))
+                Ok(ClientCommandOutput::get_objects(
+                    objects,
+                    with_object_content,
+                ))
             }
             ClientCommand::GetObjectsOwned { owner } => {
                 let objects = client.get_objects_owned(&owner).await?;
 
-                Ok(ClientCommandOutput::get_objects_owned(objects))
+                Ok(ClientCommandOutput::get_objects_owned(
+                    objects,
+                    with_object_content,
+                ))
             }
             ClientCommand::GetTransaction { digest } => {
                 let transaction = client.get_transaction(&digest).await?;
@@ -74,7 +84,10 @@ impl ClientCommand {
             ClientCommand::GetTransactionResult { digest } => {
                 let result = client.get_transaction_result(&digest).await?;
 
-                Ok(ClientCommandOutput::get_transaction_result(result))
+                Ok(ClientCommandOutput::get_transaction_result(
+                    result,
+                    with_object_content,
+                ))
             }
             ClientCommand::SubmitTransaction { transaction } => {
                 let bytes = general_purpose::STANDARD.decode(&transaction)?;

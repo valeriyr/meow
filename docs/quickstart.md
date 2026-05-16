@@ -123,7 +123,7 @@ meow transaction meow-call \
   --sender <ADDRESS> --gas-coin <OBJECT_ADDRESS> [ARGS...]
 
 # Sign it
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 
 # Submit it
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>

@@ -4,10 +4,11 @@ use meow_types::{
     identifier::Identifier,
     object::{
         Object,
-        object_conversion::{object_to_vm_object_value, vm_object_value_to_object},
+        object_conversion::{
+            extract_human_readable_content, object_to_vm_object_value, vm_object_value_to_object,
+        },
         object_decl_ref::ObjectDeclRef,
         object_owner::ObjectOwner,
-        object_type::ObjectType,
         object_version::ObjectVersion,
     },
     system_framework::meow_object::{MEOW_OBJECT_ID_FIELD_NAME, MeowObjectId},
@@ -67,16 +68,9 @@ fn object_to_vm_carries_type_name() {
 
 #[test]
 fn object_to_vm_fails_for_module_type() {
-    let obj = Object::new(
-        OBJECT_ID,
-        ObjectOwner::Immutable,
-        Digest::ZERO,
-        ObjectVersion::ZERO,
-        ObjectType::Module,
-        vec![],
-    );
+    let module = make_module();
 
-    assert!(object_to_vm_object_value(&obj).is_err());
+    assert!(object_to_vm_object_value(&module).is_err());
 }
 
 //
@@ -171,6 +165,42 @@ fn round_trip_object_to_vm_and_back() {
 }
 
 //
+// ─── extract_human_readable_content tests ───
+//
+
+#[test]
+fn extract_human_readable_content_returns_fields_for_any_object() {
+    let object = make_object(
+        OBJECT_ID,
+        vec![
+            ("balance".to_string(), Value::U64(100)),
+            ("active".to_string(), Value::Bool(true)),
+        ],
+    );
+
+    let content = extract_human_readable_content(&object).expect("object must produce content");
+
+    assert_eq!(content.get("balance").map(String::as_str), Some("100"));
+    assert_eq!(content.get("active").map(String::as_str), Some("true"));
+}
+
+#[test]
+fn extract_human_readable_content_empty_object_returns_empty_map() {
+    let object = make_object(OBJECT_ID, vec![]);
+
+    let content = extract_human_readable_content(&object).expect("object must produce content");
+
+    assert!(content.is_empty());
+}
+
+#[test]
+fn extract_human_readable_content_returns_none_for_module_object() {
+    let module = make_module();
+
+    assert!(extract_human_readable_content(&module).is_none());
+}
+
+//
 // ─── Utility functions ───
 //
 
@@ -178,14 +208,12 @@ fn make_object(id: Address, fields: Vec<(String, Value)>) -> Object {
     let content = bcs::to_bytes(&fields).expect("fields must serialize");
     let ident = Identifier::new("Foo").unwrap();
     let decl_ref = ObjectDeclRef::new(MODULE_ADDR, ident);
-    Object::new(
-        id,
-        ObjectOwner::Address(OWNER),
-        Digest::ZERO,
-        ObjectVersion::ZERO,
-        ObjectType::Object(decl_ref),
-        content,
-    )
+
+    Object::fresh_object(id, OWNER, Digest::ZERO, decl_ref, content)
+}
+
+fn make_module() -> Object {
+    Object::fresh_module(OBJECT_ID, Digest::ZERO, vec![])
 }
 
 fn make_vm_to_object(val: &Value) -> Object {
