@@ -44,11 +44,12 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// mod my_module;
 ///
 /// use meow_object@0x01;
+/// use math@0x02 as m;
 ///
 /// pub struct Coin { id: meow_object::Id, balance: u64 }
 /// struct Point { x: u64, y: u64 }
 ///
-/// fn add(a: u64, b: u64) -> u64 {
+/// pub fn add(a: u64, b: u64) -> u64 {
 ///     return a + b;
 /// }
 /// ```
@@ -57,35 +58,37 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// - `mod NAME;` declaration — must be the first item in source
 /// - Primitive types: `bool`, `u64`, `address`, `string`
 /// - Address literals: `@0x02` (left-padded to 32 bytes)
-/// - User-defined structs with move semantics (primitive and nested struct fields)
-/// - Functions with parameters and an optional return type
-/// - `let` bindings, `return` statements
+/// - User-defined structs (`struct`, `pub struct`) with move semantics
+/// - Functions (`fn`, `pub fn`) with parameters, optional return type, and tuple return types
+/// - `let` bindings, reassignment (`x = expr;`), `return` statements
 /// - `if` / `else` statements
 /// - Struct destructuring: `let Name { field, .. } = value;`
 /// - Tuple destructuring: `let (a, b) = expr;`
-/// - Field assignment: `obj.field = expr;`
+/// - Field access and assignment: `obj.field`, `obj.field = expr;`
 /// - Binary operators: `+`, `-`, `*`, `/`, `%`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `&&`, `||`
 /// - Unary operator: `!` (boolean not)
-/// - Field access: `expr.field`
 /// - Struct literals: `Foo { field: expr, … }`
-/// - Function calls: `foo(arg, …)` (module or native)
+/// - Function calls: `foo(arg, …)` (local or native)
 /// - String literals: `"..."`
-/// - Cross-module dependencies via `use module_name@0x...;` and qualified names `module_name::TypeOrFn`
+/// - Cross-module imports: `use module_name@0x...;` or `use module_name@0x... as alias;`
+/// - Cross-module calls and types: `module_name::fn()`, `alias::TypeName`
 pub struct Compiler;
 
 impl Compiler {
-    /// Parse `source` and return the list of declared dependencies.
+    /// Parse `source` and return the declared dependencies.
     ///
-    /// Each entry is `(module_name, address)` as written in a `use module_name@address;`
-    /// declaration. The function validates:
+    /// Each entry is `(name, alias, address)` where `name` is the actual module name
+    /// (as declared in its `mod NAME;`) and `alias` is the local name used to reference
+    /// it in source (`use name@address as alias;`, or same as `name` when no alias is given).
+    /// The function validates:
     /// - source starts with exactly one `mod NAME;` declaration
-    /// - no two `use` declarations share the same module name
+    /// - no two `use` declarations share the same alias
     ///
     /// No dep modules need to be provided — this is intended for callers that need
     /// to know *which* modules to fetch before calling [`Compiler::compile`].
     ///
     /// Line comments (`// ...`) are stripped before parsing.
-    pub fn extract_deps(source: &str) -> Result<Vec<(String, Address)>> {
+    pub fn extract_deps(source: &str) -> Result<Vec<(String, Option<String>, Address)>> {
         let (_, _, use_decls) = Self::parse_and_extract(source)?;
         Ok(use_decls)
     }
@@ -166,7 +169,7 @@ impl Compiler {
         let mut dep_addresses: HashMap<String, Address> = HashMap::new();
         let mut import_addresses: Vec<Address> = Vec::new();
 
-        for (dep_name, dep_addr) in use_decls {
+        for (dep_name, alias, dep_addr) in use_decls {
             let found = deps
                 .iter()
                 .find(|(addr, m)| *addr == dep_addr && m.name == dep_name);
@@ -176,7 +179,9 @@ impl Compiler {
                      no provided dep module matches that name and address",
                 )));
             }
-            dep_addresses.insert(dep_name, dep_addr);
+            let local_name = alias.unwrap_or_else(|| dep_name.clone());
+            validator::validate_identifier(&local_name, "use alias", &config)?;
+            dep_addresses.insert(local_name, dep_addr);
             import_addresses.push(dep_addr);
         }
 
@@ -356,9 +361,11 @@ impl Compiler {
     /// - no duplicate `use` names
     ///
     /// Returns `(items, module_name, use_decls)` where `use_decls` is a list of
-    /// `(name, address)` pairs in source order.
+    /// `(dep_name, alias, address)` triples in source order.
     #[allow(clippy::type_complexity)]
-    fn parse_and_extract(source: &str) -> Result<(Vec<AstItem>, String, Vec<(String, Address)>)> {
+    fn parse_and_extract(
+        source: &str,
+    ) -> Result<(Vec<AstItem>, String, Vec<(String, Option<String>, Address)>)> {
         let source_no_comments = strip_line_comments(source);
         let items = parser()
             .parse(source_no_comments.as_str())
@@ -390,19 +397,24 @@ impl Compiler {
             ));
         }
 
-        let mut use_decls: Vec<(String, Address)> = Vec::new();
+        let mut use_decls: Vec<(String, Option<String>, Address)> = Vec::new();
         for item in &items {
             if let AstItem::Use {
                 name: dep_name,
                 address: dep_addr,
+                alias,
             } = item
             {
-                if use_decls.iter().any(|(n, _)| n == dep_name) {
+                let local_name = alias.as_ref().unwrap_or(dep_name);
+                if use_decls
+                    .iter()
+                    .any(|(name, a, _)| a.as_deref().unwrap_or(name.as_str()) == local_name)
+                {
                     return Err(CompilerError::Message(format!(
-                        "duplicate use declaration: '{dep_name}' is already imported",
+                        "duplicate use declaration: '{local_name}' is already used as an alias",
                     )));
                 }
-                use_decls.push((dep_name.clone(), *dep_addr));
+                use_decls.push((dep_name.clone(), alias.clone(), *dep_addr));
             }
         }
 

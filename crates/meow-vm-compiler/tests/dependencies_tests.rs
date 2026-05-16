@@ -23,11 +23,11 @@ fn extract_deps_returns_declared_imports() {
     assert_eq!(deps.len(), 2);
     assert_eq!(
         deps[0],
-        ("math".to_string(), Address::from_str("0x01").unwrap())
+        ("math".to_string(), None, Address::from_str("0x01").unwrap())
     );
     assert_eq!(
         deps[1],
-        ("util".to_string(), Address::from_str("0x02").unwrap())
+        ("util".to_string(), None, Address::from_str("0x02").unwrap())
     );
 }
 
@@ -37,8 +37,7 @@ fn extract_deps_no_imports_returns_empty() {
         mod main;
         fn run() -> u64 { 0 }
     "#;
-    let deps = Compiler::extract_deps(src).unwrap();
-    assert!(deps.is_empty());
+    assert!(Compiler::extract_deps(src).unwrap().is_empty());
 }
 
 #[test]
@@ -271,6 +270,139 @@ fn complete_transitive_closure_is_accepted() {
         )
         .is_ok()
     );
+}
+
+//
+// ─── Alias (`use mod@addr as alias`) ───
+//
+
+#[test]
+fn extract_deps_alias_returns_alias_as_key() {
+    let src = r#"
+        mod main;
+        use helper@0x42 as h;
+        fn run() -> u64 { 0 }
+    "#;
+    let deps = Compiler::extract_deps(src).unwrap();
+    assert_eq!(deps.len(), 1);
+    assert_eq!(
+        deps[0],
+        (
+            "helper".to_string(),
+            Some("h".to_string()),
+            Address::from_str("0x42").unwrap()
+        )
+    );
+}
+
+#[test]
+fn alias_used_for_cross_module_call() {
+    let dep = utils::compile(
+        r#"
+            mod helper;
+            pub fn get() -> u64 { 7 }
+        "#,
+    )
+    .expect("dep must compile");
+
+    let src = r#"
+        mod main;
+        use helper@0x42 as h;
+        pub fn run() -> u64 { h::get() }
+    "#;
+    utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)])
+        .expect("alias must work for cross-module call");
+}
+
+#[test]
+fn original_module_name_rejected_when_alias_set() {
+    let dep = utils::compile(
+        r#"
+            mod helper;
+            pub fn get() -> u64 { 1 }
+        "#,
+    )
+    .expect("dep must compile");
+
+    // Declares alias `h` — using `helper::get()` must fail.
+    let src = r#"
+        mod main;
+        use helper@0x42 as h;
+        pub fn run() -> u64 { helper::get() }
+    "#;
+    assert!(matches!(
+        utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("undeclared module 'helper'")
+    ));
+}
+
+#[test]
+fn alias_too_long_is_rejected() {
+    let dep = utils::compile(
+        r#"
+            mod helper;
+            pub fn get() -> u64 { 1 }
+        "#,
+    )
+    .expect("dep must compile");
+
+    let long_alias = "a".repeat(256);
+    let src = format!(
+        r#"
+            mod main;
+            use helper@0x42 as {long_alias};
+        "#
+    );
+    assert!(matches!(
+        utils::compile_with_deps(&src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("not a valid identifier")
+    ));
+}
+
+#[test]
+fn duplicate_alias_is_rejected() {
+    let src = r#"
+        mod main;
+        use foo@0x01 as shared;
+        use bar@0x02 as shared;
+    "#;
+    assert!(matches!(
+        Compiler::extract_deps(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("duplicate use declaration")
+    ));
+}
+
+#[test]
+fn two_modules_same_name_different_addresses_with_aliases_accepted() {
+    let dep1 = utils::compile(
+        r#"
+            mod math;
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
+        "#,
+    )
+    .expect("dep1 must compile");
+    let dep2 = utils::compile(
+        r#"
+            mod math;
+            pub fn mul(a: u64, b: u64) -> u64 { a * b }
+        "#,
+    )
+    .expect("dep2 must compile");
+
+    let src = r#"
+        mod main;
+        use math@0x01 as math1;
+        use math@0x02 as math2;
+        pub fn run(a: u64, b: u64) -> u64 { math1::add(a, b) }
+    "#;
+    utils::compile_with_deps(
+        src,
+        &[
+            (Address::from_str("0x01").unwrap(), &dep1),
+            (Address::from_str("0x02").unwrap(), &dep2),
+        ],
+    )
+    .expect("two modules with same name but different aliases must compile");
 }
 
 //

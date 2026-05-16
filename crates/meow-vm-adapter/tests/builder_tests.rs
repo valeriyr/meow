@@ -138,8 +138,7 @@ fn extract_module_deps_returns_empty_for_no_deps() {
         mod main;
         fn noop() {}
     "#;
-    let deps = builder::extract_module_deps(src).unwrap();
-    assert!(deps.is_empty());
+    assert!(builder::extract_module_deps(src).unwrap().is_empty());
 }
 
 #[test]
@@ -156,11 +155,30 @@ fn extract_module_deps_returns_declared_imports_in_order() {
     assert_eq!(deps.len(), 2);
     assert_eq!(
         deps[0],
-        ("math".to_string(), Address::from_str("0x01").unwrap())
+        ("math".to_string(), None, Address::from_str("0x01").unwrap())
     );
     assert_eq!(
         deps[1],
-        ("util".to_string(), Address::from_str("0x02").unwrap())
+        ("util".to_string(), None, Address::from_str("0x02").unwrap())
+    );
+}
+
+#[test]
+fn extract_module_deps_with_alias_returns_some_alias() {
+    let src = r#"
+        mod main;
+        use math@0x01 as m;
+        fn noop() {}
+    "#;
+    let deps = builder::extract_module_deps(src).unwrap();
+    assert_eq!(deps.len(), 1);
+    assert_eq!(
+        deps[0],
+        (
+            "math".to_string(),
+            Some("m".to_string()),
+            Address::from_str("0x01").unwrap()
+        )
     );
 }
 

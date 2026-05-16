@@ -14,17 +14,17 @@ mod my_module;
 
 ## Imports
 
-Use `use` declarations to import other published modules. The `@<address>` suffix is the 32-byte on-chain address of the module.
+Use `use` declarations to import other published modules. The `@<address>` suffix is the 32-byte on-chain address of the module. An optional `as alias` gives the module a different local name.
 
 ```meow
 mod my_game;
 
 use meow_object@0x01;
 use meow_coin@0x10;
-use math@0x1a2b3c...;
+use math@0x1a2b3c... as m;  // reference as m:: instead of math::
 ```
 
-After importing, reference types and functions with `module_name::TypeName` or `module_name::function_name(...)`. Duplicate `use` names in the same module are rejected.
+After importing, reference types and functions with `module_name::TypeName` or `module_name::function_name(...)`, or use the alias if one was declared. Duplicate aliases in the same module are rejected. Two modules with the same name but different addresses can both be imported by giving each a distinct alias.
 
 ### Using imported types and functions
 
@@ -32,11 +32,11 @@ After importing, reference types and functions with `module_name::TypeName` or `
 - **Types**: use `module_name::TypeName` as a type annotation. Receive values via `pub fn` return values or parameters. Direct construction (`module_name::TypeName { ... }`) is always rejected — use a constructor function exported by the dep module.
 
 ```meow
-use shapes@0x...;
+use shapes@0x... as geo;
 fn run() -> u64 {
-    let p = shapes::make_point(3, 7); // ok — uses constructor
-    // let p = shapes::Point { x: 3, y: 7 }; // rejected — cross-module construction
-    return shapes::get_x(p);  // ok — uses getter
+    let p = geo::make_point(3, 7);        // ok — uses constructor
+    // let p = geo::Point { x: 3, y: 7 }; // rejected — cross-module construction
+    return geo::get_x(p);                 // ok — uses getter
 }
 ```
 

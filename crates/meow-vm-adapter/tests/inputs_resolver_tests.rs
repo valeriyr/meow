@@ -355,8 +355,8 @@ async fn load_deps_async_fetches_direct_dep() {
     let dep_addr = Address::from_str("0x10").unwrap();
     let dep_module = compile(DEP_SRC, &[]);
 
-    let dep_decl = vec![("point".to_string(), dep_addr)];
-    let loaded = inputs_resolver::load_deps_async(&dep_decl, |addr| {
+    let dep_addresses = vec![dep_addr];
+    let loaded = inputs_resolver::load_deps_async(&dep_addresses, |addr| {
         let m = dep_module.clone();
         async move { if addr == dep_addr { Some(m) } else { None } }
     })
@@ -375,8 +375,8 @@ async fn load_deps_async_follows_transitive_imports() {
     let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
     // Caller only declares main as a direct dep; dep should be discovered transitively.
-    let dep_decl = vec![("shapes".to_string(), main_addr)];
-    let loaded = inputs_resolver::load_deps_async(&dep_decl, |addr| {
+    let dep_addresses = vec![main_addr];
+    let loaded = inputs_resolver::load_deps_async(&dep_addresses, |addr| {
         let dep = dep_module.clone();
         let main = main_module.clone();
         async move {
@@ -411,12 +411,12 @@ async fn load_deps_async_deduplicates_diamond_deps() {
     let a_module = compile(&main_src(c_addr), &[(c_addr, &c_module)]);
     let b_module = compile(&main_src(c_addr), &[(c_addr, &c_module)]);
 
-    let dep_decl = vec![("a".to_string(), a_addr), ("b".to_string(), b_addr)];
+    let dep_addresses = vec![a_addr, b_addr];
 
     let fetch_count = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let count = fetch_count.clone();
 
-    let loaded = inputs_resolver::load_deps_async(&dep_decl, move |addr| {
+    let loaded = inputs_resolver::load_deps_async(&dep_addresses, move |addr| {
         let c = c_module.clone();
         let a = a_module.clone();
         let b = b_module.clone();

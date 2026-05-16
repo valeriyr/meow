@@ -549,6 +549,7 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         .boxed();
 
     // use module_name@0x...;
+    // use module_name@0x... as alias;
     let use_item: BoxedParser<'src, AstItem> = kw("use")
         .ignore_then(ident)
         .then_ignore(just('@').padded())
@@ -563,8 +564,13 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
                     })
                 }),
         )
+        .then(kw("as").ignore_then(ident).or_not())
         .then_ignore(just(';').padded())
-        .map(|(name, address)| AstItem::Use { name, address })
+        .map(|((name, address), alias)| AstItem::Use {
+            name,
+            address,
+            alias,
+        })
         .boxed();
 
     let item: BoxedParser<'src, AstItem> =

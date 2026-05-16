@@ -20,11 +20,13 @@ pub type Result<T> = std::result::Result<T, BuilderError>;
 /// Maximum byte length of source code passed to the compiler.
 pub const MAX_SOURCE_SIZE: usize = 64 * 1024; // 64 KiB
 
-/// Extract declared dependency addresses from source without full compilation.
+/// Extract declared dependency information from source without full compilation.
 ///
-/// Returns `(module_name, on_chain_address)` pairs in source order. No dep
-/// modules need to be provided — this is intended for callers that need to
-/// know which modules to fetch before calling [`build`].
+/// Returns `(name, alias, address)` triples in source order, where `name` is the
+/// actual module name and `alias` is the local name used in source (`name` when
+/// no `as` clause is present). No dep modules need to be provided — this is
+/// intended for callers that need to know which modules to fetch before calling
+/// [`build`].
 ///
 /// # Note on double parsing
 /// Callers that follow up with [`build`] will cause the source to be parsed
@@ -34,7 +36,7 @@ pub const MAX_SOURCE_SIZE: usize = 64 * 1024; // 64 KiB
 /// two calls without exposing internal AST types. The overhead is bounded by
 /// [`MAX_SOURCE_SIZE`] and is negligible compared to the network round-trips
 /// needed to fetch dep modules.
-pub fn extract_module_deps(source: &str) -> Result<Vec<(String, Address)>> {
+pub fn extract_module_deps(source: &str) -> Result<Vec<(String, Option<String>, Address)>> {
     if source.len() > MAX_SOURCE_SIZE {
         return Err(BuilderError::SourceTooLarge {
             size: source.len(),
@@ -42,11 +44,9 @@ pub fn extract_module_deps(source: &str) -> Result<Vec<(String, Address)>> {
         });
     }
 
-    let vm_deps = Compiler::extract_deps(source)?;
-
-    Ok(vm_deps
+    Ok(Compiler::extract_deps(source)?
         .into_iter()
-        .map(|(name, addr)| (name, addr.into()))
+        .map(|(name, alias, addr)| (name, alias, addr.into()))
         .collect())
 }
 

@@ -132,10 +132,12 @@ pub struct AstStruct {
 pub enum AstItem {
     /// `mod NAME;` — declares the module's name. Must be the first item in source.
     ModuleDecl(String),
-    /// `use module_name@0x...;` — declares a dependency on a module at a specific address.
+    /// `use module_name@0x...;` or `use module_name@0x... as alias;` — declares a dependency.
     Use {
         name: String,
         address: Address,
+        /// Local alias used to reference the module in source. Defaults to `name` when absent.
+        alias: Option<String>,
     },
     Struct(AstStruct),
     Fn(AstFunction),

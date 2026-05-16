@@ -13,9 +13,12 @@ pub async fn build_module(
     path: PathBuf,
 ) -> anyhow::Result<(Module, HashMap<Address, Module>)> {
     let source = builder::read_source_file(path)?;
-    let dep_decl = builder::extract_module_deps(&source)?;
+    let dep_addresses: Vec<Address> = builder::extract_module_deps(&source)?
+        .into_iter()
+        .map(|(_, _, addr)| addr)
+        .collect();
 
-    let deps = inputs_resolver::load_deps_async(&dep_decl, |addr| async move {
+    let deps = inputs_resolver::load_deps_async(&dep_addresses, |addr| async move {
         let obj = client.get_object(&addr).await.ok().flatten()?;
         bcs::from_bytes::<Module>(obj.content()).ok()
     })

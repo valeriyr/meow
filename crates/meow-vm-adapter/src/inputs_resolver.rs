@@ -105,13 +105,13 @@ where
 
 /// Fetch all transitive dependency modules needed to compile or run a module.
 ///
-/// Starts from the direct deps declared in source (`deps_decl`), then follows
+/// Starts from the direct deps declared in source (`dep_addresses`), then follows
 /// each module's own `.imports` transitively (BFS). Diamond deps are deduplicated.
 ///
 /// `get_module` is called for each address. Missing modules (`None`) are silently
 /// skipped — a missing dep will surface as a compiler or VM error at the call site.
 pub async fn load_deps_async<F, Fut>(
-    deps_decl: &[(String, Address)],
+    dep_addresses: &[Address],
     get_module: F,
 ) -> HashMap<Address, Module>
 where
@@ -119,7 +119,7 @@ where
     Fut: Future<Output = Option<Module>>,
 {
     let mut loaded: HashMap<Address, Module> = HashMap::new();
-    let mut queue: Vec<Address> = deps_decl.iter().map(|(_, addr)| *addr).collect();
+    let mut queue: Vec<Address> = dep_addresses.to_vec();
 
     while let Some(addr) = queue.pop() {
         if loaded.contains_key(&addr) {

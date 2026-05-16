@@ -20,8 +20,8 @@ use crate::{
 pub struct Codegen<'m> {
     config: &'m CompilerConfig,
     structs: &'m [StructDef],
-    /// Maps a dep module's human-readable name to its on-chain address.
-    /// Used to translate `module_name::something` → `@<hex>::something` in bytecode.
+    /// Maps each dep module's alias (or name when no alias is given) to its on-chain address.
+    /// Used to translate `alias::something` → `@<hex>::something` in bytecode.
     dep_addresses: &'m HashMap<String, Address>,
     /// Maps each dep module's address to its compiled Module.
     /// Used to look up function visibility and return types for cross-module calls.
@@ -31,7 +31,7 @@ pub struct Codegen<'m> {
     local_fn_return_types: &'m HashMap<String, Option<Type>>,
     locals: HashMap<String, u8>,
     /// Tracks the inferred source-level type name for each local variable.
-    /// Cross-module types use the `"dep_name::TypeName"` form.
+    /// Cross-module types use the `"alias::TypeName"` form (alias = declared name when no `as` clause).
     /// Primitives are tracked too (e.g. `"u64"`) for completeness.
     local_types: HashMap<String, String>,
     next_slot: u8,

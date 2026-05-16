@@ -460,3 +460,119 @@ fn chained_cross_module_calls() {
     let result = vm.call("four", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(4)));
 }
+
+//
+// ─── Module aliases (`use mod@addr as alias`) ───
+//
+
+#[test]
+fn alias_used_for_cross_module_function_call() {
+    let a1 = Address::from_str("0x01").unwrap();
+    let math = utils::compile(
+        r#"
+            mod math;
+
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
+        "#,
+    );
+
+    let caller = utils::compile_with_deps(
+        &format!(
+            r#"
+                mod caller;
+
+                use math@{} as m;
+
+                pub fn run(a: u64, b: u64) -> u64 {{ m::add(a, b) }}
+            "#,
+            a1
+        ),
+        &[(a1, &math)],
+    );
+
+    let vm = utils::vm_with_deps(caller, HashMap::from([(a1, math)]));
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let result = vm
+        .call("run", vec![Value::U64(10), Value::U64(3)], &mut gas)
+        .unwrap();
+    assert_eq!(result.return_value, Some(Value::U64(13)));
+}
+
+#[test]
+fn alias_used_for_cross_module_struct() {
+    let a10 = Address::from_str("0x10").unwrap();
+    let shapes = utils::compile(
+        r#"
+            mod shapes;
+
+            pub struct Point { x: u64, y: u64 }
+
+            pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
+            pub fn get_x(p: Point) -> u64 { p.x }
+        "#,
+    );
+
+    let user = utils::compile_with_deps(
+        &format!(
+            r#"
+                mod user;
+
+                use shapes@{} as geo;
+
+                pub fn run() -> u64 {{
+                    let p = geo::make_point(5, 9);
+                    geo::get_x(p)
+                }}
+            "#,
+            a10
+        ),
+        &[(a10, &shapes)],
+    );
+
+    let vm = utils::vm_with_deps(user, HashMap::from([(a10, shapes)]));
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let result = vm.call("run", vec![], &mut gas).unwrap();
+    assert_eq!(result.return_value, Some(Value::U64(5)));
+}
+
+#[test]
+fn two_modules_same_name_distinguished_by_alias() {
+    let a01 = Address::from_str("0x01").unwrap();
+    let a02 = Address::from_str("0x02").unwrap();
+
+    let math_v1 = utils::compile(
+        r#"
+            mod math;
+
+            pub fn value() -> u64 { 100 }
+        "#,
+    );
+    let math_v2 = utils::compile(
+        r#"
+            mod math;
+
+            pub fn value() -> u64 { 200 }
+        "#,
+    );
+
+    let caller = utils::compile_with_deps(
+        &format!(
+            r#"
+                mod caller;
+
+                use math@{a01} as math1;
+                use math@{a02} as math2;
+
+                pub fn run() -> u64 {{ math1::value() + math2::value() }}
+            "#,
+            a01 = a01,
+            a02 = a02,
+        ),
+        &[(a01, &math_v1), (a02, &math_v2)],
+    );
+
+    let vm = utils::vm_with_deps(caller, HashMap::from([(a01, math_v1), (a02, math_v2)]));
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let result = vm.call("run", vec![], &mut gas).unwrap();
+    assert_eq!(result.return_value, Some(Value::U64(300)));
+}

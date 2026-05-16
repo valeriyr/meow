@@ -46,12 +46,27 @@ impl Store {
     /// - destroyed objects → removed
     pub fn apply_execution_result(&mut self, result: &ExecutionResult) {
         for obj in result.created_objects() {
+            assert!(
+                !self.objects.contains_key(obj.address()),
+                "created object ID collision: {}",
+                obj.address()
+            );
             self.objects.insert(*obj.address(), obj.clone());
         }
         for obj in result.changed_objects() {
+            assert!(
+                self.objects.contains_key(obj.address()),
+                "changed object not found in store: {}",
+                obj.address()
+            );
             self.objects.insert(*obj.address(), obj.clone());
         }
         for obj in result.destroyed_objects() {
+            assert!(
+                self.objects.contains_key(obj.address()),
+                "destroyed object not found in store: {}",
+                obj.address()
+            );
             self.objects.remove(obj.address());
         }
     }
