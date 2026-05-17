@@ -54,6 +54,11 @@ impl Type {
     pub fn is_valid_field_type(&self) -> bool {
         self.is_primitive() || matches!(self, Self::Struct(_))
     }
+
+    /// Returns `true` if this is a struct type declared in a different module.
+    pub fn is_cross_module(&self) -> bool {
+        matches!(self, Self::Struct(name) if is_cross_module_type_name(name))
+    }
 }
 
 impl std::fmt::Display for Type {
@@ -203,4 +208,10 @@ impl StructDef {
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
         self.fields.iter().position(|f| f.name == field_name)
     }
+}
+
+/// Returns `true` if `name` is a qualified struct name of the form `"dep_alias::TypeName"`,
+/// indicating it was declared in a different module.
+pub fn is_cross_module_type_name(name: &str) -> bool {
+    name.contains("::")
 }

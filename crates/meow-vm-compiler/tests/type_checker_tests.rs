@@ -708,6 +708,61 @@ fn let_tuple_on_non_tuple_rejected() {
 }
 
 //
+// ─── Reassignment type checking ───
+//
+
+#[test]
+fn reassign_same_type_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+            fn run() -> u64 {
+                let x = 0;
+                x = 42;
+                x
+            }
+        "#,
+    )
+    .expect("reassigning to the same type must compile");
+}
+
+#[test]
+fn reassign_type_mismatch_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+            fn bad() {
+                let x = 0;
+                x = true;
+            }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("expected u64") && msg.contains("found bool")),
+        "expected reassignment type error, got: {err:?}"
+    );
+}
+
+#[test]
+fn reassign_undefined_variable_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+            fn bad() {
+                x = 1;
+            }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("undefined variable 'x'")),
+        "expected undefined variable error, got: {err:?}"
+    );
+}
+
+//
 // ─── Cross-module ───
 //
 

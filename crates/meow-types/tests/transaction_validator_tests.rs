@@ -65,16 +65,18 @@ fn too_many_args_returns_error() {
     // Default config is used for validation so we can use it here.
     let config = config::compiler_config();
 
-    let args_amount = config.max_params() + 1;
-    let args: Vec<_> = (0..(args_amount as u8))
+    let max_params = config.max_params();
+    // Build one more arg than the limit allows.
+    let args: Vec<_> = (0..=max_params)
         .map(|i| obj_input(Address::fill(i)))
         .collect();
     let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
+    let expected_limit = max_params as usize;
 
     assert!(matches!(
         validator::validate_transaction(&tx),
         Err(ValidationError::TooManyCallArguments { amount, limit })
-            if amount == args_amount && limit == config.max_params()
+            if amount == expected_limit + 1 && limit == expected_limit
     ));
 }
 

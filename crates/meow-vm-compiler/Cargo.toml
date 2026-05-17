@@ -7,7 +7,7 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "Compiler from .meow source code to MEOW VM bytecode"
 
 [dependencies]
-chumsky = "0.12"
+chumsky = "0.13"
 
 thiserror.workspace = true
 

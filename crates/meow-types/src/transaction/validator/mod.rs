@@ -68,7 +68,7 @@ fn validate_transaction_size(transaction: &Transaction, limit: usize) -> Result<
 /// Validates that the number of call arguments does not exceed the compiler limit.
 fn validate_call_args_count(call: &Call, compiler: &CompilerConfig) -> Result<()> {
     let amount = call.arguments().len();
-    let limit = compiler.max_params();
+    let limit = compiler.max_params() as usize;
     if amount > limit {
         return Err(ValidationError::TooManyCallArguments { amount, limit });
     }

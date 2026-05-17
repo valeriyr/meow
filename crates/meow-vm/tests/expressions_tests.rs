@@ -288,6 +288,81 @@ fn bool_not_in_condition() {
 }
 
 //
+// ─── Operator precedence ───
+//
+
+#[test]
+fn mul_before_add() {
+    // 2 + 3 * 4 must equal 14, not 20
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 2 + 3 * 4 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(14)));
+}
+
+#[test]
+fn mul_before_sub() {
+    // 10 - 2 * 3 must equal 4, not 24
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 10 - 2 * 3 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(4)));
+}
+
+#[test]
+fn sub_is_left_associative() {
+    // 10 - 3 - 2 must equal 5 (left-to-right), not 9
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 10 - 3 - 2 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(5)));
+}
+
+#[test]
+fn parens_override_precedence() {
+    // (2 + 3) * 4 must equal 20
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { (2 + 3) * 4 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(20)));
+}
+
+//
+// ─── u64 wrapping arithmetic ───
+//
+
+#[test]
+fn add_wraps_on_overflow() {
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 18446744073709551615 + 1 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
+}
+
+#[test]
+fn sub_wraps_on_underflow() {
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 0 - 1 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(u64::MAX)));
+}
+
+#[test]
+fn mul_wraps_on_overflow() {
+    let src = r#"
+        mod test;
+        pub fn f() -> u64 { 9223372036854775808 * 2 }
+    "#;
+    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
+}
+
+//
 // ─── Utilities ───
 //
 

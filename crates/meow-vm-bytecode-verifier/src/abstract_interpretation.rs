@@ -5,7 +5,7 @@ use meow_vm_types::{
     bytecode::Instruction,
     module::{Function, Module},
     module_ref,
-    types::Type,
+    types::{self, Type},
 };
 
 use crate::{
@@ -65,14 +65,6 @@ fn from_type(ty: &Type) -> AbstractType {
         Type::Struct(n) => AbstractType::Struct(n.clone()),
         Type::Tuple(types) => AbstractType::Tuple(types.iter().map(from_type).collect()),
     }
-}
-
-/// Returns `true` if the type name contains `::`, indicating it refers to a
-/// type from a dependency module. Field-level structural checks are skipped
-/// for cross-module types because the dep-name → address mapping is not
-/// stored in the bytecode.
-fn is_cross_module_type(name: &str) -> bool {
-    name.contains("::")
 }
 
 //
@@ -205,7 +197,7 @@ fn resolve_field_type(
         AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
-    if is_cross_module_type(type_name) {
+    if types::is_cross_module_type_name(type_name) {
         return None; // can't resolve without dep-name→address mapping
     }
     let def = module.get_struct(type_name)?;
@@ -233,7 +225,7 @@ fn check_field_read_visibility(ty: &AbstractType, field_name: &str) -> Option<Ve
         AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
-    if !is_cross_module_type(type_name) {
+    if !types::is_cross_module_type_name(type_name) {
         return None; // same-module: always allowed
     }
     Some(VerificationError::CrossModulePrivateFieldRead {
@@ -440,7 +432,7 @@ pub(crate) fn check_function(
                     _ => None,
                 };
                 if let Some(n) = &root_name
-                    && is_cross_module_type(n)
+                    && types::is_cross_module_type_name(n)
                 {
                     errors.push(VerificationError::CrossModuleFieldWrite {
                         function: fn_name.clone(),

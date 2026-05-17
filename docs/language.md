@@ -231,7 +231,73 @@ if cond { ... }
 if cond { ... } else { ... }
 ```
 
+Each branch body is a separate scope — see [Variable shadowing and scoping](#variable-shadowing-and-scoping) below.
+
 Both branches must leave the stack in the same state (same types, same struct liveness). Using `if` without `else` is valid when neither branch creates struct values that survive past the branch.
+
+### Variable shadowing and scoping
+
+Redeclaring a name with `let` in the same scope *shadows* the previous binding.
+
+**Primitives** can always be shadowed — the slot is reused:
+
+```meow
+let x = 1;
+let x = 2;   // ok — x is now 2
+```
+
+**Structs** can only be shadowed after the previous binding has been consumed (destructured or passed to a function). Shadowing a live struct is a compile error because it would leak the value:
+
+```meow
+let p = Point { x: 1, y: 2 };
+let p = Point { x: 3, y: 4 }; // error: cannot shadow 'p' — still holds a struct value
+
+let Point { x, .. } = p;      // consume p first
+let p = Point { x: 3, y: 4 }; // ok
+```
+
+#### Block scoping
+
+Each `if`/`else` branch body is its own block scope. The outer bindings are fully restored when the branch exits.
+
+Variables declared inside a branch body are **not visible** after the branch:
+
+```meow
+if cond {
+    let inner = 42;
+}
+return inner; // error: undefined variable 'inner'
+```
+
+A name declared in an outer scope can be shadowed inside a branch body — the outer binding is restored when the branch exits:
+
+```meow
+let x = 1;
+if cond {
+    let x = 99; // inner shadow; does not affect outer x
+}
+return x;       // always 1
+```
+
+The same applies to struct bindings. The inner shadow uses a new slot so the outer binding is preserved:
+
+```meow
+let p = Point { x: 1, y: 2 };
+if cond {
+    let p = Point { x: 9, y: 9 }; // new slot — outer p unaffected
+    let Point { x, .. } = p;       // inner p must be consumed here
+}
+let Point { x, .. } = p;           // outer p is still alive
+```
+
+Any struct introduced inside a branch body **must be consumed before the branch ends** — leaving a live struct at the end of a branch is a compile error:
+
+```meow
+if cond {
+    let p = Point { x: 1, y: 2 };
+    // error: struct 'p' introduced in if body must be consumed before the branch ends
+}
+```
 
 ## Expressions
 
@@ -335,10 +401,14 @@ All functions and structs are **private by default**. The `pub` keyword makes th
 
 | Limit | Default |
 |-------|---------|
-| Maximum struct definitions per module | 64 |
+| Maximum identifier length (chars) | 128 |
+| Maximum struct definitions per module | 128 |
 | Maximum functions per module | 256 |
+| Maximum fields per struct | 32 |
+| Maximum function parameters | 16 |
+| Maximum tuple elements | 16 |
+| Maximum local variables per function | 255 |
+| Maximum bytecode instructions per function | 65 536 |
 | Maximum `use` declarations per module | 64 |
 | Maximum transitive dependency modules | 64 |
-| Maximum function parameters | 16 |
-| Maximum tuple elements | 8 |
 | Maximum call depth | 256 |

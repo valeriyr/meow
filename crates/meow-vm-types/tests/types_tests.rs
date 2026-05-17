@@ -1,6 +1,6 @@
 use meow_vm_types::{
     address::Address,
-    types::{FieldDef, StructDef, Type, Value},
+    types::{FieldDef, StructDef, Type, Value, is_cross_module_type_name},
 };
 
 //
@@ -129,4 +129,47 @@ fn struct_def_fields() {
     assert_eq!(def.fields[0].ty, Type::U64);
     assert_eq!(def.fields[1].name, "y");
     assert_eq!(def.fields[1].ty, Type::U64);
+}
+
+//
+// ─── is_cross_module_type_name ───
+//
+
+#[test]
+fn qualified_type_name_is_cross_module() {
+    assert!(is_cross_module_type_name("dep::Foo"));
+    assert!(is_cross_module_type_name("my_dep::Bar"));
+}
+
+#[test]
+fn unqualified_type_name_is_not_cross_module() {
+    assert!(!is_cross_module_type_name("Foo"));
+    assert!(!is_cross_module_type_name(""));
+}
+
+//
+// ─── Type::is_cross_module ───
+//
+
+#[test]
+fn qualified_struct_is_cross_module() {
+    assert!(Type::Struct("dep::Foo".to_string()).is_cross_module());
+}
+
+#[test]
+fn local_struct_is_not_cross_module() {
+    assert!(!Type::Struct("Foo".to_string()).is_cross_module());
+}
+
+#[test]
+fn primitives_are_not_cross_module() {
+    assert!(!Type::Bool.is_cross_module());
+    assert!(!Type::U64.is_cross_module());
+    assert!(!Type::Address.is_cross_module());
+    assert!(!Type::Str.is_cross_module());
+}
+
+#[test]
+fn tuple_is_not_cross_module() {
+    assert!(!Type::Tuple(vec![Type::U64, Type::Bool]).is_cross_module());
 }

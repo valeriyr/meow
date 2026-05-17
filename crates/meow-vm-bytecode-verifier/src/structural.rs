@@ -72,7 +72,7 @@ pub(crate) fn check_module(
         // Tuple return type arity
         if let Some(Type::Tuple(types)) = &f.return_type {
             let size = types.len();
-            let limit = cfg.max_tuple_elements();
+            let limit = cfg.max_tuple_elements() as usize;
             if size > limit {
                 errors.push(VerificationError::TupleTooLarge {
                     function: f.name.clone(),
@@ -235,7 +235,7 @@ pub(crate) fn check_module(
                 }
                 Instruction::MakeTuple(n) | Instruction::UnpackTuple(n) => {
                     let size = *n as usize;
-                    let limit = cfg.max_tuple_elements();
+                    let limit = cfg.max_tuple_elements() as usize;
                     if size > limit {
                         errors.push(VerificationError::TupleTooLarge {
                             function: f.name.clone(),

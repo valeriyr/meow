@@ -7,7 +7,7 @@ use meow_vm_types::{
     bytecode::Instruction,
     config::CompilerConfig,
     module::{Function, Module},
-    types::{StructDef, Type},
+    types::{self, StructDef, Type},
 };
 
 use crate::{
@@ -29,12 +29,20 @@ pub struct Codegen<'m> {
     /// Maps local function names to their return types.
     /// Used to infer types of locals assigned from same-module function calls.
     local_fn_return_types: &'m HashMap<String, Option<Type>>,
-    locals: HashMap<String, u8>,
-    /// Tracks the inferred source-level type name for each local variable.
-    /// Cross-module types use the `"alias::TypeName"` form (alias = declared name when no `as` clause).
-    /// Primitives are tracked too (e.g. `"u64"`) for completeness.
-    local_types: HashMap<String, String>,
+    /// Maps each variable name to `(slot, scope_depth)` where `scope_depth` is the
+    /// if/else nesting level at which the binding was created. Used by `alloc_local`
+    /// to distinguish same-scope shadowing (reuse slot) from inner-scope shadowing
+    /// (allocate a new slot to preserve the outer binding).
+    locals: HashMap<String, (u8, u32)>,
+    /// Tracks the inferred type for each local slot.
+    /// Keyed by slot index so that if-body shadowing (outer and inner slots for the
+    /// same name) can be tracked independently. Cross-module struct types are stored
+    /// as `Type::Struct("alias::TypeName")`.
+    local_types: HashMap<u8, Type>,
     next_slot: u8,
+    /// Nesting depth of if/else body scopes. Zero means the function's top-level body.
+    /// Incremented when entering an if/else body, decremented on exit.
+    scope_depth: u32,
     code: Vec<Instruction>,
 }
 
@@ -49,7 +57,7 @@ impl<'m> Codegen<'m> {
     ) -> Result<Function> {
         validator::validate_function_name(&ast_fn.name, config)?;
 
-        let max_params = config.max_params();
+        let max_params = config.max_params() as usize;
         if ast_fn.params.len() > max_params {
             return Err(CompilerError::Message(format!(
                 "function '{}': too many parameters ({} > limit of {})",
@@ -75,10 +83,10 @@ impl<'m> Codegen<'m> {
                 &format!("parameter in function '{}'", ast_fn.name),
                 config,
             )?;
-            cg.alloc_local(name.clone())?;
+            let slot = cg.alloc_local(name.clone())?;
             let ty = cg.translate_type(ty)?;
             // Record the source-level type name for type tracking.
-            cg.local_types.insert(name.clone(), ty.name().to_string());
+            cg.local_types.insert(slot, ty.clone());
             params.push((name, ty));
         }
 
@@ -132,21 +140,37 @@ impl<'m> Codegen<'m> {
             locals: HashMap::new(),
             local_types: HashMap::new(),
             next_slot: 0,
+            scope_depth: 0,
             code: Vec::new(),
         }
     }
 
     fn alloc_local(&mut self, name: String) -> Result<u8> {
         validator::validate_identifier(&name, "variable", self.config)?;
+        if let Some(&(existing_slot, existing_depth)) = self.locals.get(&name)
+            && existing_depth == self.scope_depth
+        {
+            // Same-scope shadowing: reuse the existing slot (no orphaned slots).
+            // If the old binding still holds a live struct, reject — the struct would be leaked.
+            if matches!(self.local_types.get(&existing_slot), Some(ty) if !ty.is_primitive()) {
+                return Err(CompilerError::Message(format!(
+                    "cannot shadow '{name}': the binding still holds a struct value — \
+                         consume or destructure it first",
+                )));
+            }
+            return Ok(existing_slot);
+        }
+        // Outer-scope binding: allocate a new slot so the outer binding is preserved.
+        // The outer `locals` entry is restored when the if/else body exits.
         let max_locals = self.config.max_locals();
-        if self.next_slot as usize >= max_locals {
+        if self.next_slot >= max_locals {
             return Err(CompilerError::Message(format!(
                 "too many local variables: limit is {}",
                 max_locals,
             )));
         }
         let slot = self.next_slot;
-        self.locals.insert(name, slot);
+        self.locals.insert(name, (slot, self.scope_depth));
         self.next_slot += 1;
         Ok(slot)
     }
@@ -155,15 +179,8 @@ impl<'m> Codegen<'m> {
         self.code.push(instr);
     }
 
-    /// Translate a potentially-qualified name to its address-qualified bytecode form.
-    ///
-    /// `"module_name::something"` → `"@<hex_address>::something"`
-    /// `"plain_name"` → `"plain_name"` (unchanged)
-    ///
-    /// Returns an error if `module_name` is used but not found in `dep_addresses`
-    /// (i.e. the module was not declared via `use module_name;`).
     /// Translate a [`Type`] so that any `Struct("dep_name::TypeName")` is converted
-    /// to `Struct("@<hex_address>::TypeName")`.  Other types pass through unchanged.
+    /// to `Struct("@<hex_address>::TypeName")`. Other types pass through unchanged.
     fn translate_type(&self, ty: Type) -> Result<Type> {
         match ty {
             Type::Struct(name) => Ok(Type::Struct(self.translate_name(&name)?)),
@@ -177,6 +194,13 @@ impl<'m> Codegen<'m> {
         }
     }
 
+    /// Translate a potentially-qualified name to its address-qualified bytecode form.
+    ///
+    /// `"module_name::something"` → `"@<hex_address>::something"`
+    /// `"plain_name"` → `"plain_name"` (unchanged)
+    ///
+    /// Returns an error if `module_name` is not found in `dep_addresses`
+    /// (i.e. the module was not declared via `use module_name;`).
     fn translate_name(&self, name: &str) -> Result<String> {
         if let Some((mod_name, rest)) = name.split_once("::") {
             match self.dep_addresses.get(mod_name) {
@@ -190,30 +214,27 @@ impl<'m> Codegen<'m> {
         }
     }
 
-    /// Returns true if `type_name` refers to a type declared in a different module
-    /// (i.e. it uses the `dep_name::TypeName` qualified form).
-    fn is_cross_module_type(type_name: &str) -> bool {
-        type_name.contains("::")
-    }
-
     /// Infer the source-level type name of `expr` without compiling it.
     ///
     /// Returns `None` when the type cannot be determined statically (e.g. a
     /// function call whose return type is unknown). Callers treat `None` as
     /// "unknown" and skip visibility checks that would require the type.
-    fn infer_type(&self, expr: &Expr) -> Option<String> {
+    fn infer_type(&self, expr: &Expr) -> Option<Type> {
         match expr {
-            Expr::Bool(_) => Some("bool".to_string()),
-            Expr::Int(_) => Some("u64".to_string()),
-            Expr::Address(_) => Some("address".to_string()),
-            Expr::Str(_) => Some("string".to_string()),
-            Expr::Ident(name) => self.local_types.get(name).cloned(),
-            Expr::StructLit { name, .. } => Some(name.clone()),
+            Expr::Bool(_) => Some(Type::Bool),
+            Expr::Int(_) => Some(Type::U64),
+            Expr::Address(_) => Some(Type::Address),
+            Expr::Str(_) => Some(Type::Str),
+            Expr::Ident(name) => {
+                let &(slot, _) = self.locals.get(name.as_str())?;
+                self.local_types.get(&slot).cloned()
+            }
+            Expr::StructLit { name, .. } => Some(Type::Struct(name.clone())),
             Expr::FieldAccess { expr: base, field } => {
                 let base_type = self.infer_type(base)?;
-                let def = self.structs.iter().find(|s| s.name == base_type)?;
+                let def = self.structs.iter().find(|s| s.name == base_type.name())?;
                 let field_def = def.fields.iter().find(|f| f.name == *field)?;
-                Some(field_def.ty.name().to_string())
+                Some(field_def.ty.clone())
             }
             Expr::Call { name, .. } => {
                 if let Some((dep_name, fn_local_name)) = name.split_once("::") {
@@ -223,21 +244,22 @@ impl<'m> Codegen<'m> {
                     let func = dep_module.get_function(fn_local_name)?;
                     func.return_type.as_ref().map(|t| match t {
                         // Qualify struct return types with the dep module name.
-                        Type::Struct(local_name) => format!("{dep_name}::{local_name}"),
-                        _ => t.name().to_string(),
+                        Type::Struct(local_name) => {
+                            Type::Struct(format!("{dep_name}::{local_name}"))
+                        }
+                        other => other.clone(),
                     })
                 } else {
                     // Same-module call — look up in pre-collected local function map.
-                    let return_type = self.local_fn_return_types.get(name.as_str())?;
-                    return_type.as_ref().map(|t| t.name().to_string())
+                    self.local_fn_return_types.get(name.as_str())?.clone()
                 }
             }
             Expr::BinOp { op, .. } => Some(match op {
-                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => "u64".to_string(),
-                _ => "bool".to_string(),
+                BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => Type::U64,
+                _ => Type::Bool,
             }),
             Expr::Tuple(_) => None,
-            Expr::UnaryOp { .. } => Some("bool".to_string()),
+            Expr::UnaryOp { .. } => Some(Type::Bool),
         }
     }
 
@@ -268,31 +290,31 @@ impl<'m> Codegen<'m> {
         Ok(())
     }
 
-    /// Check that reading `field` on a value of `type_name` is allowed.
+    /// Check that reading a field on a value of the given type is allowed.
     ///
     /// All fields are private — cross-module field reads are always rejected.
     /// Within the declaring module, all field reads are allowed.
-    fn check_field_read(&self, type_name: &str, _field: &str) -> Result<()> {
-        if Self::is_cross_module_type(type_name) {
+    fn check_field_read(&self, ty: &Type, _field: &str) -> Result<()> {
+        if ty.is_cross_module() {
             return Err(CompilerError::Message(format!(
-                "fields of '{type_name}' are private — use a public getter function to access them",
+                "fields of '{}' are private — use a public getter function to access them",
+                ty.name(),
             )));
         }
         Ok(())
     }
 
-    /// Check that writing `field` on a value of the given type is allowed.
+    /// Check that writing a field on a value of the given type is allowed.
     ///
     /// Rejects any field write to a type declared in another module.
     /// Within the declaring module, field writes are always allowed.
-    fn check_field_write(&self, type_name: &str, field: &str) -> Result<()> {
-        // Reject all field writes from outside the declaring module.
-        if Self::is_cross_module_type(type_name) {
+    fn check_field_write(&self, ty: &Type, field: &str) -> Result<()> {
+        if ty.is_cross_module() {
             return Err(CompilerError::Message(format!(
-                "field '{field}' of '{type_name}' cannot be written from outside the declaring module",
+                "field '{field}' of '{}' cannot be written from outside the declaring module",
+                ty.name(),
             )));
         }
-
         Ok(())
     }
 
@@ -304,9 +326,14 @@ impl<'m> Codegen<'m> {
             Expr::Str(s) => self.emit(Instruction::PushStr(s)),
 
             Expr::Ident(name) => {
-                let slot = self.locals.get(&name).copied().ok_or_else(|| {
+                let slot = self.locals.get(&name).map(|&(s, _)| s).ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
+                // Struct loads move the value out of the slot — mark the binding consumed
+                // so that a subsequent `let name = ...` knows the slot is safe to reuse.
+                if matches!(self.local_types.get(&slot), Some(ty) if !ty.is_primitive()) {
+                    self.local_types.remove(&slot);
+                }
                 self.emit(Instruction::Load(slot));
             }
 
@@ -338,17 +365,17 @@ impl<'m> Codegen<'m> {
                 path.reverse(); // flatten_field_chain builds the path in reverse
 
                 if let Expr::Ident(ref name) = root_expr
-                    && let Some(&slot) = self.locals.get(name)
+                    && let Some(&(slot, _)) = self.locals.get(name)
                 {
-                    if let Some(type_name) = self.local_types.get(name).cloned() {
-                        self.check_field_read(&type_name, &path[0])?;
+                    if let Some(ty) = self.local_types.get(&slot) {
+                        self.check_field_read(ty, &path[0])?;
                     }
                     self.emit(Instruction::LoadField(slot, path));
                     return Ok(());
                 }
                 // Fallback: compile base expression, then GetField for each step.
-                if let Some(type_name) = self.infer_type(&root_expr) {
-                    self.check_field_read(&type_name, &path[0])?;
+                if let Some(ty) = self.infer_type(&root_expr) {
+                    self.check_field_read(&ty, &path[0])?;
                 }
                 self.compile_expr(root_expr)?;
                 for step in path {
@@ -358,7 +385,7 @@ impl<'m> Codegen<'m> {
 
             Expr::StructLit { name, fields } => {
                 // Cross-module struct construction is always forbidden.
-                if Self::is_cross_module_type(&name) {
+                if types::is_cross_module_type_name(&name) {
                     return Err(CompilerError::Message(format!(
                         "cannot construct '{name}' outside its declaring module — \
                          structs can only be created where they are defined",
@@ -402,7 +429,7 @@ impl<'m> Codegen<'m> {
 
             Expr::Tuple(items) => {
                 let n = items.len();
-                let max = self.config.max_tuple_elements();
+                let max = self.config.max_tuple_elements() as usize;
                 if n > max {
                     return Err(CompilerError::Message(format!(
                         "tuple literal has {n} elements, exceeding the limit of {max}"
@@ -437,12 +464,12 @@ impl<'m> Codegen<'m> {
                 let slot = self.alloc_local(name.clone())?;
                 self.emit(Instruction::Store(slot));
                 if let Some(ty) = inferred_type {
-                    self.local_types.insert(name, ty);
+                    self.local_types.insert(slot, ty);
                 }
             }
 
             Stmt::Reassign { name, expr } => {
-                let slot = self.locals.get(&name).copied().ok_or_else(|| {
+                let slot = self.locals.get(&name).map(|&(s, _)| s).ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
                 self.compile_expr(expr)?;
@@ -470,20 +497,33 @@ impl<'m> Codegen<'m> {
                 self.compile_expr(cond)?;
                 let patch_cond = self.code.len();
                 self.emit(Instruction::JumpIfNot(0));
+
+                // Then body — scoped: shadow+restore, structs must be consumed.
+                let outer_locals = self.locals.clone();
+                self.scope_depth += 1;
                 for s in body {
                     self.compile_stmt(s)?;
                 }
+                self.scope_depth -= 1;
+                self.check_branch_structs_consumed(&outer_locals, "if")?;
+                self.locals = outer_locals;
+
                 if let Some(else_stmts) = else_body {
-                    // Emit Jump to skip else body after then body executes.
                     let patch_jump = self.code.len();
                     self.emit(Instruction::Jump(0));
-                    // Patch JumpIfNot to land on first instruction of else body.
                     self.code[patch_cond] =
                         Instruction::JumpIfNot((self.code.len() - patch_cond) as i32);
+
+                    // Else body — scoped: shadow+restore, structs must be consumed.
+                    let outer_locals = self.locals.clone();
+                    self.scope_depth += 1;
                     for s in else_stmts {
                         self.compile_stmt(s)?;
                     }
-                    // Patch Jump to land after else body.
+                    self.scope_depth -= 1;
+                    self.check_branch_structs_consumed(&outer_locals, "else")?;
+                    self.locals = outer_locals;
+
                     self.code[patch_jump] =
                         Instruction::Jump((self.code.len() - patch_jump) as i32);
                 } else {
@@ -494,7 +534,7 @@ impl<'m> Codegen<'m> {
 
             Stmt::LetTuple { names, expr } => {
                 let n = names.len();
-                let max = self.config.max_tuple_elements();
+                let max = self.config.max_tuple_elements() as usize;
                 if n > max {
                     return Err(CompilerError::Message(format!(
                         "tuple destructuring has {n} elements, exceeding the limit of {max}"
@@ -563,10 +603,9 @@ impl<'m> Codegen<'m> {
                             .find(|f| &f.name == field_name)
                             .unwrap()
                             .ty
-                            .name()
-                            .to_string();
+                            .clone();
                         let slot = self.alloc_local(binding_name.clone())?;
-                        self.local_types.insert(binding_name.clone(), field_ty);
+                        self.local_types.insert(slot, field_ty);
                         self.emit(Instruction::Store(slot));
                     } else {
                         // rest_discarded: unbound field is dropped — forbidden for linear types
@@ -586,18 +625,43 @@ impl<'m> Codegen<'m> {
                 field_path,
                 expr,
             } => {
-                let slot = self.locals.get(&obj_name).copied().ok_or_else(|| {
+                let slot = self.locals.get(&obj_name).map(|&(s, _)| s).ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{obj_name}'"))
                 })?;
 
                 // Visibility check on the first element of the path.
                 let first_field = &field_path[0];
-                if let Some(type_name) = self.local_types.get(&obj_name).cloned() {
-                    self.check_field_write(&type_name, first_field)?;
+                if let Some(ty) = self.local_types.get(&slot) {
+                    self.check_field_write(ty, first_field)?;
                 }
 
                 self.compile_expr(expr)?;
                 self.emit(Instruction::StoreField(slot, field_path));
+            }
+        }
+        Ok(())
+    }
+
+    /// Checks that all structs introduced inside a branch body have been consumed.
+    ///
+    /// `outer_locals` is the snapshot taken before entering the branch.
+    /// Any name whose slot differs from the snapshot is a branch-local binding;
+    /// if it still holds a struct type it was not consumed — an error.
+    /// `local_types` is intentionally NOT restored: outer slot consumption that
+    /// happened inside the branch is correctly preserved.
+    fn check_branch_structs_consumed(
+        &self,
+        outer_locals: &HashMap<String, (u8, u32)>,
+        branch: &str,
+    ) -> Result<()> {
+        for (name, &(slot, _)) in &self.locals {
+            if outer_locals.get(name.as_str()).map(|&(s, _)| s) != Some(slot)
+                && let Some(ty) = self.local_types.get(&slot)
+                && !ty.is_primitive()
+            {
+                return Err(CompilerError::Message(format!(
+                    "struct '{name}' introduced in {branch} body must be consumed before the branch ends",
+                )));
             }
         }
         Ok(())

@@ -220,10 +220,7 @@ fn tuple_too_large_in_return_type_rejected() {
     );
     // Inject an oversized MakeTuple instruction directly.
     tamper(&mut module, "f", |code| {
-        *code = vec![
-            Instruction::MakeTuple((limit + 1) as u8),
-            Instruction::Return,
-        ];
+        *code = vec![Instruction::MakeTuple(limit + 1), Instruction::Return];
     });
     let errs = verify_errors(&module, &no_deps());
     assert!(

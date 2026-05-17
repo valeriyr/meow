@@ -14,11 +14,14 @@ pub struct CompilerConfig {
     /// Maximum number of fields in a struct definition.
     max_fields: usize,
     /// Maximum number of parameters in a function.
-    max_params: usize,
+    /// Bytecode-constrained: parameters occupy the first N slots, and slot indices are `u8`.
+    max_params: u8,
     /// Maximum number of elements in a tuple literal or tuple return type.
-    max_tuple_elements: usize,
+    /// Bytecode-constrained: `MakeTuple` and `UnpackTuple` encode the count as `u8`.
+    max_tuple_elements: u8,
     /// Maximum number of local variable slots in a function.
-    max_locals: usize,
+    /// Bytecode-constrained: slot indices are encoded as `u8` in `Load` / `Store`.
+    max_locals: u8,
     /// Maximum number of bytecode instructions in a single function.
     max_fun_code_size: usize,
     /// Maximum number of `use` (import) declarations in a module.
@@ -55,17 +58,20 @@ impl CompilerConfig {
     }
 
     /// Returns the maximum number of parameters allowed in a function.
-    pub fn max_params(&self) -> usize {
+    /// Returns `u8` because slot indices are `u8` in the bytecode.
+    pub fn max_params(&self) -> u8 {
         self.max_params
     }
 
     /// Returns the maximum number of elements allowed in a tuple literal or tuple return type.
-    pub fn max_tuple_elements(&self) -> usize {
+    /// Returns `u8` because `MakeTuple` / `UnpackTuple` encode the count as `u8` in the bytecode.
+    pub fn max_tuple_elements(&self) -> u8 {
         self.max_tuple_elements
     }
 
     /// Returns the maximum number of local variable slots allowed in a function.
-    pub fn max_locals(&self) -> usize {
+    /// Returns `u8` because `Load` / `Store` encode slot indices as `u8` in the bytecode.
+    pub fn max_locals(&self) -> u8 {
         self.max_locals
     }
 

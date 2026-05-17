@@ -77,6 +77,10 @@ pub enum Stmt {
     /// A bare expression whose value is discarded.
     Expr(Expr),
     /// An `if` statement with an optional `else` branch.
+    ///
+    /// Each branch body is a scope: variables introduced inside are not visible
+    /// after the branch, shadowed outer names are restored on exit, and any
+    /// struct introduced in the branch must be consumed before the branch ends.
     If {
         cond: Expr,
         body: Vec<Stmt>,
