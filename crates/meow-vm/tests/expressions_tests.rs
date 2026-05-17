@@ -40,16 +40,6 @@ fn div() {
 }
 
 #[test]
-fn division_by_zero() {
-    let vm = utils::vm(utils::compile(DIV_SRC));
-    let mut gas = GasMeter::unlimited();
-    let err = vm
-        .call("div", vec![Value::U64(10), Value::U64(0)], &mut gas)
-        .unwrap_err();
-    assert!(matches!(err, VmError::DivisionByZero));
-}
-
-#[test]
 fn modulo() {
     assert_eq!(
         utils::run(REM_SRC, "rem", vec![Value::U64(10), Value::U64(3)]),
@@ -79,16 +69,6 @@ fn modulo_by_one() {
         utils::run(REM_SRC, "rem", vec![Value::U64(999), Value::U64(1)]),
         Some(Value::U64(0))
     );
-}
-
-#[test]
-fn modulo_by_zero() {
-    let vm = utils::vm(utils::compile(REM_SRC));
-    let mut gas = GasMeter::unlimited();
-    let err = vm
-        .call("rem", vec![Value::U64(10), Value::U64(0)], &mut gas)
-        .unwrap_err();
-    assert!(matches!(err, VmError::DivisionByZero));
 }
 
 #[test]
@@ -128,6 +108,26 @@ fn modulo_in_condition() {
         utils::run(EVEN_SRC, "is_even", vec![Value::U64(9)]),
         Some(Value::Bool(false))
     );
+}
+
+#[test]
+fn division_by_zero() {
+    let vm = utils::vm(utils::compile(DIV_SRC));
+    let mut gas = GasMeter::unlimited();
+    let err = vm
+        .call("div", vec![Value::U64(10), Value::U64(0)], &mut gas)
+        .unwrap_err();
+    assert!(matches!(err, VmError::DivisionByZero));
+}
+
+#[test]
+fn modulo_by_zero() {
+    let vm = utils::vm(utils::compile(REM_SRC));
+    let mut gas = GasMeter::unlimited();
+    let err = vm
+        .call("rem", vec![Value::U64(10), Value::U64(0)], &mut gas)
+        .unwrap_err();
+    assert!(matches!(err, VmError::DivisionByZero));
 }
 
 //
@@ -296,6 +296,7 @@ fn mul_before_add() {
     // 2 + 3 * 4 must equal 14, not 20
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 2 + 3 * 4 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(14)));
@@ -306,6 +307,7 @@ fn mul_before_sub() {
     // 10 - 2 * 3 must equal 4, not 24
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 10 - 2 * 3 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(4)));
@@ -316,6 +318,7 @@ fn sub_is_left_associative() {
     // 10 - 3 - 2 must equal 5 (left-to-right), not 9
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 10 - 3 - 2 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(5)));
@@ -326,6 +329,7 @@ fn parens_override_precedence() {
     // (2 + 3) * 4 must equal 20
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { (2 + 3) * 4 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(20)));
@@ -339,6 +343,7 @@ fn parens_override_precedence() {
 fn add_wraps_on_overflow() {
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 18446744073709551615 + 1 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
@@ -348,6 +353,7 @@ fn add_wraps_on_overflow() {
 fn sub_wraps_on_underflow() {
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 0 - 1 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(u64::MAX)));
@@ -357,6 +363,7 @@ fn sub_wraps_on_underflow() {
 fn mul_wraps_on_overflow() {
     let src = r#"
         mod test;
+
         pub fn f() -> u64 { 9223372036854775808 * 2 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
@@ -368,96 +375,115 @@ fn mul_wraps_on_overflow() {
 
 const ADD_SRC: &str = r#"
         mod math;
+
         pub fn add(a: u64, b: u64) -> u64 { a + b }
     "#;
 
 const SUB_SRC: &str = r#"
         mod math;
+
         pub fn sub(a: u64, b: u64) -> u64 { a - b }
     "#;
 
 const MUL_SRC: &str = r#"
         mod math;
+
         pub fn mul(a: u64, b: u64) -> u64 { a * b }
     "#;
 
 const DIV_SRC: &str = r#"
         mod math;
+
         pub fn div(a: u64, b: u64) -> u64 { a / b }
     "#;
 
 const REM_SRC: &str = r#"
         mod math;
+
         pub fn rem(a: u64, b: u64) -> u64 { a % b }
     "#;
 
 const GROUP_EXPR_SRC_WITH_PARENTHESES: &str = r#"
         mod math;
+
         pub fn f(a: u64, b: u64, c: u64) -> u64 { (a + b) % c }
     "#;
 
 const GROUP_EXPR_SRC_WITHOUT_PARENTHESES: &str = r#"
         mod math;
+
         pub fn f(a: u64, b: u64, c: u64) -> u64 { a + b % c }
     "#;
 
 const EVEN_SRC: &str = r#"
         mod math;
+
         pub fn is_even(n: u64) -> bool { n % 2 == 0 }
     "#;
 
 const EQUAL_SRC: &str = r#"
         mod math;
+
         pub fn eq(a: u64, b: u64) -> bool { a == b }
     "#;
 
 const NOT_EQUAL_SRC: &str = r#"
         mod math;
+
         pub fn ne(a: u64, b: u64) -> bool { a != b }
     "#;
 
 const LT_SRC: &str = r#"
         mod math;
+
         pub fn lt(a: u64, b: u64) -> bool { a < b }
     "#;
 
 const LE_SRC: &str = r#"
         mod math;
+
         pub fn le(a: u64, b: u64) -> bool { a <= b }
     "#;
 
 const GT_SRC: &str = r#"
         mod math;
+
         pub fn gt(a: u64, b: u64) -> bool { a > b }
     "#;
 
 const GE_SRC: &str = r#"
         mod math;
+
         pub fn ge(a: u64, b: u64) -> bool { a >= b }
     "#;
 
 const AND_SRC: &str = r#"
         mod math;
+
         pub fn f(a: bool, b: bool) -> bool { a && b }
     "#;
 
 const OR_SRC: &str = r#"
         mod math;
+
         pub fn f(a: bool, b: bool) -> bool { a || b }
     "#;
 
 const NOT_SRC: &str = r#"
         mod math;
+
         pub fn f(a: bool) -> bool { !a }
     "#;
 
 const DOUBLE_NOT_SRC: &str = r#"
         mod math;
+
         pub fn f(a: bool) -> bool { !!a }
     "#;
 
 const NOT_COND_SRC: &str = r#"
         mod math;
+
         pub fn f(flag: bool) -> u64 {
             if !flag { return 99; }
             0

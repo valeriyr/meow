@@ -70,5 +70,6 @@ fn out_of_gas_returns_error() {
 
 const SRC: &str = r#"
         mod gas_test;
+
         pub fn add(a: u64, b: u64) -> u64 { a + b }
     "#;

@@ -42,7 +42,7 @@ Publishing creates a module object on-chain. You need a running node and a funde
 meow transaction publish hero.meow --sender <YOUR_ADDRESS> --gas-coin <GAS_COIN_ADDRESS>
 
 # 2. Sign the output transaction
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 
 # 3. Submit
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>

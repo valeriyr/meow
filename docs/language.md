@@ -33,10 +33,10 @@ After importing, reference types and functions with `module_name::TypeName` or `
 
 ```meow
 use shapes@0x... as geo;
-fn run() -> u64 {
+fn run() -> (geo::Point, u64) {
     let p = geo::make_point(3, 7);        // ok — uses constructor
     // let p = geo::Point { x: 3, y: 7 }; // rejected — cross-module construction
-    return geo::get_x(p);                 // ok — uses getter
+    return geo::get_x(p);                 // ok — uses getter; returns (Point, u64)
 }
 ```
 
@@ -222,6 +222,7 @@ Mutates a field on a struct held in a local slot. The `id` field is immutable an
 ```meow
 hero.level = hero.level + 1;
 hero.name = "Veteran";
+hero.stats.level = 10;   // nested field path — assigns to a field of a field-typed struct
 ```
 
 ### `if` / `else`
@@ -334,6 +335,7 @@ Reading a struct variable moves it out of the binding (the binding becomes dead)
 ```meow
 hero.level          // read field 'level' from hero
 coin.id             // read the id field (returns meow_object::Id)
+hero.stats.level    // nested field path — reads a field of a field-typed struct
 ```
 
 Field access reads a field without consuming the parent struct. For primitives the result is a copy; for struct-typed fields the result is a struct value.

@@ -5,7 +5,7 @@ use std::str::FromStr;
 use meow_vm::gas_meter::GasMeter;
 use meow_vm_types::{
     address::Address,
-    natives::{NativeFnEntry, NativeResult},
+    natives::{NativeFnEntry, NativeParam, NativeResult},
     types::{Type, Value},
 };
 
@@ -20,6 +20,7 @@ fn address_literal_in_source() {
         utils::run(
             r#"
                 mod test;
+
                 pub fn get_addr() -> address { @0x01 }
             "#,
             "get_addr",
@@ -35,6 +36,7 @@ fn address_literal_equality() {
         utils::run(
             r#"
                 mod test;
+
                 pub fn same() -> bool { let a = @0x01; let b = @0x01; a == b }
             "#,
             "same",
@@ -50,6 +52,7 @@ fn address_literal_inequality() {
         utils::run(
             r#"
                 mod test;
+
                 pub fn different() -> bool { let a = @0x01; let b = @0x02; a == b }
             "#,
             "different",
@@ -65,6 +68,7 @@ fn address_literal_passed_as_parameter() {
         utils::run(
             r#"
                 mod test;
+
                 pub fn is_zero(a: address) -> bool { a == @0x00 }
                 pub fn check() -> bool { is_zero(@0x00) }
             "#,
@@ -82,6 +86,7 @@ fn address_round_trip() {
         utils::run(
             r#"
                 mod test;
+
                 pub fn identity(a: address) -> address { a }
             "#,
             "identity",
@@ -95,6 +100,7 @@ fn address_round_trip() {
 fn address_equality() {
     let src = r#"
         mod test;
+
         pub fn same(a: address, b: address) -> bool { a == b }
     "#;
     let addr = Address::fill(1);
@@ -125,6 +131,7 @@ fn address_equality() {
 fn string_literal_return() {
     let src = r#"
         mod test;
+
         pub fn greeting() -> string { "hello" }
     "#;
     assert_eq!(
@@ -137,6 +144,7 @@ fn string_literal_return() {
 fn string_parameter_round_trip() {
     let src = r#"
         mod test;
+
         pub fn identity(s: string) -> string { s }
     "#;
     assert_eq!(
@@ -149,13 +157,14 @@ fn string_parameter_round_trip() {
 fn string_passed_to_native() {
     let src = r#"
         mod test;
+
         pub fn send_msg() { log_native("hello from meow"); }
     "#;
     let received_ptr = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let ptr = received_ptr.clone();
     let log = NativeFnEntry {
         name: "log_native".to_string(),
-        params: vec![Some(Type::Str)],
+        params: vec![NativeParam::Concrete(Type::Str)],
         return_type: None,
         gas_cost: 0,
         func: Box::new(move |args| {

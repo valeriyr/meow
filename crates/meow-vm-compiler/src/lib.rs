@@ -43,10 +43,10 @@ pub type Result<T> = std::result::Result<T, CompilerError>;
 /// ```text
 /// mod my_module;
 ///
-/// use meow_object@0x01;
+/// use dep_a@0x01;
 /// use math@0x02 as m;
 ///
-/// pub struct Coin { id: meow_object::Id, balance: u64 }
+/// pub struct Token { id: dep_a::Id, balance: u64 }
 /// struct Point { x: u64, y: u64 }
 ///
 /// pub fn add(a: u64, b: u64) -> u64 {

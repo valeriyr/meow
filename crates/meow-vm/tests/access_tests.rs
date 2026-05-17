@@ -10,31 +10,15 @@ use meow_vm_types::{
 };
 
 //
-// ─── Private function call rejected ───
+// ─── Function visibility ───
 //
-
-#[test]
-fn calling_private_fn_returns_private_function_error() {
-    let module = utils::compile(
-        r#"
-            mod test;
-            fn secret() -> u64 { 42 }
-        "#,
-    );
-    let vm = utils::vm(module);
-    let mut gas = GasMeter::unlimited();
-    let err = vm.call("secret", vec![], &mut gas).unwrap_err();
-    assert!(
-        matches!(err, VmError::PrivateFunction(ref name) if name == "secret"),
-        "expected PrivateFunction, got: {err:?}"
-    );
-}
 
 #[test]
 fn calling_pub_fn_succeeds() {
     let module = utils::compile(
         r#"
             mod test;
+
             pub fn answer() -> u64 { 42 }
         "#,
     );
@@ -50,6 +34,7 @@ fn private_fn_callable_internally() {
     let module = utils::compile(
         r#"
             mod test;
+
             fn helper() -> u64 { 7 }
             pub fn run() -> u64 { helper() }
         "#,
@@ -58,6 +43,24 @@ fn private_fn_callable_internally() {
     let mut gas = GasMeter::unlimited();
     let result = vm.call("run", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(7)));
+}
+
+#[test]
+fn calling_private_fn_returns_private_function_error() {
+    let module = utils::compile(
+        r#"
+            mod test;
+
+            fn secret() -> u64 { 42 }
+        "#,
+    );
+    let vm = utils::vm(module);
+    let mut gas = GasMeter::unlimited();
+    let err = vm.call("secret", vec![], &mut gas).unwrap_err();
+    assert!(
+        matches!(err, VmError::PrivateFunction(ref name) if name == "secret"),
+        "expected PrivateFunction, got: {err:?}"
+    );
 }
 
 //
@@ -71,6 +74,7 @@ fn calling_native_fn_directly_returns_native_function_call_direct_error() {
     let module = utils::compile(
         r#"
             mod test;
+
             pub fn noop() {}
         "#,
     );
@@ -90,6 +94,7 @@ fn calling_registered_native_fn_directly_is_rejected() {
     let module = utils::compile(
         r#"
             mod test;
+
             pub fn noop() {}
         "#,
     );
@@ -126,6 +131,7 @@ fn enable_call_private_functions_allows_private_fn() {
     let module = utils::compile(
         r#"
             mod test;
+
             fn secret() -> u64 { 99 }
         "#,
     );
@@ -147,6 +153,7 @@ fn enable_call_private_functions_does_not_affect_natives() {
     let module = utils::compile(
         r#"
             mod test;
+
             fn noop() {}
         "#,
     );

@@ -5,8 +5,9 @@ use std::collections::{HashMap, HashSet};
 use meow_types::system_framework::meow_object::{
     MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MEOW_OBJECT_ID_FIELD_NAME,
 };
-use meow_vm_bytecode_verifier::natives::{NativeSignature, builtin_natives};
 use meow_vm_types::address::Address;
+use meow_vm_types::natives::NativeSig;
+use meow_vm_types::natives::builtin_natives;
 use meow_vm_types::{
     bytecode::Instruction,
     module::{Function, Module},
@@ -36,7 +37,7 @@ use crate::bytecode_verifier::error::BytecodeVerifierError;
 pub fn verify(
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    adapter_natives: &[NativeSignature],
+    adapter_natives: &[NativeSig],
 ) -> Result<(), Vec<BytecodeVerifierError>> {
     let mut errors = Vec::new();
 
@@ -57,8 +58,7 @@ pub fn verify(
 
     if !object_types.is_empty() {
         let builtins = builtin_natives();
-        let all_natives: Vec<&NativeSignature> =
-            builtins.iter().chain(adapter_natives.iter()).collect();
+        let all_natives: Vec<&NativeSig> = builtins.iter().chain(adapter_natives.iter()).collect();
 
         for func in &module.functions {
             check_id_freshness(func, module, deps, &all_natives, &object_types, &mut errors);
@@ -179,7 +179,7 @@ fn call_effect(
     name: &str,
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[&NativeSignature],
+    natives: &[&NativeSig],
 ) -> (usize, bool) {
     // Cross-module call: `@hex::fn`
     if let Some((dep_addr, fn_name)) = parse_module_ref(name) {
@@ -206,7 +206,7 @@ fn check_id_freshness(
     func: &Function,
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[&NativeSignature],
+    natives: &[&NativeSig],
     object_types: &[&str],
     errors: &mut Vec<BytecodeVerifierError>,
 ) {
@@ -287,6 +287,10 @@ fn check_id_freshness(
                 field_names,
             } => {
                 let n = field_names.len();
+                // `object_types` contains only locally-defined object struct names.
+                // Cross-module NewStruct (e.g. "@0x02::Token") is rejected by the
+                // language-level bytecode verifier before this function is called, so
+                // no cross-module type can reach this check as a NewStruct operand.
                 if object_types.contains(&type_name.as_str()) && n > 0 {
                     // `id` is field[0]; fields are pushed in definition order so `id` is
                     // deepest in the N-slot window — at index `stack.len() - N` from bottom.
@@ -476,7 +480,7 @@ fn check_id_field_mutations(
     func: &Function,
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[&NativeSignature],
+    natives: &[&NativeSig],
     object_types: &[&str],
     errors: &mut Vec<BytecodeVerifierError>,
 ) {

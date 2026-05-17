@@ -3,6 +3,10 @@ use std::str::FromStr;
 use meow_vm_compiler::{Compiler, error::CompilerError};
 use meow_vm_types::{address::Address, config::CompilerConfig};
 
+//
+// ─── Module structure ───
+//
+
 #[test]
 fn too_many_functions_rejected() {
     let config = CompilerConfig::default();
@@ -41,42 +45,58 @@ fn too_many_structs_rejected() {
     ));
 }
 
-#[test]
-fn too_many_params_rejected() {
-    let config = CompilerConfig::default();
-    let params = (0..=config.max_params())
-        .map(|i| format!("p{i}: u64"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let src = format!(
-        r#"
-            mod test;
-            fn f({params}) {{}}
-        "#
-    );
-    assert!(matches!(
-        Compiler::compile(&src, &[], &[], config).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("too many parameters")
-    ));
-}
+//
+// ─── Imports and dependencies ───
+//
 
 #[test]
-fn too_many_fields_rejected() {
-    let config = CompilerConfig::default();
-    let fields = (0..=config.max_fields())
-        .map(|i| format!("f{i}: u64"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let src = format!(
+fn dep_modules_at_limit_succeeds() {
+    // Same chain, limit = 2 — [b, c] fits within the limit.
+    let cfg = CompilerConfig::default();
+    let b_addr = Address::from_str("0x02").unwrap();
+    let c_addr = Address::from_str("0x03").unwrap();
+
+    let c_module = Compiler::compile(
         r#"
-            mod test;
-            struct Big {{ {fields} }} fn noop() {{}}
-        "#
+            mod c;
+
+            pub fn get() -> u64 { 1 }
+        "#,
+        &[],
+        &[],
+        cfg.clone(),
+    )
+    .expect("c must compile");
+    let b_module = Compiler::compile(
+        r#"
+            mod b;
+
+            use c@0x03;
+
+            pub fn get() -> u64 { c::get() }
+        "#,
+        &[(c_addr, &c_module)],
+        &[],
+        cfg,
+    )
+    .expect("b must compile");
+
+    let at_limit = CompilerConfig::default().with_max_dep_modules(2);
+    assert!(
+        Compiler::compile(
+            r#"
+                mod main;
+
+                use b@0x02;
+
+                fn run() -> u64 { b::get() }
+            "#,
+            &[(b_addr, &b_module), (c_addr, &c_module)],
+            &[],
+            at_limit
+        )
+        .is_ok()
     );
-    assert!(matches!(
-        Compiler::compile(&src, &[], &[], config).unwrap_err(),
-        CompilerError::Message(msg) if msg.contains("too many fields")
-    ));
 }
 
 #[test]
@@ -93,6 +113,7 @@ fn too_many_imports_rejected() {
             &format!(
                 r#"
                 mod dep{i};
+
                 fn noop() {{}}
             "#
             ),
@@ -132,6 +153,7 @@ fn too_many_dep_modules_rejected() {
     let c_module = Compiler::compile(
         r#"
             mod c;
+
             pub fn get() -> u64 { 1 }
         "#,
         &[],
@@ -142,7 +164,9 @@ fn too_many_dep_modules_rejected() {
     let b_module = Compiler::compile(
         r#"
             mod b;
+
             use c@0x03;
+
             pub fn get() -> u64 { c::get() }
         "#,
         &[(c_addr, &c_module)],
@@ -157,7 +181,9 @@ fn too_many_dep_modules_rejected() {
         Compiler::compile(
             r#"
                 mod main;
+
                 use b@0x02;
+
                 fn run() -> u64 { b::get() }
             "#,
             &[(b_addr, &b_module), (c_addr, &c_module)],
@@ -169,50 +195,89 @@ fn too_many_dep_modules_rejected() {
     ));
 }
 
+//
+// ─── Struct fields ───
+//
+
 #[test]
-fn dep_modules_at_limit_succeeds() {
-    // Same chain, limit = 2 — [b, c] fits within the limit.
-    let cfg = CompilerConfig::default();
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
-
-    let c_module = Compiler::compile(
+fn too_many_fields_rejected() {
+    let config = CompilerConfig::default();
+    let fields = (0..=config.max_fields())
+        .map(|i| format!("f{i}: u64"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let src = format!(
         r#"
-            mod c;
-            pub fn get() -> u64 { 1 }
-        "#,
-        &[],
-        &[],
-        cfg.clone(),
-    )
-    .expect("c must compile");
-    let b_module = Compiler::compile(
-        r#"
-            mod b;
-            use c@0x03;
-            pub fn get() -> u64 { c::get() }
-        "#,
-        &[(c_addr, &c_module)],
-        &[],
-        cfg,
-    )
-    .expect("b must compile");
+            mod test;
 
-    let at_limit = CompilerConfig::default().with_max_dep_modules(2);
-    assert!(
-        Compiler::compile(
-            r#"
-                mod main;
-                use b@0x02;
-                fn run() -> u64 { b::get() }
-            "#,
-            &[(b_addr, &b_module), (c_addr, &c_module)],
-            &[],
-            at_limit
-        )
-        .is_ok()
+            struct Big {{ {fields} }} fn noop() {{}}
+        "#
     );
+    assert!(matches!(
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("too many fields")
+    ));
 }
+
+//
+// ─── Function body ───
+//
+
+#[test]
+fn too_many_params_rejected() {
+    let config = CompilerConfig::default();
+    let params = (0..=config.max_params())
+        .map(|i| format!("p{i}: u64"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let src = format!(
+        r#"
+            mod test;
+
+            fn f({params}) {{}}
+        "#
+    );
+    assert!(matches!(
+        Compiler::compile(&src, &[], &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("too many parameters")
+    ));
+}
+
+#[test]
+fn too_many_locals_rejected() {
+    // With max_locals = 2, a function can hold at most 2 local slots.
+    // Three let bindings need 3 slots — the third allocation must be rejected.
+    let config = CompilerConfig::default().with_max_locals(2);
+    let src = r#"
+        mod test;
+
+        fn f() { let a = 1; let b = 2; let c = 3; }
+    "#;
+    assert!(matches!(
+        Compiler::compile(src, &[], &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("too many local variables")
+    ));
+}
+
+#[test]
+fn function_too_large_rejected() {
+    // With max_fun_code_size = 1, even the minimal fn body (PushU64 + Return = 2
+    // instructions) exceeds the limit.
+    let config = CompilerConfig::default().with_max_fun_code_size(1);
+    let src = r#"
+        mod test;
+
+        fn f() -> u64 { 1 }
+    "#;
+    assert!(matches!(
+        Compiler::compile(src, &[], &[], config).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("bytecode too large")
+    ));
+}
+
+//
+// ─── Tuples ───
+//
 
 #[test]
 fn tuple_literal_too_many_elements_rejected() {
@@ -224,6 +289,7 @@ fn tuple_literal_too_many_elements_rejected() {
     let src = format!(
         r#"
             mod test;
+
             fn f() {{ let t = ({items}); }}
         "#
     );
@@ -247,6 +313,7 @@ fn tuple_return_type_too_many_elements_rejected() {
     let src = format!(
         r#"
             mod test;
+
             fn f() -> ({types}) {{ ({items}) }}
         "#
     );
@@ -256,6 +323,10 @@ fn tuple_return_type_too_many_elements_rejected() {
     ));
 }
 
+//
+// ─── Identifiers ───
+//
+
 #[test]
 fn module_name_too_long_rejected() {
     let config = CompilerConfig::default();
@@ -264,6 +335,7 @@ fn module_name_too_long_rejected() {
     let src = format!(
         r#"
             mod {long};
+
             fn f() {{}}
         "#
     );

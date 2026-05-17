@@ -14,6 +14,7 @@ fn tuple_return_with_primitives() {
     utils::compile(
         r#"
             mod test;
+
             pub fn pair(a: u64, b: u64) -> (u64, u64) { (a, b) }
         "#,
     )
@@ -25,6 +26,7 @@ fn tuple_return_mixed_types() {
     utils::compile(
         r#"
             mod test;
+
             pub fn describe(x: u64, flag: bool) -> (u64, bool) { (x, flag) }
         "#,
     )
@@ -36,7 +38,9 @@ fn tuple_return_with_struct() {
     utils::compile(
         r#"
             mod test;
+
             struct Token { value: u64 }
+
             pub fn split(t: Token) -> (Token, Token) {
                 let half = t.value / 2;
                 t.value = half;
@@ -57,7 +61,9 @@ fn tuple_destructuring_with_primitives() {
     utils::compile(
         r#"
             mod test;
+
             fn swap(a: u64, b: u64) -> (u64, u64) { (b, a) }
+
             pub fn run() -> u64 {
                 let (x, y) = swap(1, 2);
                 x
@@ -72,11 +78,14 @@ fn tuple_destructuring_cross_module() {
     with_dep(
         r#"
             mod math;
+
             pub fn divmod(a: u64, b: u64) -> (u64, u64) { (a / b, a % b) }
         "#,
         r#"
             mod user;
+
             use math@0x01;
+
             pub fn quotient(a: u64, b: u64) -> u64 {
                 let (q, _r) = math::divmod(a, b);
                 q
@@ -84,6 +93,35 @@ fn tuple_destructuring_cross_module() {
         "#,
     )
     .expect("cross-module tuple destructuring must compile");
+}
+
+#[test]
+fn triple_tuple_return() {
+    utils::compile(
+        r#"
+            mod test;
+
+            pub fn f(a: u64, b: bool, c: u64) -> (u64, bool, u64) { (a, b, c) }
+        "#,
+    )
+    .expect("three-element tuple return must compile");
+}
+
+#[test]
+fn tuple_destructuring_with_wildcard() {
+    utils::compile(
+        r#"
+            mod test;
+
+            fn pair(a: u64, b: u64) -> (u64, u64) { (a, b) }
+
+            pub fn first(a: u64, b: u64) -> u64 {
+                let (x, _) = pair(a, b);
+                x
+            }
+        "#,
+    )
+    .expect("tuple destructuring with wildcard discard must compile");
 }
 
 //

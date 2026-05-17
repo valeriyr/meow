@@ -84,7 +84,7 @@ meow contract run my_module.meow function_name arg1 arg2
 meow transaction publish my_module.meow --sender <ADDRESS> --gas-coin <GAS_COIN_ADDRESS>
 
 # 2. Sign
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 
 # 3. Submit
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>

@@ -1,6 +1,6 @@
 use meow_vm_types::bytecode::Instruction;
 
-/// Per-instruction gas costs. Pass a custom schedule to [`Vm::with_gas_schedule`].
+/// Per-instruction gas costs.
 #[derive(Debug, Clone)]
 pub struct GasSchedule {
     /// Cost of pushing a primitive value (`bool`, `u64`, or `address`) onto the stack.

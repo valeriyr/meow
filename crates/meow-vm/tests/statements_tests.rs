@@ -11,6 +11,7 @@ use meow_vm_types::types::Value;
 fn let_binding() {
     let src = r#"
         mod test;
+
         pub fn compute(x: u64) -> u64 {
             let a = x + 1;
             let b = a * 2;
@@ -31,6 +32,7 @@ fn let_binding() {
 fn if_branch_taken() {
     let src = r#"
         mod test;
+
         pub fn max(a: u64, b: u64) -> u64 {
             if a > b { return a; }
             b
@@ -50,6 +52,7 @@ fn if_branch_taken() {
 fn if_mutates_local() {
     let src = r#"
         mod test;
+
         pub fn clamp(x: u64, max: u64) -> u64 {
             let result = x;
             if x > max { result = max; }
@@ -74,6 +77,7 @@ fn if_mutates_local() {
 fn if_else_branches() {
     let src = r#"
         mod test;
+
         pub fn classify(x: u64) -> u64 { if x > 10 { return 1; } else { return 0; } }
     "#;
     assert_eq!(
@@ -131,6 +135,7 @@ fn function_call_chain() {
 fn void_function_returns_none() {
     let src = r#"
         mod test;
+
         pub fn do_nothing() {}
     "#;
     let vm = utils::vm(utils::compile(src));

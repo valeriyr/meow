@@ -32,7 +32,7 @@ meow transaction meow-call \
   --gas-coin <GAS_COIN_ADDRESS> \
   <COIN_ADDRESS> @<RECIPIENT_ADDRESS>
 
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```
 
@@ -50,7 +50,7 @@ meow transaction meow-call \
   --gas-coin <GAS_COIN_ADDRESS> \
   <COIN_ADDRESS> 500 @<RECIPIENT_ADDRESS>
 
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```
 
@@ -66,7 +66,7 @@ meow transaction meow-call \
   --gas-coin <GAS_COIN_ADDRESS> \
   <COIN_ADDRESS> 100
 
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```
 
@@ -82,7 +82,7 @@ meow transaction meow-call \
   --gas-coin <GAS_COIN_ADDRESS> \
   <FROM_COIN_ADDRESS> <TO_COIN_ADDRESS>
 
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```
 
@@ -98,6 +98,6 @@ meow transaction meow-call \
   --gas-coin <GAS_COIN_ADDRESS> \
   <COIN_ADDRESS>
 
-meow transaction sign --transaction <BASE64_TRANSACTION>
+meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```

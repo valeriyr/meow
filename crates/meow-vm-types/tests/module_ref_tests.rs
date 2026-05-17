@@ -30,6 +30,12 @@ fn parses_full_address() {
     );
 }
 
+#[test]
+fn preserves_function_name_exactly() {
+    let (_, name) = parse_module_ref("@0x01::some_fn_name").unwrap();
+    assert_eq!(name, "some_fn_name");
+}
+
 //
 // ─── Errors ───
 //
@@ -52,10 +58,4 @@ fn returns_none_for_missing_separator() {
 #[test]
 fn returns_none_for_invalid_address() {
     assert_eq!(parse_module_ref("@not_an_address::transfer"), None);
-}
-
-#[test]
-fn preserves_function_name_exactly() {
-    let (_, name) = parse_module_ref("@0x01::some_fn_name").unwrap();
-    assert_eq!(name, "some_fn_name");
 }

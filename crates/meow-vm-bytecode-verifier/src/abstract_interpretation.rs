@@ -8,10 +8,9 @@ use meow_vm_types::{
     types::{self, Type},
 };
 
-use crate::{
-    error::VerificationError,
-    natives::{NativeParam, NativeSignature},
-};
+use meow_vm_types::natives::{NativeParam, NativeSig};
+
+use crate::error::VerificationError;
 
 //
 // ─── Abstract types ───
@@ -271,7 +270,7 @@ pub(crate) fn check_function(
     func: &Function,
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[NativeSignature],
+    natives: &[NativeSig],
 ) -> Vec<VerificationError> {
     let mut errors = Vec::new();
     let fn_name = &func.name;
@@ -916,7 +915,7 @@ fn check_call(
     fn_name: &str,
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[NativeSignature],
+    natives: &[NativeSig],
     state: &mut AbstractState,
     errors: &mut Vec<VerificationError>,
 ) {

@@ -44,11 +44,7 @@ use std::collections::hash_map::Entry;
 
 use meow_vm_types::module_ref;
 use meow_vm_types::natives::{NativeFnEntry, NativeResult};
-use meow_vm_types::{
-    address::Address,
-    config::VmConfig,
-    types::{Type, Value},
-};
+use meow_vm_types::{address::Address, config::VmConfig, types::Value};
 
 use meow_vm_types::{bytecode::Instruction, module::Module};
 
@@ -70,9 +66,8 @@ pub struct VmCallResult {
     pub return_value: Option<Value>,
     /// Final state of each argument passed to the top-level call.
     ///
-    /// `None` if the argument was consumed (moved into `meow_vm_transfer` or
-    /// `meow_vm_destroy`). `Some(v)` if the argument was not consumed (may have
-    /// been mutated via `StoreField`).
+    /// `None` if the argument was consumed (passed to a native that takes ownership).
+    /// `Some(v)` if the argument was not consumed (may have been mutated via `StoreField`).
     pub final_args: Vec<Option<Value>>,
 }
 
@@ -161,10 +156,7 @@ impl Vm {
         }
         // If the caller supplied their own meow_vm_abort, validate its signature.
         if let Some(entry) = native_map.get(meow_vm_types::natives::MEOW_VM_ABORT) {
-            let expected: Vec<Option<Type>> = meow_vm_types::natives::meow_vm_abort_params()
-                .into_iter()
-                .map(Some)
-                .collect();
+            let expected = meow_vm_types::natives::meow_vm_abort_sig().params;
             assert_eq!(
                 entry.params, expected,
                 "meow_vm_abort override has wrong parameter types; expected (bool, u64, str)"

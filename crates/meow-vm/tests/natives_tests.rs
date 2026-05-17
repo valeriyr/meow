@@ -7,7 +7,7 @@ use meow_vm::error::VmError;
 use meow_vm::gas_meter::GasMeter;
 use meow_vm::gas_schedule::GasSchedule;
 use meow_vm_types::config::VmConfig;
-use meow_vm_types::natives::{NativeFnEntry, NativeResult};
+use meow_vm_types::natives::{NativeFnEntry, NativeParam, NativeResult};
 use meow_vm_types::types::{Type, Value};
 //
 // ─── Native function calls ───
@@ -17,6 +17,7 @@ use meow_vm_types::types::{Type, Value};
 fn native_returns_value() {
     let src = r#"
         mod test;
+
         pub fn compute(a: u64, b: u64) -> u64 { let sum = add_native(a, b); sum }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_add_native()]);
@@ -33,6 +34,7 @@ fn void_native_does_not_leave_stack_garbage() {
     // must push Void (not nothing) or the Pop would underflow the stack.
     let src = r#"
         mod test;
+
         pub fn run_side_effect(x: u64) -> u64 { log_native(x); x + 1 }
     "#;
     let vm = utils::vm_with_natives(src, vec![test_log_native()]);
@@ -44,6 +46,33 @@ fn void_native_does_not_leave_stack_garbage() {
 }
 
 //
+// ─── NativeResult::Error ───
+//
+
+#[test]
+fn native_error_propagates_as_vm_native_error() {
+    let src = r#"
+        mod test;
+
+        pub fn run() { fail_native(); }
+    "#;
+    let native = NativeFnEntry {
+        name: "fail_native".to_string(),
+        params: vec![],
+        return_type: None,
+        gas_cost: 0,
+        func: Box::new(|_| NativeResult::Error("something broke".to_string())),
+    };
+    let vm = utils::vm_with_natives(src, vec![native]);
+    let mut gas = GasMeter::unlimited();
+    let err = vm.call("run", vec![], &mut gas).unwrap_err();
+    assert!(
+        matches!(&err, VmError::NativeError(msg) if msg == "something broke"),
+        "NativeResult::Error must surface as VmError::NativeError, got: {err:?}"
+    );
+}
+
+//
 // ─── meow_vm_abort ───
 //
 
@@ -52,6 +81,7 @@ fn builtin_abort_triggers_on_false_condition() {
     // meow_vm_abort(condition, code, msg): aborts when condition is FALSE (assert semantics).
     let src = r#"
         mod test;
+
         pub fn check(x: u64) { meow_vm_abort(x != 0, 42, "must not be zero"); }
     "#;
     let vm = utils::vm_with_source(src);
@@ -74,9 +104,10 @@ fn builtin_abort_triggers_on_false_condition() {
 fn abort_can_be_overridden_by_custom_native() {
     let src = r#"
         mod test;
+
         pub fn check(x: u64) { meow_vm_abort(x != 0, 99, "overridden"); }
     "#;
-    let vm = utils::vm_with_natives(src, vec![test_doubling_abort_native()]);
+    let vm = utils::vm_with_natives(src, vec![doubling_abort_native()]);
     let mut gas = GasMeter::unlimited();
 
     let err = vm.call("check", vec![Value::U64(0)], &mut gas).unwrap_err();
@@ -91,6 +122,7 @@ fn abort_can_be_overridden_by_custom_native() {
 fn use_after_move_is_an_error() {
     let src = r#"
         mod test;
+
         struct Token { amount: u64 }
 
         pub fn consume_twice(tok: Token) { consume_native(tok); consume_native(tok); }
@@ -113,6 +145,7 @@ fn use_after_move_is_an_error() {
 fn final_args_holds_primitives_after_call() {
     let src = r#"
         mod test;
+
         pub fn f(a: u64, b: u64) -> u64 { a + b }
     "#;
     let vm = utils::vm_with_source(src);
@@ -127,6 +160,7 @@ fn final_args_holds_primitives_after_call() {
 fn final_args_is_none_for_consumed_struct() {
     let src = r#"
         mod test;
+
         struct Token { amount: u64 }
 
         pub fn consume(tok: Token) { consume_native(tok); }
@@ -142,6 +176,7 @@ fn final_args_is_some_for_surviving_struct() {
     // A struct that is not consumed keeps its slot — final_args holds it.
     let src = r#"
         mod test;
+
         struct Token { amount: u64 }
 
         pub fn read_amount(tok: Token) -> u64 { tok.amount }
@@ -160,6 +195,7 @@ fn final_args_reflects_mutations_on_surviving_struct() {
     // A mutated-but-not-consumed struct surfaces with its updated field values.
     let src = r#"
         mod test;
+
         struct Token { amount: u64 }
 
         pub fn double_amount(tok: Token) { tok.amount = tok.amount * 2; }
@@ -170,41 +206,6 @@ fn final_args_reflects_mutations_on_surviving_struct() {
         .call("double_amount", vec![test_token(30)], &mut gas)
         .unwrap();
     assert_eq!(r.final_args, vec![Some(test_token(60))]);
-}
-
-//
-// ─── Utility functions ───
-//
-
-fn test_token(amount: u64) -> Value {
-    Value::Struct {
-        type_name: "Token".to_string(),
-        fields: vec![("amount".to_string(), Value::U64(amount))],
-    }
-}
-
-fn test_add_native() -> NativeFnEntry {
-    NativeFnEntry {
-        name: "add_native".to_string(),
-        params: vec![Some(Type::U64), Some(Type::U64)],
-        return_type: Some(Type::U64),
-        gas_cost: 5,
-        func: Box::new(|args| {
-            NativeResult::Return(Some(Value::U64(
-                args[0].as_u64().unwrap() + args[1].as_u64().unwrap(),
-            )))
-        }),
-    }
-}
-
-fn test_log_native() -> NativeFnEntry {
-    NativeFnEntry {
-        name: "log_native".to_string(),
-        params: vec![Some(Type::U64)],
-        return_type: None,
-        gas_cost: 1,
-        func: Box::new(|_| NativeResult::Return(None)),
-    }
 }
 
 //
@@ -220,7 +221,7 @@ fn meow_vm_abort_override_with_wrong_params_panics() {
         module,
         vec![NativeFnEntry {
             name: "meow_vm_abort".to_string(),
-            params: vec![Some(Type::U64)], // wrong — should be (bool, u64, str)
+            params: vec![NativeParam::Concrete(Type::U64)], // wrong — should be (bool, u64, str)
             return_type: None,
             gas_cost: 0,
             func: Box::new(|_| NativeResult::Return(None)),
@@ -240,7 +241,11 @@ fn meow_vm_abort_override_with_wrong_return_type_panics() {
         module,
         vec![NativeFnEntry {
             name: "meow_vm_abort".to_string(),
-            params: vec![Some(Type::Bool), Some(Type::U64), Some(Type::Str)],
+            params: vec![
+                NativeParam::Concrete(Type::Bool),
+                NativeParam::Concrete(Type::U64),
+                NativeParam::Concrete(Type::Str),
+            ],
             return_type: Some(Type::Bool), // wrong — must be void
             gas_cost: 0,
             func: Box::new(|_| NativeResult::Return(None)),
@@ -251,11 +256,53 @@ fn meow_vm_abort_override_with_wrong_return_type_panics() {
     );
 }
 
-fn test_doubling_abort_native() -> NativeFnEntry {
+//
+// ─── Utility functions ───
+//
+
+fn test_token(amount: u64) -> Value {
+    Value::Struct {
+        type_name: "Token".to_string(),
+        fields: vec![("amount".to_string(), Value::U64(amount))],
+    }
+}
+
+fn test_add_native() -> NativeFnEntry {
+    NativeFnEntry {
+        name: "add_native".to_string(),
+        params: vec![
+            NativeParam::Concrete(Type::U64),
+            NativeParam::Concrete(Type::U64),
+        ],
+        return_type: Some(Type::U64),
+        gas_cost: 5,
+        func: Box::new(|args| {
+            NativeResult::Return(Some(Value::U64(
+                args[0].as_u64().unwrap() + args[1].as_u64().unwrap(),
+            )))
+        }),
+    }
+}
+
+fn test_log_native() -> NativeFnEntry {
+    NativeFnEntry {
+        name: "log_native".to_string(),
+        params: vec![NativeParam::Concrete(Type::U64)],
+        return_type: None,
+        gas_cost: 1,
+        func: Box::new(|_| NativeResult::Return(None)),
+    }
+}
+
+fn doubling_abort_native() -> NativeFnEntry {
     // Overrides meow_vm_abort; doubles the code to prove this fn ran.
     NativeFnEntry {
         name: "meow_vm_abort".to_string(),
-        params: vec![Some(Type::Bool), Some(Type::U64), Some(Type::Str)],
+        params: vec![
+            NativeParam::Concrete(Type::Bool),
+            NativeParam::Concrete(Type::U64),
+            NativeParam::Concrete(Type::Str),
+        ],
         return_type: None,
         gas_cost: 0,
         func: Box::new(|args| {

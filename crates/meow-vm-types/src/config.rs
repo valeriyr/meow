@@ -96,6 +96,48 @@ impl CompilerConfig {
         &self.reserved_function_names
     }
 
+    /// Returns a new config with the maximum number of struct definitions set.
+    pub fn with_max_structs(mut self, max: usize) -> Self {
+        self.max_structs = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of function definitions set.
+    pub fn with_max_functions(mut self, max: usize) -> Self {
+        self.max_functions = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of fields per struct set.
+    pub fn with_max_fields(mut self, max: usize) -> Self {
+        self.max_fields = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of function parameters set.
+    pub fn with_max_params(mut self, max: u8) -> Self {
+        self.max_params = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of local variable slots set.
+    pub fn with_max_locals(mut self, max: u8) -> Self {
+        self.max_locals = max;
+        self
+    }
+
+    /// Returns a new config with the maximum bytecode size per function set.
+    pub fn with_max_fun_code_size(mut self, max: usize) -> Self {
+        self.max_fun_code_size = max;
+        self
+    }
+
+    /// Returns a new config with the maximum number of import declarations set.
+    pub fn with_max_imports(mut self, max: usize) -> Self {
+        self.max_imports = max;
+        self
+    }
+
     /// Returns a new config with the maximum number of dependency modules set.
     pub fn with_max_dep_modules(mut self, max: usize) -> Self {
         self.max_dep_modules = max;

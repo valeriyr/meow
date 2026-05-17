@@ -1,7 +1,8 @@
 /// All errors the bytecode verifier can report.
 ///
-/// Every variant carries the `function` name and, where applicable, the
-/// 0-based instruction index (`pc`) for precise location reporting.
+/// Instruction-level variants carry the `function` name and a 0-based `pc`
+/// index for precise location reporting. Module-level variants (naming,
+/// counts) carry only the relevant name or count fields.
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum VerificationError {
     //
@@ -29,6 +30,45 @@ pub enum VerificationError {
         local_count: u8,
         param_count: usize,
     },
+
+    #[error("module has {count} struct definitions, exceeding the limit of {limit}")]
+    TooManyStructs { count: usize, limit: usize },
+
+    #[error("module has {count} function definitions, exceeding the limit of {limit}")]
+    TooManyFunctions { count: usize, limit: usize },
+
+    #[error("struct '{struct_name}' has {count} fields, exceeding the limit of {limit}")]
+    TooManyFields {
+        struct_name: String,
+        count: usize,
+        limit: usize,
+    },
+
+    #[error("function '{function}' has {count} parameters, exceeding the limit of {limit}")]
+    TooManyParams {
+        function: String,
+        count: usize,
+        limit: usize,
+    },
+
+    #[error(
+        "function '{function}' has {count} bytecode instructions, exceeding the limit of {limit}"
+    )]
+    FunctionTooLarge {
+        function: String,
+        count: usize,
+        limit: usize,
+    },
+
+    #[error("function '{function}' has local_count {count} exceeding the limit of {limit}")]
+    TooManyLocals {
+        function: String,
+        count: u8,
+        limit: u8,
+    },
+
+    #[error("module has {count} imports, exceeding the limit of {limit}")]
+    TooManyImports { count: usize, limit: usize },
 
     //
     // ─── Jump / slot bounds ───
@@ -66,7 +106,7 @@ pub enum VerificationError {
     // ─── Struct shape ───
     //
     #[error("function '{function}' at pc {pc}: NewStruct references unknown type '{type_name}'")]
-    UnknownStructType {
+    UndefinedStructType {
         function: String,
         pc: usize,
         type_name: String,

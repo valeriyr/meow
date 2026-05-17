@@ -3,77 +3,28 @@ use std::{cell::RefCell, rc::Rc};
 use meow_types::system_framework::meow_object::{
     self, MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId,
 };
-use meow_vm_bytecode_verifier::natives::{NativeParam, NativeSignature};
 use meow_vm_types::{
     convert,
-    natives::{NativeFnEntry, NativeResult, NativeSig},
+    natives::{NativeFnEntry, NativeParam, NativeResult, NativeSig},
     types::Type,
 };
 
 use crate::{Value, context::Context};
 
-/// Returns the verifier signatures for the adapter-supplied native functions.
+/// Returns the native signatures for all adapter-supplied native functions.
 ///
-/// These are passed to [`meow_vm_bytecode_verifier::verify`] so the verifier
-/// can type-check call sites for adapter natives.
-pub fn adapter_native_signatures() -> Vec<NativeSignature> {
-    let id_type = Type::Struct(MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string());
-    vec![
-        NativeSignature::new("meow_vm_fresh_id", vec![], Some(id_type.clone())),
-        NativeSignature::new(
-            "meow_vm_transfer",
-            vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
-            None,
-        ),
-        NativeSignature::new(
-            "meow_vm_destroy",
-            vec![NativeParam::Concrete(id_type)],
-            None,
-        ),
-        NativeSignature::new("meow_vm_sender", vec![], Some(Type::Address)),
-        NativeSignature::new("meow_vm_rand", vec![], Some(Type::U64)),
-        NativeSignature::new("meow_vm_timestamp", vec![], Some(Type::U64)),
-    ]
+/// Used by the bytecode verifier ([`meow_vm_bytecode_verifier::verify`]) — uses the
+/// bytecode-qualified `Id` type name.
+pub fn adapter_native_sigs() -> Vec<NativeSig> {
+    native_sigs_with_id_type(MEOW_OBJECT_ID_BYTECODE_TYPE_NAME)
 }
 
-/// Returns the compiler-level native signatures for adapter-supplied native functions.
+/// Returns the native signatures for use by the compiler's type checker.
 ///
-/// These are passed to [`meow_vm_compiler::Compiler::compile`] so the type checker
-/// can validate call sites for adapter natives in source code.
+/// Uses the source-level `meow_object::Id` type name so the type checker can match
+/// it against source annotations.
 pub fn adapter_native_sigs_for_compiler() -> Vec<NativeSig> {
-    let id_type = Type::Struct("meow_object::Id".to_string());
-    vec![
-        NativeSig {
-            name: "meow_vm_fresh_id".to_string(),
-            params: vec![],
-            return_type: Some(id_type.clone()),
-        },
-        NativeSig {
-            name: "meow_vm_transfer".to_string(),
-            params: vec![None, Some(Type::Address)],
-            return_type: None,
-        },
-        NativeSig {
-            name: "meow_vm_destroy".to_string(),
-            params: vec![Some(id_type)],
-            return_type: None,
-        },
-        NativeSig {
-            name: "meow_vm_sender".to_string(),
-            params: vec![],
-            return_type: Some(Type::Address),
-        },
-        NativeSig {
-            name: "meow_vm_rand".to_string(),
-            params: vec![],
-            return_type: Some(Type::U64),
-        },
-        NativeSig {
-            name: "meow_vm_timestamp".to_string(),
-            params: vec![],
-            return_type: Some(Type::U64),
-        },
-    ]
+    native_sigs_with_id_type("meow_object::Id")
 }
 
 /// Constructs the native function table used by the executor.
@@ -102,7 +53,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_transfer".to_string(),
-            params: vec![None, Some(Type::Address)],
+            params: vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
             return_type: None,
             gas_cost: 20, // 20 gas — object ownership change writes to the execution context
             func: Box::new(move |mut args| {
@@ -135,7 +86,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_destroy".to_string(),
-            params: vec![Some(id_type.clone())],
+            params: vec![NativeParam::Concrete(id_type.clone())],
             return_type: None,
             gas_cost: 10, // 10 gas — object deletion is cheaper than transfer (no owner update)
             func: Box::new(move |args| {
@@ -196,6 +147,45 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     vec![fresh_id, transfer, destroy, sender, rand, timestamp]
 }
 
+/// Builds the full native signature list using `id_type_name` as the struct type name for
+/// `meow_object::Id` parameters and return types. The verifier passes the bytecode-qualified
+/// name; the compiler passes the source-level name.
+fn native_sigs_with_id_type(id_type_name: &str) -> Vec<NativeSig> {
+    let id_type = Type::Struct(id_type_name.to_string());
+    vec![
+        NativeSig {
+            name: "meow_vm_fresh_id".to_string(),
+            params: vec![],
+            return_type: Some(id_type.clone()),
+        },
+        NativeSig {
+            name: "meow_vm_transfer".to_string(),
+            params: vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
+            return_type: None,
+        },
+        NativeSig {
+            name: "meow_vm_destroy".to_string(),
+            params: vec![NativeParam::Concrete(id_type)],
+            return_type: None,
+        },
+        NativeSig {
+            name: "meow_vm_sender".to_string(),
+            params: vec![],
+            return_type: Some(Type::Address),
+        },
+        NativeSig {
+            name: "meow_vm_rand".to_string(),
+            params: vec![],
+            return_type: Some(Type::U64),
+        },
+        NativeSig {
+            name: "meow_vm_timestamp".to_string(),
+            params: vec![],
+            return_type: Some(Type::U64),
+        },
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use std::{cell::RefCell, rc::Rc};
@@ -206,6 +196,34 @@ mod tests {
     use crate::{context::Context, external_context::DEFAULT_RAND_SEED};
 
     #[test]
+    fn compiler_and_verifier_sigs_use_correct_id_type_names() {
+        let verifier_sigs = adapter_native_sigs();
+        let compiler_sigs = adapter_native_sigs_for_compiler();
+
+        let verifier_id = verifier_sigs
+            .iter()
+            .find(|s| s.name == "meow_vm_fresh_id")
+            .and_then(|s| s.return_type.as_ref())
+            .expect("meow_vm_fresh_id must have a return type in verifier sigs");
+        assert_eq!(
+            *verifier_id,
+            Type::Struct(MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string()),
+            "verifier sigs must use the bytecode-qualified Id type name"
+        );
+
+        let compiler_id = compiler_sigs
+            .iter()
+            .find(|s| s.name == "meow_vm_fresh_id")
+            .and_then(|s| s.return_type.as_ref())
+            .expect("meow_vm_fresh_id must have a return type in compiler sigs");
+        assert_eq!(
+            *compiler_id,
+            Type::Struct("meow_object::Id".to_string()),
+            "compiler sigs must use the source-level meow_object::Id type name"
+        );
+    }
+
+    #[test]
     fn all_native_collections_are_consistent() {
         let ctx = Rc::new(RefCell::new(Context::new(
             Address::ZERO,
@@ -213,51 +231,35 @@ mod tests {
             DEFAULT_RAND_SEED,
             0,
         )));
-        let verifier_sigs = adapter_native_signatures();
-        let compiler_sigs = adapter_native_sigs_for_compiler();
         let entries = build_natives(ctx);
 
-        let verifier_names: Vec<&str> = verifier_sigs.iter().map(|s| s.name.as_str()).collect();
-        let compiler_names: Vec<&str> = compiler_sigs.iter().map(|s| s.name.as_str()).collect();
-        let entry_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
-        assert_eq!(
-            verifier_names, entry_names,
-            "verifier sigs and build_natives must list functions in the same order"
-        );
-        assert_eq!(
-            compiler_names, entry_names,
-            "compiler sigs and build_natives must list functions in the same order"
-        );
+        let assert_consistent = |sigs: Vec<NativeSig>, label: &str| {
+            let sig_names: Vec<&str> = sigs.iter().map(|s| s.name.as_str()).collect();
+            let entry_names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+            assert_eq!(
+                sig_names, entry_names,
+                "{label} and build_natives must list functions in the same order"
+            );
+            for (sig, entry) in sigs.iter().zip(entries.iter()) {
+                assert_eq!(
+                    sig.params.len(),
+                    entry.params.len(),
+                    "{label}: sig/VM param count mismatch for '{}'",
+                    entry.name
+                );
+                assert_eq!(
+                    sig.return_type.is_some(),
+                    entry.return_type.is_some(),
+                    "{label}: sig/VM return type presence mismatch for '{}'",
+                    entry.name
+                );
+            }
+        };
 
-        for ((vsig, csig), entry) in verifier_sigs
-            .iter()
-            .zip(compiler_sigs.iter())
-            .zip(entries.iter())
-        {
-            assert_eq!(
-                vsig.params.len(),
-                entry.params.len(),
-                "verifier/VM param count mismatch for '{}'",
-                entry.name
-            );
-            assert_eq!(
-                csig.params.len(),
-                entry.params.len(),
-                "compiler/VM param count mismatch for '{}'",
-                entry.name
-            );
-            assert_eq!(
-                vsig.return_type.is_some(),
-                entry.return_type.is_some(),
-                "verifier/VM return type presence mismatch for '{}'",
-                entry.name
-            );
-            assert_eq!(
-                csig.return_type.is_some(),
-                entry.return_type.is_some(),
-                "compiler/VM return type presence mismatch for '{}'",
-                entry.name
-            );
-        }
+        assert_consistent(adapter_native_sigs(), "adapter_native_sigs");
+        assert_consistent(
+            adapter_native_sigs_for_compiler(),
+            "adapter_native_sigs_for_compiler",
+        );
     }
 }

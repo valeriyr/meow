@@ -4,7 +4,11 @@ use std::str::FromStr;
 
 use meow_vm_compiler::{Compiler, Result, error::CompilerError};
 use meow_vm_types::{
-    address::Address, config::CompilerConfig, module::Module, natives::NativeSig, types::Type,
+    address::Address,
+    config::CompilerConfig,
+    module::Module,
+    natives::{NativeParam, NativeSig},
+    types::Type,
 };
 
 //
@@ -91,7 +95,7 @@ fn struct_literal_unknown_field_rejected() {
 }
 
 //
-// ─── Expressions ───
+// ─── Equality ───
 //
 
 #[test]
@@ -155,6 +159,10 @@ fn equality_different_struct_types_rejected() {
     );
 }
 
+//
+// ─── Expressions ───
+//
+
 #[test]
 fn undefined_variable_rejected() {
     let err = utils::compile(
@@ -210,6 +218,10 @@ fn unary_not_on_non_bool_rejected() {
         "expected unary not type error, got: {err:?}"
     );
 }
+
+//
+// ─── Field access ───
+//
 
 #[test]
 fn field_access_on_non_struct_rejected() {
@@ -297,57 +309,30 @@ fn wrong_function_argument_type_rejected() {
 //
 
 #[test]
-fn wrong_field_type_native_return_mismatch_rejected() {
-    let new_id_sig = NativeSig {
-        name: "meow_vm_new_id".to_string(),
-        params: vec![],
-        return_type: Some(Type::Struct("meow_object::Id".to_string())),
-    };
-    with_dep_and_sigs(
-        r#"
-            mod meow_object;
-            pub struct Id { inner: address }
-        "#,
-        r#"
-            mod test;
-            use meow_object@0x01;
-
-            struct Bad { id: address }
-
-            fn make() -> Bad {
-                Bad { id: meow_vm_new_id() }
-            }
-        "#,
-        &[new_id_sig],
-    )
-    .expect_err("meow_object::Id cannot be used where address is expected");
-}
-
-#[test]
 fn correct_native_in_struct_field_compiles() {
-    let new_id_sig = NativeSig {
-        name: "meow_vm_new_id".to_string(),
+    let id_sig = NativeSig {
+        name: "make_id".to_string(),
         params: vec![],
-        return_type: Some(Type::Struct("meow_object::Id".to_string())),
+        return_type: Some(Type::Struct("ext::Id".to_string())),
     };
     with_dep_and_sigs(
         r#"
-            mod meow_object;
+            mod ext;
             pub struct Id { inner: address }
         "#,
         r#"
             mod test;
-            use meow_object@0x01;
+            use ext@0x01;
 
-            struct Good { id: meow_object::Id, value: u64 }
+            struct Good { id: ext::Id, value: u64 }
 
             fn make(v: u64) -> Good {
-                Good { id: meow_vm_new_id(), value: v }
+                Good { id: make_id(), value: v }
             }
         "#,
-        &[new_id_sig],
+        &[id_sig],
     )
-    .expect("meow_object::Id field initialised with meow_vm_new_id() must compile");
+    .expect("ext::Id field initialised with make_id() must compile");
 }
 
 #[test]
@@ -362,6 +347,33 @@ fn meow_vm_abort_correct_types_compile() {
         "#,
     )
     .expect("meow_vm_abort with correct types must compile");
+}
+
+#[test]
+fn wrong_field_type_native_return_mismatch_rejected() {
+    let id_sig = NativeSig {
+        name: "make_id".to_string(),
+        params: vec![],
+        return_type: Some(Type::Struct("ext::Id".to_string())),
+    };
+    with_dep_and_sigs(
+        r#"
+            mod ext;
+            pub struct Id { inner: address }
+        "#,
+        r#"
+            mod test;
+            use ext@0x01;
+
+            struct Bad { id: address }
+
+            fn make() -> Bad {
+                Bad { id: make_id() }
+            }
+        "#,
+        &[id_sig],
+    )
+    .expect_err("ext::Id cannot be used where address is expected");
 }
 
 #[test]
@@ -387,7 +399,7 @@ fn meow_vm_abort_wrong_condition_type_rejected() {
 fn native_wrong_arg_count_rejected() {
     let sig = NativeSig {
         name: "my_fn".to_string(),
-        params: vec![Some(Type::U64)],
+        params: vec![NativeParam::Concrete(Type::U64)],
         return_type: None,
     };
     let err = Compiler::compile(
@@ -408,7 +420,7 @@ fn native_wrong_arg_count_rejected() {
 fn native_any_struct_param_with_primitive_rejected() {
     let sig = NativeSig {
         name: "my_fn".to_string(),
-        params: vec![None],
+        params: vec![NativeParam::AnyStruct],
         return_type: None,
     };
     let err = Compiler::compile(
@@ -430,6 +442,23 @@ fn native_any_struct_param_with_primitive_rejected() {
 //
 
 #[test]
+fn field_assign_correct_type_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+
+            struct Counter { value: u64 }
+
+            fn inc(c: Counter) -> Counter {
+                c.value = c.value + 1;
+                c
+            }
+        "#,
+    )
+    .expect("field assign with correct type must compile");
+}
+
+#[test]
 fn void_result_in_let_binding_rejected() {
     let err = utils::compile(
         r#"
@@ -446,45 +475,6 @@ fn void_result_in_let_binding_rejected() {
     assert!(
         matches!(&err, CompilerError::Message(msg) if msg.contains("void")),
         "expected void-in-let error, got: {err:?}"
-    );
-}
-
-#[test]
-fn wrong_reassignment_type_rejected() {
-    let err = utils::compile(
-        r#"
-            mod test;
-
-            fn bad() -> u64 {
-                let x = 1;
-                x = true;
-                x
-            }
-        "#,
-    )
-    .unwrap_err();
-    assert!(
-        matches!(&err, CompilerError::Message(msg)
-            if msg.contains("expected u64") && msg.contains("found bool")),
-        "expected reassignment type error, got: {err:?}"
-    );
-}
-
-#[test]
-fn reassign_to_undefined_variable_rejected() {
-    let err = utils::compile(
-        r#"
-            mod test;
-
-            fn bad() {
-                x = 42;
-            }
-        "#,
-    )
-    .unwrap_err();
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("assignment to undefined variable")),
-        "expected undefined variable error, got: {err:?}"
     );
 }
 
@@ -523,23 +513,6 @@ fn return_without_value_in_typed_fn_rejected() {
         matches!(&err, CompilerError::Message(msg) if msg.contains("return without value")),
         "expected return without value error, got: {err:?}"
     );
-}
-
-#[test]
-fn field_assign_correct_type_compiles() {
-    utils::compile(
-        r#"
-            mod test;
-
-            struct Counter { value: u64 }
-
-            fn inc(c: Counter) -> Counter {
-                c.value = c.value + 1;
-                c
-            }
-        "#,
-    )
-    .expect("field assign with correct type must compile");
 }
 
 #[test]
@@ -587,6 +560,26 @@ fn correct_if_condition_compiles() {
 }
 
 #[test]
+fn if_else_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+
+            fn sign(x: u64) -> bool {
+                let result = false;
+                if x > 0 {
+                    result = true;
+                } else {
+                    result = false;
+                }
+                result
+            }
+        "#,
+    )
+    .expect("if-else with matching branch types must compile");
+}
+
+#[test]
 fn wrong_if_condition_rejected() {
     let err = utils::compile(
         r#"
@@ -605,26 +598,6 @@ fn wrong_if_condition_rejected() {
             if msg.contains("expected bool") && msg.contains("found u64")),
         "expected if-condition type error, got: {err:?}"
     );
-}
-
-#[test]
-fn if_else_compiles() {
-    utils::compile(
-        r#"
-            mod test;
-
-            fn sign(x: u64) -> bool {
-                let result = false;
-                if x > 0 {
-                    result = true;
-                } else {
-                    result = false;
-                }
-                result
-            }
-        "#,
-    )
-    .expect("if-else with matching branch types must compile");
 }
 
 //
@@ -646,6 +619,23 @@ fn let_struct_compiles() {
         "#,
     )
     .expect("struct destructuring with valid fields must compile");
+}
+
+#[test]
+fn let_tuple_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+
+            fn swap(a: u64, b: u64) -> (u64, u64) { (b, a) }
+
+            fn run() -> u64 {
+                let (x, y) = swap(1, 2);
+                x
+            }
+        "#,
+    )
+    .expect("tuple destructuring must compile");
 }
 
 #[test]
@@ -671,23 +661,6 @@ fn let_struct_unknown_field_rejected() {
 }
 
 #[test]
-fn let_tuple_compiles() {
-    utils::compile(
-        r#"
-            mod test;
-
-            fn swap(a: u64, b: u64) -> (u64, u64) { (b, a) }
-
-            fn run() -> u64 {
-                let (x, y) = swap(1, 2);
-                x
-            }
-        "#,
-    )
-    .expect("tuple destructuring must compile");
-}
-
-#[test]
 fn let_tuple_on_non_tuple_rejected() {
     let err = utils::compile(
         r#"
@@ -708,7 +681,7 @@ fn let_tuple_on_non_tuple_rejected() {
 }
 
 //
-// ─── Reassignment type checking ───
+// ─── Reassignment ───
 //
 
 #[test]
@@ -716,6 +689,7 @@ fn reassign_same_type_compiles() {
     utils::compile(
         r#"
             mod test;
+
             fn run() -> u64 {
                 let x = 0;
                 x = 42;
@@ -731,6 +705,7 @@ fn reassign_type_mismatch_rejected() {
     let err = utils::compile(
         r#"
             mod test;
+
             fn bad() {
                 let x = 0;
                 x = true;
@@ -750,6 +725,7 @@ fn reassign_undefined_variable_rejected() {
     let err = utils::compile(
         r#"
             mod test;
+
             fn bad() {
                 x = 1;
             }
@@ -771,10 +747,12 @@ fn cross_module_arg_type_mismatch_rejected() {
     let err = with_dep(
         r#"
             mod math;
+
             pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         r#"
             mod user;
+
             use math@0x01;
 
             fn bad() -> u64 {

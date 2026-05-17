@@ -6,7 +6,7 @@
 
 use std::{collections::HashMap, str::FromStr};
 
-use meow_vm_types::{address::Address, module::Module, types::Type};
+use meow_vm_types::{address::Address, module::Module, natives::NativeParam, types::Type};
 
 use crate::{
     NativeSig, Result,
@@ -26,8 +26,8 @@ pub struct TypeChecker<'m> {
     source_structs: HashMap<String, StructInfo>,
     /// Concrete function signatures for local fns and dep-module fns.
     source_fns: HashMap<String, (Vec<Type>, Option<Type>)>,
-    /// Native function signatures; `None` param means "any struct accepted".
-    native_fns: HashMap<String, (Vec<Option<Type>>, Option<Type>)>,
+    /// Native function signatures; `NativeParam::AnyStruct` means "any struct accepted".
+    native_fns: HashMap<String, (Vec<NativeParam>, Option<Type>)>,
     fn_name: &'m str,
     return_type: Option<Type>,
 }
@@ -36,7 +36,7 @@ impl<'m> TypeChecker<'m> {
     fn new(
         source_structs: HashMap<String, StructInfo>,
         source_fns: HashMap<String, (Vec<Type>, Option<Type>)>,
-        native_fns: HashMap<String, (Vec<Option<Type>>, Option<Type>)>,
+        native_fns: HashMap<String, (Vec<NativeParam>, Option<Type>)>,
     ) -> Self {
         TypeChecker {
             source_structs,
@@ -254,7 +254,7 @@ impl<'m> TypeChecker<'m> {
             arg_types.push(self.require_typed(arg, locals, &format!("argument to '{name}'"))?);
         }
 
-        // Check native functions first (may have `None` params meaning "any struct").
+        // Check native functions first (may have `AnyStruct` params meaning "any struct").
         if let Some((param_types, ret_type)) = self.native_fns.get(name) {
             if arg_types.len() != param_types.len() {
                 return Err(self.type_err(format!(
@@ -263,12 +263,16 @@ impl<'m> TypeChecker<'m> {
                     arg_types.len()
                 )));
             }
-            for (i, (actual, expected_opt)) in arg_types.iter().zip(param_types.iter()).enumerate()
-            {
-                if let Some(expected) = expected_opt {
-                    self.expect_type(actual, expected, &format!("argument {} of '{name}'", i + 1))?;
-                } else {
-                    match actual {
+            for (i, (actual, param)) in arg_types.iter().zip(param_types.iter()).enumerate() {
+                match param {
+                    NativeParam::Concrete(expected) => {
+                        self.expect_type(
+                            actual,
+                            expected,
+                            &format!("argument {} of '{name}'", i + 1),
+                        )?;
+                    }
+                    NativeParam::AnyStruct => match actual {
                         Type::Struct(_) => {}
                         other => {
                             return Err(self.type_err(format!(
@@ -277,7 +281,7 @@ impl<'m> TypeChecker<'m> {
                                 type_display(other)
                             )));
                         }
-                    }
+                    },
                 }
             }
             return Ok(ret_type.clone());
@@ -591,7 +595,7 @@ pub fn check(
     }
 
     // ── Build native_fns (caller-provided + VM built-ins) ───────────────────
-    let mut native_fns: HashMap<String, (Vec<Option<Type>>, Option<Type>)> = HashMap::new();
+    let mut native_fns: HashMap<String, (Vec<NativeParam>, Option<Type>)> = HashMap::new();
 
     for sig in native_sigs {
         native_fns.insert(

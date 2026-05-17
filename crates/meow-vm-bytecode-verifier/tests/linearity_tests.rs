@@ -15,7 +15,9 @@ fn struct_consumed_by_call_passes() {
     let module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         fn sink(p: Point) {}
         pub fn give(p: Point) { sink(p); }
     "#,
@@ -34,7 +36,9 @@ fn param_struct_alive_at_return_passes() {
     let module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         fn mutate(p: Point) { p.x = 42; return; }
     "#,
     );
@@ -48,7 +52,9 @@ fn param_struct_moved_to_local_slot_at_return_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         fn dummy(p: Point) { return; }
     "#,
     );
@@ -71,6 +77,10 @@ fn param_struct_moved_to_local_slot_at_return_rejected() {
     );
 }
 
+//
+// ─── Unconsumed struct ───
+//
+
 #[test]
 fn compiled_lose_function_rejected() {
     // Compile exactly: fn lose(p: Point) { let q = p; }
@@ -79,7 +89,9 @@ fn compiled_lose_function_rejected() {
     let module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         pub fn lose(p: Point) { let q = p; }
     "#,
     );
@@ -98,7 +110,9 @@ fn struct_from_unpacked_tuple_unconsumed_at_return_rejected() {
     let module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         fn make_pair(p: Point) -> (Point, u64) {
             let v = p.x;
             (p, v)
@@ -295,7 +309,9 @@ fn struct_unpack_passes() {
     let module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
+
         pub fn sum(p: Point) -> u64 {
             let Point { x, y } = p;
             x + y
@@ -351,7 +367,9 @@ fn struct_module() -> meow_vm_types::module::Module {
     compile(
         r#"
         mod m;
+
         pub struct Point { x: u64, y: u64 }
+
         fn dummy() { return; }
     "#,
     )

@@ -151,6 +151,23 @@ fn primitive_to_struct_shadow_compiles() {
 }
 
 #[test]
+fn struct_to_primitive_shadow_allowed_after_consumption() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        fn run() -> u64 {
+            let p = Point { x: 1, y: 2 };
+            let Point { x, .. } = p;
+            let p = false;
+            return x;
+        }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
 fn struct_to_primitive_shadow_rejected_when_struct_live() {
     let src = r#"
         mod test;
@@ -169,23 +186,6 @@ fn struct_to_primitive_shadow_rejected_when_struct_live() {
     ));
 }
 
-#[test]
-fn struct_to_primitive_shadow_allowed_after_consumption() {
-    let src = r#"
-        mod test;
-
-        struct Point { x: u64, y: u64 }
-
-        fn run() -> u64 {
-            let p = Point { x: 1, y: 2 };
-            let Point { x, .. } = p;
-            let p = false;
-            return x;
-        }
-    "#;
-    assert!(utils::compile(src).is_ok());
-}
-
 //
 // ─── If-body scoping ───
 //
@@ -194,7 +194,9 @@ fn struct_to_primitive_shadow_allowed_after_consumption() {
 fn if_body_shadow_compiles() {
     let src = r#"
         mod test;
+
         struct Point { x: u64, y: u64 }
+
         fn run() -> u64 {
             let p = Point { x: 1, y: 2 };
             if true {
@@ -209,9 +211,69 @@ fn if_body_shadow_compiles() {
 }
 
 #[test]
+fn else_body_shadow_compiles() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        fn run() -> u64 {
+            let p = Point { x: 1, y: 2 };
+            if false {
+            } else {
+                let p = Point { x: 9, y: 9 };
+                let Point { x, .. } = p;
+            }
+            let Point { x, .. } = p;
+            return x;
+        }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
+fn nested_if_scopes_compile() {
+    let src = r#"
+        mod test;
+
+        fn run() -> u64 {
+            let x = 1;
+            if true {
+                let x = 2;
+                if true {
+                    let x = 3;
+                }
+            }
+            return x;
+        }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
+fn primitive_shadow_in_if_compiles() {
+    let src = r#"
+        mod test;
+
+        struct Point { x: u64, y: u64 }
+
+        fn run() -> u64 {
+            let p = false;
+            if true {
+                let p = Point { x: 3, y: 4 };
+                let Point { .. } = p;
+            }
+            return 0;
+        }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
 fn if_body_variable_not_visible_after_if() {
     let src = r#"
         mod test;
+
         fn run() -> u64 {
             if true {
                 let inner = 42;
@@ -229,7 +291,9 @@ fn if_body_variable_not_visible_after_if() {
 fn if_body_unconsumed_struct_is_rejected() {
     let src = r#"
         mod test;
+
         struct Point { x: u64, y: u64 }
+
         fn run() {
             let p = Point { x: 1, y: 2 };
             if true {
@@ -249,7 +313,9 @@ fn if_body_unconsumed_struct_is_rejected() {
 fn else_body_unconsumed_struct_is_rejected() {
     let src = r#"
         mod test;
+
         struct Point { x: u64, y: u64 }
+
         fn run() {
             let p = Point { x: 1, y: 2 };
             if true {
@@ -264,58 +330,4 @@ fn else_body_unconsumed_struct_is_rejected() {
         utils::compile(src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("must be consumed before the branch ends")
     ));
-}
-
-#[test]
-fn else_body_shadow_compiles() {
-    let src = r#"
-        mod test;
-        struct Point { x: u64, y: u64 }
-        fn run() -> u64 {
-            let p = Point { x: 1, y: 2 };
-            if false {
-            } else {
-                let p = Point { x: 9, y: 9 };
-                let Point { x, .. } = p;
-            }
-            let Point { x, .. } = p;
-            return x;
-        }
-    "#;
-    assert!(utils::compile(src).is_ok());
-}
-
-#[test]
-fn nested_if_scopes_compile() {
-    let src = r#"
-        mod test;
-        fn run() -> u64 {
-            let x = 1;
-            if true {
-                let x = 2;
-                if true {
-                    let x = 3;
-                }
-            }
-            return x;
-        }
-    "#;
-    assert!(utils::compile(src).is_ok());
-}
-
-#[test]
-fn primitive_shadow_in_if_compiles() {
-    let src = r#"
-        mod test;
-        struct Point { x: u64, y: u64 }
-        fn run() -> u64 {
-            let p = false;
-            if true {
-                let p = Point { x: 3, y: 4 };
-                let Point { .. } = p;
-            }
-            return 0;
-        }
-    "#;
-    assert!(utils::compile(src).is_ok());
 }

@@ -266,7 +266,7 @@ fn execute_meow_module_publish(
     };
     let deps_ref: std::collections::HashMap<_, _> = deps.iter().map(|(a, m)| (*a, m)).collect();
 
-    let adapter_natives = natives::adapter_native_signatures();
+    let adapter_natives = natives::adapter_native_sigs();
     if let Err(errors) = meow_vm_bytecode_verifier::verify(
         &module_val,
         &deps_ref,

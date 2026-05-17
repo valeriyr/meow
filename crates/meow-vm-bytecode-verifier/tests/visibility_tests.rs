@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 
 use meow_vm_bytecode_verifier::VerificationError;
-use meow_vm_types::{address::Address, bytecode::Instruction};
+use meow_vm_types::{address::Address, bytecode::Instruction, config::CompilerConfig};
 
 //
 // ─── Happy paths ───
@@ -17,13 +17,16 @@ fn cross_module_call_chain_passes() {
     let dep = compile(
         r#"
         mod dep;
+
         pub fn double(x: u64) -> u64 { x + x }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
+
             use dep@0x42;
+
             pub fn quadruple(x: u64) -> u64 { dep::double(dep::double(x)) }
         "#,
         &[(addr, &dep)],
@@ -37,6 +40,30 @@ fn cross_module_call_chain_passes() {
 //
 
 #[test]
+fn call_public_cross_module_function_passes() {
+    let addr = dep_addr();
+    let dep = compile(
+        r#"
+        mod dep;
+
+        pub fn get() -> u64 { 42 }
+    "#,
+    );
+    let main = compile_with_deps(
+        r#"
+            mod main;
+
+            use dep@0x42;
+
+            pub fn f() -> u64 { dep::get() }
+        "#,
+        &[(addr, &dep)],
+    );
+    let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
+    verify_ok(&main, &deps);
+}
+
+#[test]
 fn call_private_cross_module_function_rejected() {
     // The compiler blocks cross-module calls to private functions at source level,
     // so we compile main without the call and inject it via bytecode tamper.
@@ -44,12 +71,14 @@ fn call_private_cross_module_function_rejected() {
     let dep = compile(
         r#"
         mod dep;
+
         fn secret() -> u64 { 99 }
     "#,
     );
     let mut main = compile(
         r#"
         mod main;
+
         pub fn f() -> u64 { 1 }
     "#,
     );
@@ -70,27 +99,6 @@ fn call_private_cross_module_function_rejected() {
     );
 }
 
-#[test]
-fn call_public_cross_module_function_passes() {
-    let addr = dep_addr();
-    let dep = compile(
-        r#"
-        mod dep;
-        pub fn get() -> u64 { 42 }
-    "#,
-    );
-    let main = compile_with_deps(
-        r#"
-            mod main;
-            use dep@0x42;
-            pub fn f() -> u64 { dep::get() }
-        "#,
-        &[(addr, &dep)],
-    );
-    let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
-    verify_ok(&main, &deps);
-}
-
 //
 // ─── Cross-module struct construction ───
 //
@@ -102,7 +110,9 @@ fn cross_module_struct_construction_rejected() {
     let dep = compile(
         r#"
         mod dep;
+
         pub struct Point { x: u64, y: u64 }
+
         fn noop() -> u64 { 0 }
     "#,
     );
@@ -146,6 +156,7 @@ fn cross_module_private_field_read_via_load_field_rejected() {
     let dep = compile(
         r#"
             mod dep;
+
             pub struct Id { inner: u64 }
         "#,
     );
@@ -156,6 +167,7 @@ fn cross_module_private_field_read_via_load_field_rejected() {
     let mut main = compile_with_deps(
         r#"
             mod main;
+
             use dep@0x42;
 
             struct Wrapper { id: dep::Id }
@@ -187,28 +199,46 @@ fn cross_module_private_field_read_via_load_field_rejected() {
 
 #[test]
 fn cross_module_field_write_rejected() {
-    // CrossModuleFieldWrite triggers on StoreField(slot, field) when the abstract
-    // type in that slot contains "::" (cross-module). Reaching that state requires
-    // a cross-module type in a local slot, which can only arrive via NewStruct —
-    // already blocked by CrossModuleStructConstruction. Covered indirectly there.
+    // CrossModuleFieldWrite: StoreField on a slot holding a cross-module struct.
+    // Compile a function that passes through a dep::Pair without field access
+    // (compiler allows this), then tamper the body to inject StoreField.
     let addr = dep_addr();
     let dep = compile(
         r#"
         mod dep;
+
         pub struct Pair { a: u64, b: u64 }
-        fn noop() -> u64 { 0 }
     "#,
     );
-    let main = compile_with_deps(
+    let mut main = compile_with_deps(
         r#"
             mod main;
+
             use dep@0x42;
-            pub fn f() -> u64 { 1 }
+
+            fn pass(p: dep::Pair) -> dep::Pair { p }
         "#,
         &[(addr, &dep)],
     );
-    let _ = dep;
-    let _ = main;
+    // Inject PushU64 + StoreField before the Load/Return — StoreField on slot 0
+    // (which the abstract interpreter knows holds a dep::Pair) triggers CrossModuleFieldWrite.
+    tamper(&mut main, "pass", |code| {
+        code.splice(
+            0..0,
+            [
+                Instruction::PushU64(42),
+                Instruction::StoreField(0, vec!["a".to_string()]),
+            ],
+        );
+    });
+    let deps = HashMap::from([(addr, &dep)]);
+    let errs = meow_vm_bytecode_verifier::verify(&main, &deps, &[], &CompilerConfig::default())
+        .expect_err("cross-module StoreField must be rejected");
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, VerificationError::CrossModuleFieldWrite { .. })),
+        "expected CrossModuleFieldWrite, got: {errs:?}"
+    );
 }
 
 //
@@ -221,13 +251,16 @@ fn missing_dep_causes_undefined_function_error() {
     let dep = compile(
         r#"
         mod dep;
+
         pub fn get() -> u64 { 42 }
     "#,
     );
     let main = compile_with_deps(
         r#"
             mod main;
+
             use dep@0x42;
+
             pub fn f() -> u64 { dep::get() }
         "#,
         &[(addr, &dep)],

@@ -70,8 +70,7 @@ fn struct_value_semantics() {
 #[test]
 fn struct_id_field_is_arbitrary() {
     // Structs have no special `id` field rule. A field named `id` can hold any
-    // type and be assigned any value — unlike objects which require `id: address`
-    // initialized with meow_vm_fresh_id().
+    // type and be assigned any value.
     let src = r#"
         mod test;
 

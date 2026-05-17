@@ -101,7 +101,9 @@ fn primitive_shadowed_by_struct_returns_struct_field() {
 fn if_body_outer_struct_accessible_after_if() {
     let src = r#"
         mod test;
+
         struct Point { x: u64, y: u64 }
+
         pub fn run() -> u64 {
             let p = Point { x: 1, y: 2 };
             if true {
@@ -119,6 +121,7 @@ fn if_body_outer_struct_accessible_after_if() {
 fn if_body_outer_primitive_unchanged_after_inner_shadow() {
     let src = r#"
         mod test;
+
         pub fn run() -> u64 {
             let x = 10;
             if true {
@@ -134,6 +137,7 @@ fn if_body_outer_primitive_unchanged_after_inner_shadow() {
 fn nested_if_scopes_restore_correctly() {
     let src = r#"
         mod test;
+
         pub fn run() -> u64 {
             let x = 1;
             if true {
@@ -154,6 +158,7 @@ fn if_body_same_scope_shadow_reuses_slot() {
     // (slot reused, not a second slot allocated). The final value must be 2.
     let src = r#"
         mod test;
+
         pub fn run() -> u64 {
             let x = 0;
             if true {
@@ -170,7 +175,9 @@ fn if_body_same_scope_shadow_reuses_slot() {
 fn else_body_outer_struct_accessible_after_else() {
     let src = r#"
         mod test;
+
         struct Point { x: u64, y: u64 }
+
         pub fn run() -> u64 {
             let p = Point { x: 5, y: 5 };
             if false {

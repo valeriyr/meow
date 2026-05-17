@@ -2,10 +2,11 @@
 
 use std::collections::HashMap;
 
-use meow_vm_bytecode_verifier::{NativeParam, NativeSignature, VerificationError};
+use meow_vm_bytecode_verifier::{NativeSig, VerificationError};
 use meow_vm_compiler::Compiler;
 use meow_vm_types::{
-    address::Address, bytecode::Instruction, config::CompilerConfig, module::Module, types::Type,
+    address::Address, bytecode::Instruction, config::CompilerConfig, module::Module,
+    natives::NativeParam, types::Type,
 };
 
 pub fn compile(src: &str) -> Module {
@@ -41,22 +42,27 @@ pub fn no_deps() -> HashMap<Address, &'static Module> {
     HashMap::new()
 }
 
-/// Simplified native signatures for language-level verifier tests.
+/// Generic native signatures used across verifier tests.
 ///
-/// These use `AnyStruct` for `meow_vm_transfer` and `meow_vm_destroy` to keep
-/// tests independent of the adapter's specific `meow_object::Id` type. The
-/// adapter enforces actual type constraints separately via its own verifier.
-fn test_natives() -> Vec<NativeSignature> {
+/// These are not tied to any adapter — they exist solely to give the abstract
+/// interpreter enough information to type-check the few tests that emit Call
+/// instructions to non-local functions.
+fn test_natives() -> Vec<NativeSig> {
     vec![
-        NativeSignature::new("meow_vm_fresh_id", vec![], Some(Type::Address)),
-        NativeSignature::new(
-            "meow_vm_transfer",
-            vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
-            None,
-        ),
-        NativeSignature::new("meow_vm_destroy", vec![NativeParam::AnyStruct], None),
-        NativeSignature::new("meow_vm_sender", vec![], Some(Type::Address)),
-        NativeSignature::new("meow_vm_rand", vec![], Some(Type::U64)),
-        NativeSignature::new("meow_vm_timestamp", vec![], Some(Type::U64)),
+        NativeSig {
+            name: "addr_native".to_string(),
+            params: vec![],
+            return_type: Some(Type::Address),
+        },
+        NativeSig {
+            name: "u64_native".to_string(),
+            params: vec![],
+            return_type: Some(Type::U64),
+        },
+        NativeSig {
+            name: "consume_native".to_string(),
+            params: vec![NativeParam::AnyStruct],
+            return_type: None,
+        },
     ]
 }

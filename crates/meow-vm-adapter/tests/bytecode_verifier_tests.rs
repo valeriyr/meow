@@ -34,8 +34,11 @@ use meow_vm_types::types::Type;
 /// and a simple creation function. Used across multiple tests.
 const OBJECT_SRC: &str = r#"
     mod token_test;
+
     use meow_object@0x01;
+
     pub struct Token { id: meow_object::Id, amount: u64 }
+
     pub fn create(amount: u64) {
         let t = Token { id: meow_vm_fresh_id(), amount: amount };
         meow_vm_transfer(t, meow_vm_sender());
@@ -46,7 +49,9 @@ const OBJECT_SRC: &str = r#"
 /// tests where the function bytecode must not diverge from the struct definition.
 const LAYOUT_STRUCT_ONLY_SRC: &str = r#"
     mod layout_test;
+
     use meow_object@0x01;
+
     pub struct Token { id: meow_object::Id, amount: u64 }
 "#;
 
@@ -106,7 +111,9 @@ fn plain_struct_without_id_field_passes() {
     let module = builder::build(
         r#"
             mod plain_test;
+
             pub struct Config { value: u64 }
+
             pub fn noop(c: Config) -> u64 { c.value }
         "#,
         &[],
@@ -133,8 +140,11 @@ fn object_created_with_stored_fresh_id_passes() {
     let module = builder::build(
         r#"
             mod stored_id_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, amount: u64 }
+
             pub fn create(amount: u64) {
                 let id = meow_vm_fresh_id();
                 let t = Token { id: id, amount: amount };
@@ -166,8 +176,11 @@ fn object_created_from_parameter_id_fails() {
     let module = builder::build(
         r#"
             mod param_id_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, amount: u64 }
+
             pub fn create_with_id(id: meow_object::Id, amount: u64) {
                 let t = Token { id: id, amount: amount };
                 meow_vm_transfer(t, meow_vm_sender());
@@ -196,8 +209,11 @@ fn object_created_from_unpacked_id_fails() {
     let module = builder::build(
         r#"
             mod reuse_id_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, amount: u64 }
+
             pub fn reuse_id(t: Token, new_amount: u64) {
                 let Token { id, .. } = t;
                 let t2 = Token { id: id, amount: new_amount };
@@ -214,6 +230,41 @@ fn object_created_from_unpacked_id_fails() {
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
         "object constructed from unpacked id must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn object_created_from_tuple_unpacked_id_fails() {
+    // get_id() wraps meow_vm_fresh_id in a tuple return. UnpackTuple marks every
+    // element Fresh::Other — even the Id slot — so the caller cannot use it to
+    // construct an object. NewStruct must fire ObjectIdNotFresh.
+    let meow_object_module = build_meow_object();
+    let module = builder::build(
+        r#"
+            mod tuple_id_test;
+
+            use meow_object@0x01;
+
+            pub struct Token { id: meow_object::Id, amount: u64 }
+
+            fn get_id() -> (meow_object::Id, u64) { (meow_vm_fresh_id(), 42) }
+            pub fn create_from_tuple() {
+                let (id, amount) = get_id();
+                let t = Token { id: id, amount: amount };
+                meow_vm_transfer(t, meow_vm_sender());
+            }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![make_meow_object_dep(&meow_object_module)],
+    );
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
+        "object constructed from tuple-unpacked id must be rejected, got: {:?}",
         result.status()
     );
 }
@@ -245,8 +296,11 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
     let mut module = builder::build(
         r#"
             mod branch_merge_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, amount: u64 }
+
             fn make_id() -> meow_object::Id { meow_vm_fresh_id() }
             pub fn create(cond: bool, amount: u64) -> Token {
                 let t = Token { id: meow_vm_fresh_id(), amount: amount };
@@ -296,6 +350,7 @@ fn module_without_object_types_skips_freshness_check() {
     let module = builder::build(
         r#"
             mod no_objects;
+
             pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
@@ -321,7 +376,9 @@ fn object_type_as_local_struct_field_fails() {
     let module = builder::build(
         r#"
             mod nested_test;
+
             use meow_object@0x01;
+
             pub struct Inner { id: meow_object::Id, value: u64 }
             pub struct Outer { inner: Inner, amount: u64 }
         "#,
@@ -348,7 +405,9 @@ fn cross_module_object_type_as_struct_field_fails() {
     let dep_module = builder::build(
         r#"
             mod dep_with_object;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, balance: u64 }
         "#,
         &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
@@ -358,7 +417,9 @@ fn cross_module_object_type_as_struct_field_fails() {
     let module = builder::build(
         r#"
             mod wrapper_test;
+
             use dep_with_object@0x02;
+
             pub struct Wrapper { token: dep_with_object::Token, extra: u64 }
         "#,
         &[
@@ -386,6 +447,7 @@ fn plain_struct_as_field_type_passes() {
     let module = builder::build(
         r#"
             mod plain_nested;
+
             pub struct Point { x: u64, y: u64 }
             pub struct Line { start: Point, end: Point }
         "#,
@@ -415,8 +477,11 @@ fn object_id_field_mutation_rejected() {
     let mut module = builder::build(
         r#"
             mod mutation_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, value: u64 }
+
             pub fn noop(t: Token) -> Token { t }
         "#,
         &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
@@ -459,8 +524,11 @@ fn object_id_mutation_of_locally_created_struct_rejected() {
     let mut module = builder::build(
         r#"
             mod local_create_mutate_test;
+
             use meow_object@0x01;
+
             pub struct Token { id: meow_object::Id, amount: u64 }
+
             pub fn create(amount: u64) -> Token {
                 let t = Token { id: meow_vm_fresh_id(), amount: amount };
                 t
@@ -511,7 +579,9 @@ fn non_object_struct_id_field_write_passes() {
     let module = builder::build(
         r#"
             mod plain_id_test;
+
             pub struct Receipt { id: u64, amount: u64 }
+
             pub fn set_id(r: Receipt, new_id: u64) -> Receipt {
                 r.id = new_id;
                 r

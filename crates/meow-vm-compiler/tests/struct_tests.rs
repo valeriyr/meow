@@ -2,6 +2,10 @@ mod utils;
 
 use meow_vm_compiler::error::CompilerError;
 
+//
+// ─── Field definitions ───
+//
+
 #[test]
 fn struct_field_can_be_string_type() {
     let src = r#"
@@ -28,6 +32,21 @@ fn struct_field_can_be_another_struct_type() {
 }
 
 #[test]
+fn struct_id_field_is_arbitrary() {
+    // Unlike objects, structs have no special `id` field rule.
+    // A struct may have a field named `id` of any type, assigned to any value.
+    let src = r#"
+        mod test;
+
+        struct Receipt { id: u64, amount: u64 }
+
+        pub fn make(id: u64, amount: u64) -> Receipt { Receipt { id: id, amount: amount } }
+        pub fn get_id(r: Receipt) -> u64 { r.id }
+    "#;
+    assert!(utils::compile(src).is_ok());
+}
+
+#[test]
 fn struct_field_unknown_type_rejected() {
     let src = r#"
         mod test;
@@ -41,6 +60,10 @@ fn struct_field_unknown_type_rejected() {
         CompilerError::Message(msg) if msg.contains("unknown struct 'NonExistent'")
     ));
 }
+
+//
+// ─── Cycles ───
+//
 
 #[test]
 fn struct_cycle_direct_rejected() {
@@ -76,20 +99,9 @@ fn struct_cycle_indirect_rejected() {
     ));
 }
 
-#[test]
-fn struct_id_field_is_arbitrary() {
-    // Unlike objects, structs have no special `id` field rule.
-    // A struct may have a field named `id` of any type, assigned to any value.
-    let src = r#"
-        mod test;
-
-        struct Receipt { id: u64, amount: u64 }
-
-        pub fn make(id: u64, amount: u64) -> Receipt { Receipt { id: id, amount: amount } }
-        pub fn get_id(r: Receipt) -> u64 { r.id }
-    "#;
-    assert!(utils::compile(src).is_ok());
-}
+//
+// ─── Destructuring ───
+//
 
 #[test]
 fn struct_destructuring_compiles() {

@@ -8,7 +8,7 @@ use meow_vm_types::{
     address::Address,
     config::{CompilerConfig, VmConfig},
     module::Module,
-    natives::{NativeFnEntry, NativeResult, NativeSig},
+    natives::{NativeFnEntry, NativeParam, NativeResult, NativeSig},
     types::Value,
 };
 
@@ -102,7 +102,7 @@ pub fn run(source: &str, fn_name: &str, args: Vec<Value>) -> Option<Value> {
 pub fn consume_native(name: &str) -> NativeFnEntry {
     NativeFnEntry {
         name: name.to_string(),
-        params: vec![None], // any struct
+        params: vec![NativeParam::AnyStruct],
         return_type: None,
         gas_cost: 1,
         func: Box::new(|_| NativeResult::Return(None)),

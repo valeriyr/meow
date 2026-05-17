@@ -1,15 +1,25 @@
+//! Bytecode verifier for Meow VM modules.
+//!
+//! Validates a compiled [`Module`] before it is stored on-chain, catching
+//! malformed bytecode that the compiler would never emit but that a malicious
+//! publisher could craft by hand.
+//!
+//! Call [`verify`] with the module, its transitive dependency map, the
+//! adapter-supplied native signatures, and the active [`CompilerConfig`].
+//! It returns `Ok(())` when the module is safe to execute, or a non-empty
+//! `Err(Vec<VerificationError>)` listing every problem found.
+
 use std::collections::HashMap;
 
 use meow_vm_types::{address::Address, config::CompilerConfig, module::Module};
 
 pub mod error;
-pub mod natives;
 
 mod abstract_interpretation;
 mod structural;
 
 pub use error::VerificationError;
-pub use natives::{NativeParam, NativeSignature, builtin_natives};
+pub use meow_vm_types::natives::{NativeParam, NativeSig, builtin_natives};
 
 /// Run language-level bytecode verification on `module`.
 ///
@@ -22,19 +32,19 @@ pub use natives::{NativeParam, NativeSignature, builtin_natives};
 ///    struct move semantics (linearity), return type matching, and native call
 ///    argument types.
 ///
-/// `natives` should contain adapter-supplied natives (`meow_vm_transfer`,
-/// `meow_vm_destroy`, `meow_vm_sender`, etc.). Language built-ins (`meow_vm_abort`)
-/// are always merged in automatically — callers do not need to include them.
+/// `natives` should contain the adapter-supplied native signatures. Language
+/// built-ins (`meow_vm_abort`) are always merged in automatically — callers do
+/// not need to include them.
 ///
 /// Adapter-level rules (object layout, ID freshness) are enforced separately
 /// and must not be checked here.
 pub fn verify(
     module: &Module,
     deps: &HashMap<Address, &Module>,
-    natives: &[NativeSignature],
+    natives: &[NativeSig],
     config: &CompilerConfig,
 ) -> Result<(), Vec<VerificationError>> {
-    let all_natives: Vec<NativeSignature> = builtin_natives()
+    let all_natives: Vec<NativeSig> = builtin_natives()
         .into_iter()
         .chain(natives.iter().cloned())
         .collect();

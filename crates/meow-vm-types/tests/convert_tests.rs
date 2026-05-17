@@ -106,7 +106,7 @@ fn round_trip_with_address_newtype() {
 // ─── VmTypeNames — type-name translation ───
 //
 
-// Simulates a struct from another module (e.g. `meow_object::Id`).
+// Simulates a struct from another module with a qualified type name.
 // Its Serialize impl uses the short local name "ObjectId".
 #[derive(Serialize)]
 struct ObjectId {
@@ -210,22 +210,6 @@ fn round_trip_struct() {
 }
 
 #[test]
-fn unsupported_type_returns_error() {
-    #[derive(Serialize)]
-    struct WithSeq {
-        items: Vec<u64>,
-    }
-    impl VmTypeNames for WithSeq {}
-    let v = WithSeq {
-        items: vec![1, 2, 3],
-    };
-    assert!(matches!(
-        struct_from_rust(&v).unwrap_err(),
-        ConversionError::UnsupportedType(ref msg) if msg == "seq"
-    ));
-}
-
-#[test]
 fn struct_from_rust_accepts_any_first_field() {
     // Layout constraints (id: address first) are adapter-level, not enforced here.
     #[derive(Serialize)]
@@ -250,6 +234,22 @@ fn struct_from_rust_accepts_empty_struct() {
     assert!(matches!(
         struct_from_rust(&v).unwrap(),
         meow_vm_types::types::Value::Struct { .. }
+    ));
+}
+
+#[test]
+fn unsupported_type_returns_error() {
+    #[derive(Serialize)]
+    struct WithSeq {
+        items: Vec<u64>,
+    }
+    impl VmTypeNames for WithSeq {}
+    let v = WithSeq {
+        items: vec![1, 2, 3],
+    };
+    assert!(matches!(
+        struct_from_rust(&v).unwrap_err(),
+        ConversionError::UnsupportedType(ref msg) if msg == "seq"
     ));
 }
 

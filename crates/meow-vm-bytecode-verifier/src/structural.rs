@@ -28,6 +28,34 @@ pub(crate) fn check_module(
         });
     }
 
+    // Module-level count limits
+    let struct_count = module.structs.len();
+    let struct_limit = cfg.max_structs();
+    if struct_count > struct_limit {
+        errors.push(VerificationError::TooManyStructs {
+            count: struct_count,
+            limit: struct_limit,
+        });
+    }
+
+    let fn_count = module.functions.len();
+    let fn_limit = cfg.max_functions();
+    if fn_count > fn_limit {
+        errors.push(VerificationError::TooManyFunctions {
+            count: fn_count,
+            limit: fn_limit,
+        });
+    }
+
+    let import_count = module.imports.len();
+    let import_limit = cfg.max_imports();
+    if import_count > import_limit {
+        errors.push(VerificationError::TooManyImports {
+            count: import_count,
+            limit: import_limit,
+        });
+    }
+
     // Duplicate struct names
     let mut seen_structs = HashSet::new();
     for s in &module.structs {
@@ -42,6 +70,17 @@ pub(crate) fn check_module(
                 name: s.name.clone(),
             });
         }
+        // Field count limit
+        let field_count = s.fields.len();
+        let field_limit = cfg.max_fields();
+        if field_count > field_limit {
+            errors.push(VerificationError::TooManyFields {
+                struct_name: s.name.clone(),
+                count: field_count,
+                limit: field_limit,
+            });
+        }
+
         // Field shape rules
         for field in &s.fields {
             if !is_valid_identifier(&field.name, cfg) {
@@ -56,7 +95,9 @@ pub(crate) fn check_module(
     // Duplicate function names
     let mut seen_fns = HashSet::new();
     for f in &module.functions {
-        if !is_valid_identifier(&f.name, cfg) || RESERVED_FUNCTION_NAMES.contains(&f.name.as_str())
+        if !is_valid_identifier(&f.name, cfg)
+            || RESERVED_FUNCTION_NAMES.contains(&f.name.as_str())
+            || cfg.reserved_function_names().iter().any(|n| n == &f.name)
         {
             errors.push(VerificationError::InvalidIdentifier {
                 name: f.name.clone(),
@@ -88,6 +129,38 @@ pub(crate) fn check_module(
                 function: f.name.clone(),
                 local_count: f.local_count,
                 param_count: f.params.len(),
+            });
+        }
+
+        // Parameter count limit
+        let param_count = f.params.len();
+        let param_limit = cfg.max_params() as usize;
+        if param_count > param_limit {
+            errors.push(VerificationError::TooManyParams {
+                function: f.name.clone(),
+                count: param_count,
+                limit: param_limit,
+            });
+        }
+
+        // Function code size limit
+        let code_size = f.code.len();
+        let code_limit = cfg.max_fun_code_size();
+        if code_size > code_limit {
+            errors.push(VerificationError::FunctionTooLarge {
+                function: f.name.clone(),
+                count: code_size,
+                limit: code_limit,
+            });
+        }
+
+        // Local variable count limit
+        let local_limit = cfg.max_locals();
+        if f.local_count > local_limit {
+            errors.push(VerificationError::TooManyLocals {
+                function: f.name.clone(),
+                count: f.local_count,
+                limit: local_limit,
             });
         }
 
@@ -151,7 +224,7 @@ pub(crate) fn check_module(
                         // Local struct: must exist and field list must match
                         match module.get_struct(type_name) {
                             None => {
-                                errors.push(VerificationError::UnknownStructType {
+                                errors.push(VerificationError::UndefinedStructType {
                                     function: f.name.clone(),
                                     pc,
                                     type_name: type_name.clone(),
@@ -211,7 +284,7 @@ pub(crate) fn check_module(
                     } else {
                         match module.get_struct(type_name) {
                             None => {
-                                errors.push(VerificationError::UnknownStructType {
+                                errors.push(VerificationError::UndefinedStructType {
                                     function: f.name.clone(),
                                     pc,
                                     type_name: type_name.clone(),

@@ -13,6 +13,7 @@ fn arithmetic_and_return_passes() {
     let module = compile(
         r#"
         mod m;
+
         fn compute(a: u64, b: u64) -> u64 {
             let c = a + b;
             c * 2
@@ -23,12 +24,13 @@ fn arithmetic_and_return_passes() {
 }
 
 #[test]
-fn native_sender_call_passes() {
+fn native_returning_address_passes() {
     let module = compile(
         r#"
         mod m;
-        fn get_sender() -> address {
-            meow_vm_sender()
+
+        fn get_addr() -> address {
+            addr_native()
         }
     "#,
     );
@@ -36,12 +38,13 @@ fn native_sender_call_passes() {
 }
 
 #[test]
-fn native_rand_call_passes() {
+fn native_returning_u64_passes() {
     let module = compile(
         r#"
         mod m;
-        fn get_rand() -> u64 {
-            meow_vm_rand()
+
+        fn get_num() -> u64 {
+            u64_native()
         }
     "#,
     );
@@ -57,6 +60,7 @@ fn not_on_bool_passes() {
     let module = compile(
         r#"
         mod m;
+
         fn f(x: bool) -> bool { !x }
     "#,
     );
@@ -68,6 +72,7 @@ fn not_on_non_bool_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> bool { true }
     "#,
     );
@@ -90,6 +95,7 @@ fn not_on_empty_stack_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> bool { true }
     "#,
     );
@@ -112,6 +118,7 @@ fn add_bool_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -135,6 +142,7 @@ fn compare_mismatched_types_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> bool { true }
     "#,
     );
@@ -162,6 +170,7 @@ fn stack_underflow_on_add() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -184,6 +193,7 @@ fn stack_underflow_on_pop() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -210,6 +220,7 @@ fn wrong_return_type_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -228,6 +239,7 @@ fn missing_return_detected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -250,6 +262,7 @@ fn call_unknown_function_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -275,8 +288,10 @@ fn unpack_wrong_struct_type_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         struct Point { x: u64, y: u64 }
         struct Coin { balance: u64 }
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -315,6 +330,7 @@ fn native_wrong_arg_count_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
@@ -337,6 +353,7 @@ fn native_wrong_arg_type_rejected() {
     let mut module = compile(
         r#"
         mod m;
+
         fn f() -> u64 { 1 }
     "#,
     );
