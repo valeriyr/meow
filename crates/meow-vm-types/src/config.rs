@@ -1,3 +1,8 @@
+//! Configurable limits for the compiler and VM.
+//!
+//! Centralising these limits ensures all pipeline stages enforce the same bounds
+//! and cannot diverge from each other.
+
 //
 // ─── Compiler configuration ───
 //

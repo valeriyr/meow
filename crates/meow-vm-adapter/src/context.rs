@@ -1,4 +1,10 @@
-use meow_types::{address::Address, digest::Digest, system_framework::meow_object::object_id};
+//! Per-transaction side-effect accumulator shared with native functions during VM execution.
+//!
+//! Native functions cannot return side-effects directly — instead they write into this context
+//! (transfers, destroys, freshly created IDs), which is inspected after execution to build
+//! the final result.
+
+use meow_types::{address::Address, digest::Digest, system_framework::meow_object};
 use meow_vm_types::types::Value;
 use rand::{RngCore, SeedableRng, rngs::StdRng};
 
@@ -39,22 +45,22 @@ impl Context {
         }
     }
 
-    /// Get the sender address.
+    /// Returns the sender address.
     pub fn sender(&self) -> Address {
         self.sender
     }
 
-    /// Get the list of fresh IDs generated during execution.
+    /// Returns the list of fresh IDs generated during execution.
     pub fn fresh_ids(&self) -> &[Address] {
         &self.fresh_ids
     }
 
-    /// Get the list of transferred objects and their new owners.
+    /// Returns the list of transferred objects and their new owners.
     pub fn transfers(&self) -> &[(Value, Address)] {
         &self.transfers
     }
 
-    /// Get the IDs of destroyed objects.
+    /// Returns the IDs of destroyed objects.
     pub fn destroyed(&self) -> &[Address] {
         &self.destroyed
     }
@@ -72,7 +78,7 @@ impl Context {
     /// Record an object transfer to a new owner.
     pub fn transfer(&mut self, obj: Value, new_owner: Address) {
         debug_assert!(
-            object_id(&obj).is_some(),
+            meow_object::object_address(&obj).is_some(),
             "Only object values can be transferred"
         );
         self.transfers.push((obj, new_owner));
@@ -83,7 +89,7 @@ impl Context {
         self.destroyed.push(id);
     }
 
-    /// Get the next pseudo-random `u64` from the transaction's RNG sequence.
+    /// Returns the next pseudo-random `u64` from the transaction's RNG sequence.
     pub fn next_rand(&mut self) -> u64 {
         self.random_generator.next_u64()
     }

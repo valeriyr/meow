@@ -1,3 +1,9 @@
+//! On-chain object: the fundamental unit of state in Meow.
+//!
+//! Every piece of persistent state — user assets, modules, the gas coin — is an object.
+//! Objects carry an owner, a monotonically increasing version number, and opaque BCS content
+//! whose shape is defined by the module that created them.
+
 pub mod object_conversion;
 pub mod object_decl_ref;
 pub mod object_owner;

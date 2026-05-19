@@ -1,3 +1,5 @@
+//! Compiled module representation: the in-memory form of a Meow module after compilation.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{

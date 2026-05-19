@@ -1,12 +1,9 @@
 use std::str::FromStr;
 
+use meow_framework::{MEOW_COIN_MODULE_PATH, MEOW_OBJECT_MODULE_PATH};
 use meow_types::{
-    address::Address,
-    config::NATIVE_FUNCTION_NAMES,
-    system_framework::{
-        meow_coin::MEOW_COIN_MODULE_PATH,
-        meow_object::{MEOW_OBJECT_MODULE_ADDRESS, MEOW_OBJECT_MODULE_PATH},
-    },
+    address::Address, config::NATIVE_FUNCTION_NAMES,
+    system_framework::meow_object::MEOW_OBJECT_MODULE_ADDRESS,
 };
 use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
 use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
@@ -45,6 +42,7 @@ fn build_module_successful() {
 fn build_module_name_comes_from_source_declaration() {
     let src = r#"
         mod my_module;
+
         fn noop() {}
     "#;
     let module = builder::build(src, &[]).unwrap();
@@ -73,6 +71,7 @@ fn build_from_file_with_dep_successful() {
     let dep = builder::build(
         r#"
             mod math;
+
             pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
@@ -84,7 +83,9 @@ fn build_from_file_with_dep_successful() {
         &path,
         r#"
             mod main;
+
             use math@0x42;
+
             fn run() -> u64 { math::add(1, 2) }
         "#,
     )
@@ -136,6 +137,7 @@ fn build_source_size_limit() {
 fn extract_module_deps_returns_empty_for_no_deps() {
     let src = r#"
         mod main;
+
         fn noop() {}
     "#;
     assert!(builder::extract_module_deps(src).unwrap().is_empty());
@@ -167,7 +169,9 @@ fn extract_module_deps_returns_declared_imports_in_order() {
 fn extract_module_deps_with_alias_returns_some_alias() {
     let src = r#"
         mod main;
+
         use math@0x01 as m;
+
         fn noop() {}
     "#;
     let deps = builder::extract_module_deps(src).unwrap();
@@ -242,6 +246,7 @@ fn build_with_dep_cross_module_function_call() {
     let math = builder::build(
         r#"
             mod math;
+
             pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
@@ -276,7 +281,7 @@ fn build_with_dep_cross_module_struct() {
             pub struct Point { x: u64, y: u64 }
 
             pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
         &[],
     )
@@ -290,7 +295,7 @@ fn build_with_dep_cross_module_struct() {
 
             fn make_and_read() -> u64 {
                 let p = shapes::make_point(5, 9);
-                shapes::get_x(p)
+                shapes::to_x(p)
             }
         "#,
         &[(dep_addr, &shapes)],
@@ -305,7 +310,9 @@ fn build_with_declared_dep_not_provided_returns_error() {
     // Source declares `use math@0x01` but no dep module is provided.
     let src = r#"
         mod main;
+
         use math@0x01;
+
         fn run() -> u64 { math::add(1, 2) }
     "#;
     assert!(matches!(
@@ -321,6 +328,7 @@ fn build_with_extra_undeclared_dep_is_accepted() {
     let extra = builder::build(
         r#"
             mod extra;
+
             fn noop() {}
         "#,
         &[],
@@ -330,6 +338,7 @@ fn build_with_extra_undeclared_dep_is_accepted() {
     let module = builder::build(
         r#"
             mod main;
+
             fn run() -> u64 { 1 }
         "#,
         &[(dep_addr, &extra)],
@@ -352,6 +361,7 @@ fn defining_adapter_native_function_name_is_rejected() {
         let src = format!(
             r#"
                 mod test;
+
                 fn {name}() {{}}
             "#
         );

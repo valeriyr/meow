@@ -1,3 +1,8 @@
+//! Post-execution side-effect collection and result assembly.
+//!
+//! Inspects the execution context after the VM call returns — transferred objects
+//! and destroyed IDs — and assembles the final `ExecutionResult`.
+
 use std::collections::{BTreeSet, HashMap};
 
 use meow_types::{
@@ -9,7 +14,6 @@ use meow_types::{
     },
     system_framework::meow_object,
 };
-use meow_vm::VmCallResult;
 
 use crate::{context::Context, executor::versioning};
 
@@ -22,9 +26,7 @@ type ObjectEffects = (Vec<Object>, Vec<Object>, Vec<Object>);
 /// version. Newly created objects (from `meow_vm_fresh_id`) start at version 1.
 pub fn collect_object_effects(
     ctx: &Context,
-    call_result: &VmCallResult,
-    object_args: &[(usize, &Object)], // (arg_index, input_object)
-    module_address: &Address,
+    object_args: &[&Object],
     tx_digest: &Digest,
 ) -> std::result::Result<ObjectEffects, String> {
     let mut created_objects: Vec<Object> = Vec::new();
@@ -34,12 +36,11 @@ pub fn collect_object_effects(
     // Build a lookup from address → input object for version resolution.
     let input_by_addr: HashMap<Address, &Object> = object_args
         .iter()
-        .map(|(_, obj)| (*obj.address(), *obj))
+        .map(|obj| (*obj.address(), *obj))
         .collect();
 
     // Invariant: object_args must only contain address-owned non-module objects.
-    // Modules and immutable objects must be rejected earlier in resolve_arg.
-    object_args.iter().for_each(|(_, obj)| {
+    object_args.iter().for_each(|obj| {
         assert!(
             obj.owner().is_address_owned(),
             "only address-owned objects can be used as call arguments"
@@ -57,7 +58,7 @@ pub fn collect_object_effects(
     let transferred_ids: BTreeSet<Address> = ctx
         .transfers()
         .iter()
-        .filter_map(|(v, _)| meow_object::object_id(v))
+        .filter_map(|(v, _)| meow_object::object_address(v))
         .collect();
     let destroyed_ids: BTreeSet<Address> = ctx.destroyed().iter().copied().collect();
     let fresh_ids: BTreeSet<Address> = ctx.fresh_ids().iter().copied().collect();
@@ -70,15 +71,11 @@ pub fn collect_object_effects(
         }
     }
 
-    // Validate that all input objects are accounted for (transferred, destroyed, or surviving in their original slot).
-    for (arg_idx, input_obj) in object_args {
+    // Validate that all input objects are accounted for (transferred or destroyed).
+    // The compiler guarantees struct params are consumed; this is a runtime defence check.
+    for input_obj in object_args {
         let id = input_obj.address();
-        let surviving = call_result
-            .final_args
-            .get(*arg_idx)
-            .is_some_and(|v| v.is_some());
-        let accounted = transferred_ids.contains(id) || destroyed_ids.contains(id) || surviving;
-        if !accounted {
+        if !transferred_ids.contains(id) && !destroyed_ids.contains(id) {
             return Err(format!("input object not accounted for: {id}"));
         }
     }
@@ -86,15 +83,16 @@ pub fn collect_object_effects(
     // Collect transferred objects.
     for (obj_val, owner) in ctx.transfers() {
         let id: Address =
-            meow_object::object_id(obj_val).expect("transferred object must have an ID");
+            meow_object::object_address(obj_val).expect("transferred object must have an address");
 
-        let (version, is_fresh) = if fresh_ids.contains(&id) {
-            (ObjectVersion::ONE, true)
+        let is_fresh = fresh_ids.contains(&id);
+        let version = if is_fresh {
+            ObjectVersion::ONE
         } else {
             let original = input_by_addr
                 .get(&id)
                 .expect("all transferred objects must be found in inputs");
-            (versioning::bump_version(original), false)
+            versioning::bump_version(original)
         };
 
         let obj = object_conversion::vm_object_value_to_object(
@@ -102,7 +100,6 @@ pub fn collect_object_effects(
             ObjectOwner::Address(*owner),
             *tx_digest,
             version,
-            module_address,
         )
         .expect("failed to convert VM object value to object");
 
@@ -115,7 +112,6 @@ pub fn collect_object_effects(
 
     // Collect destroyed objects.
     for id in ctx.destroyed() {
-        // If object was created and destroyed in the same execution session, it should not appear in the destroyed list — skip it.
         if !fresh_ids.contains(id) {
             let original = input_by_addr
                 .get(id)
@@ -131,35 +127,6 @@ pub fn collect_object_effects(
                 original.content().to_vec(),
             ));
         }
-    }
-
-    // Collect surviving input objects (those not consumed by transfer/destroy).
-    for (arg_idx, input_obj) in object_args {
-        let final_val = match call_result.final_args.get(*arg_idx) {
-            Some(Some(v)) => v,
-            _ => continue, // consumed (moved to transfer/destroy)
-        };
-
-        let id: Address =
-            meow_object::object_id(final_val).expect("surviving object must have an ID");
-
-        // Skip if already handled as a transferred input.
-        if transferred_ids.contains(&id) || destroyed_ids.contains(&id) {
-            continue;
-        }
-
-        let version = versioning::bump_version(input_obj);
-
-        changed_objects.push(
-            object_conversion::vm_object_value_to_object(
-                final_val,
-                *input_obj.owner(),
-                *tx_digest,
-                version,
-                module_address,
-            )
-            .expect("VM object value is expected to be convertible to object"),
-        );
     }
 
     Ok((created_objects, changed_objects, destroyed_objects))

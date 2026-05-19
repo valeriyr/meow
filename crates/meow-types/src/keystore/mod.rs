@@ -1,3 +1,8 @@
+//! Keystore for managing signing keys.
+//!
+//! Provides a common interface over an in-memory backend and a JSON file backend,
+//! so key management is decoupled from persistence details.
+
 pub mod error;
 
 mod file_based_keystore;

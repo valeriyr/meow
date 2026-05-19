@@ -1,8 +1,5 @@
-/// All errors the bytecode verifier can report.
-///
-/// Instruction-level variants carry the `function` name and a 0-based `pc`
-/// index for precise location reporting. Module-level variants (naming,
-/// counts) carry only the relevant name or count fields.
+//! Bytecode verifier error type, covering structural and type-safety violations.
+
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum VerificationError {
     //
@@ -205,6 +202,34 @@ pub enum VerificationError {
     //
     // ─── Struct linearity ───
     //
+    #[error(
+        "function '{function}' at pc {pc}: field '{field}' has struct type — LoadField on a struct-typed field is forbidden; use UnpackStruct to extract struct fields"
+    )]
+    StructTypedFieldLoaded {
+        function: String,
+        pc: usize,
+        field: String,
+    },
+
+    #[error(
+        "function '{function}' at pc {pc}: field '{field}' has struct type — StoreField into a struct-typed field is forbidden; the old value would be implicitly dropped"
+    )]
+    StructTypedFieldWritten {
+        function: String,
+        pc: usize,
+        field: String,
+    },
+
+    #[error(
+        "function '{function}' at pc {pc}: GetField on struct '{type_name}' would silently drop linear field '{linear_field}' — use UnpackStruct to consume all fields explicitly"
+    )]
+    GetFieldDropsLinearField {
+        function: String,
+        pc: usize,
+        type_name: String,
+        linear_field: String,
+    },
+
     #[error("function '{function}' at pc {pc}: use-after-move of struct in slot {slot}")]
     UseAfterMove {
         function: String,

@@ -1,3 +1,8 @@
+//! Chain-level size and count limits.
+//!
+//! Centralising these constants ensures all pipeline stages enforce the same maximums,
+//! so a transaction accepted by one stage cannot be rejected by another.
+
 pub mod error;
 
 use std::{fs, path::PathBuf};

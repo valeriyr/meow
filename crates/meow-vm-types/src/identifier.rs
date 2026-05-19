@@ -1,3 +1,5 @@
+//! Identifier validation and the set of reserved names the VM treats specially.
+
 use crate::config;
 
 /// Names reserved at the VM level — always injected by the VM regardless of

@@ -2,6 +2,10 @@ mod utils;
 
 use meow_vm_compiler::error::CompilerError;
 
+//
+// ─── Missing or empty module declaration ───
+//
+
 #[test]
 fn empty_source_rejected() {
     assert!(matches!(
@@ -17,6 +21,10 @@ fn missing_module_decl_rejected() {
         CompilerError::Message(msg) if msg.contains("mod NAME;")
     ));
 }
+
+//
+// ─── Duplicate or misplaced module declaration ───
+//
 
 #[test]
 fn duplicate_module_decl_rejected() {

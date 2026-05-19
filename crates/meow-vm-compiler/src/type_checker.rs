@@ -1,12 +1,15 @@
-//! Type checker: validates that all expressions, assignments, and function calls
-//! are type-correct before bytecode generation.
+//! Type checker pass that runs between parsing and bytecode generation.
 //!
-//! Works entirely with **source-level types** (as written in source, before bytecode
-//! address translation). Runs as a pass between function signature collection and codegen.
+//! Validates types at the source level — before module addresses are embedded into type names —
+//! so that error messages refer to the names the developer wrote, not bytecode-qualified paths.
+//! Running as a separate pass (rather than interleaved with codegen) means type errors are
+//! always reported completely, not cut off by the first code-generation failure.
 
 use std::{collections::HashMap, str::FromStr};
 
-use meow_vm_types::{address::Address, module::Module, natives::NativeParam, types::Type};
+use meow_vm_types::{
+    address::Address, module::Module, module_ref, natives::NativeParam, types::Type,
+};
 
 use crate::{
     NativeSig, Result,
@@ -95,7 +98,7 @@ impl<'m> TypeChecker<'m> {
 
             Expr::StructLit { name, fields } => {
                 // Cross-module construction: codegen handles visibility — skip type check.
-                if name.contains("::") {
+                if module_ref::is_qualified(name) {
                     return Ok(Some(Type::Struct(name.clone())));
                 }
 
@@ -151,9 +154,10 @@ impl<'m> TypeChecker<'m> {
                     }
                 };
 
-                // Cross-module: codegen handles privacy — return unknown type.
-                if struct_name.contains("::") {
-                    return Ok(None);
+                if module_ref::is_qualified(&struct_name) {
+                    return Err(self.type_err(format!(
+                        "fields of '{struct_name}' are private — use a public getter function to access them"
+                    )));
                 }
 
                 let info = self
@@ -398,7 +402,7 @@ impl<'m> TypeChecker<'m> {
                     };
 
                     // Cross-module: skip type check, codegen enforces privacy.
-                    if struct_name.contains("::") {
+                    if module_ref::is_qualified(&struct_name) {
                         self.expr_type(expr, locals)?;
                         return Ok(());
                     }
@@ -465,7 +469,7 @@ impl<'m> TypeChecker<'m> {
             } => {
                 let ty = self.require_typed(expr, locals, "struct destructuring")?;
                 // Verify expr produces the expected struct type (skip for cross-module types).
-                if !type_name.contains("::") {
+                if !module_ref::is_qualified(type_name) {
                     let expected = Type::Struct(type_name.clone());
                     self.expect_type(
                         &ty,
@@ -666,7 +670,7 @@ fn reverse_translate_type(ty: &Type, addr_to_dep: &HashMap<Address, String>) -> 
 /// `dep_name::StructName` so they match source-level qualified names in the caller.
 fn qualify_dep_local_type(ty: &Type, dep_name: &str, dep_module_struct_names: &[&str]) -> Type {
     match ty {
-        Type::Struct(name) if !name.contains("::") && !name.starts_with('@') => {
+        Type::Struct(name) if !module_ref::is_qualified(name) && !name.starts_with('@') => {
             if dep_module_struct_names.contains(&name.as_str()) {
                 Type::Struct(format!("{}::{}", dep_name, name))
             } else {

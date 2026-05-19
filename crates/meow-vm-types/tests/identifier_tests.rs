@@ -36,6 +36,10 @@ fn valid_identifier_with_digits() {
     assert!(is_valid_identifier("hello1_world2"));
 }
 
+//
+// ─── Identifier rejection tests ───
+//
+
 #[test]
 fn invalid_identifier_empty() {
     assert!(!is_valid_identifier(""));

@@ -1,3 +1,8 @@
+//! Block-level data injected before each transaction executes.
+//!
+//! The random seed is derived from the block hash and the timestamp from the block header,
+//! making both values deterministic for all validators replaying the same block.
+
 /// The type for the random seed.
 pub type RandSeed = [u8; 32];
 

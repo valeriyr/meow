@@ -1,3 +1,10 @@
+//! Transaction executor: bridges chain-level transactions to the VM.
+//!
+//! Takes a signed transaction and pre-resolved input objects, validates gas, sets up native
+//! functions with a shared execution context, runs the VM, and assembles the resulting created,
+//! changed, and destroyed objects into an `ExecutionResult`. Gas is always charged and the gas
+//! coin always appears in the output, even when execution fails.
+
 mod effects;
 mod gas;
 mod resolvers;
@@ -7,13 +14,12 @@ pub mod error;
 
 use std::{cell::RefCell, rc::Rc};
 
-use meow_types::system_framework::meow_object;
+use meow_types::system_framework::meow_coin::meow_coin_object;
 use meow_types::{
     address::Address,
     config::{self, MAX_BCS_SERIALIZED_MODULE_SIZE},
     digest::Digest,
     object::Object,
-    system_framework::meow_coin,
     transaction::{
         Transaction,
         call::Call,
@@ -22,11 +28,7 @@ use meow_types::{
     },
 };
 use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
-use meow_vm_types::{
-    config::VmConfig,
-    module::Module,
-    types::{StructDef, Type},
-};
+use meow_vm_types::{config::VmConfig, module::Module, types::Type};
 
 use crate::{
     bytecode_verifier, context::Context, executor::error::ExecutorError,
@@ -60,7 +62,7 @@ pub fn execute(
     let gas_coin = resolvers::resolve_gas_coin_object(transaction.gas_coin(), sender, &inputs)?;
 
     // The whole gas coin balance is used as the gas budget for the transaction.
-    let gas_budget = meow_coin::gas_meow_coin_balance(gas_coin)
+    let gas_budget = meow_coin_object::balance_from_object(gas_coin)
         .expect("it is expected to have a valid balance field in the gas coin object");
     let mut gas = GasMeter::new(gas_budget);
 
@@ -165,11 +167,11 @@ fn execute_meow_call(
     if func
         .return_type
         .as_ref()
-        .is_some_and(|rt| return_type_contains_object(rt, &module.structs))
+        .is_some_and(return_type_contains_struct)
     {
         return ExecutionResult::failure(
             format!(
-                "function '{fn_name}' returns an object and cannot be called directly from a transaction"
+                "function '{fn_name}' returns a struct and cannot be called directly from a transaction — structs must be consumed within the call"
             ),
             *tx_digest,
         );
@@ -190,11 +192,17 @@ fn execute_meow_call(
         external_context.timestamp(),
     )));
     let natives = natives::build_natives(ctx.clone());
-    let vm = Vm::new(module, natives, GasSchedule::default(), deps, vm_config);
+    let vm = Vm::new(
+        ((*module_address).into(), module),
+        natives,
+        GasSchedule::default(),
+        deps,
+        vm_config,
+    );
 
     // Execute the function.
-    let call_result = match vm.call(fn_name, vm_args, gas) {
-        Ok(r) => r,
+    match vm.call(fn_name, vm_args, gas) {
+        Ok(_) => {}
         Err(VmError::Aborted { message, .. }) => {
             return ExecutionResult::failure(message, *tx_digest);
         }
@@ -204,13 +212,7 @@ fn execute_meow_call(
     };
 
     // Collect object effects.
-    match effects::collect_object_effects(
-        &ctx.borrow(),
-        &call_result,
-        &object_args,
-        module_address,
-        tx_digest,
-    ) {
+    match effects::collect_object_effects(&ctx.borrow(), &object_args, tx_digest) {
         Ok((created, changed, destroyed)) => ExecutionResult::new(
             ExecutionStatus::Success,
             *tx_digest,
@@ -318,15 +320,15 @@ fn execute_meow_module_publish(
     )
 }
 
-/// Returns true if the given return type contains an object struct, directly or nested in a tuple.
-fn return_type_contains_object(ty: &Type, structs: &[StructDef]) -> bool {
+/// Returns true if the given return type is or contains a struct, directly or nested in a tuple.
+///
+/// Any struct in a transaction return type would be silently discarded by the adapter, violating
+/// the language's struct-consumption guarantee. Objects are also structs, so this check subsumes
+/// the old object-only check.
+fn return_type_contains_struct(ty: &Type) -> bool {
     match ty {
-        Type::Struct(name) => structs
-            .iter()
-            .any(|s| s.name == *name && meow_object::is_object_struct(s)),
-        Type::Tuple(types) => types
-            .iter()
-            .any(|t| return_type_contains_object(t, structs)),
+        Type::Struct(_) => true,
+        Type::Tuple(types) => types.iter().any(return_type_contains_struct),
         _ => false,
     }
 }

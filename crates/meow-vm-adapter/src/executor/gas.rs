@@ -1,5 +1,9 @@
+//! Gas accounting for transaction execution.
+//!
+//! Deducts the gas cost from the gas coin and records the updated coin in the result.
+
 use meow_types::{
-    digest::Digest, object::Object, system_framework::meow_coin,
+    digest::Digest, object::Object, system_framework::meow_coin::meow_coin_object,
     transaction::execution_result::ExecutionResult,
 };
 
@@ -15,7 +19,7 @@ pub fn apply_gas_spending(
     gas_spent: u64,
     tx_digest: &Digest,
 ) -> ExecutionResult {
-    let updated_content = meow_coin::deduct_gas_coin_balance(gas_coin, gas_spent)
+    let updated_content = meow_coin_object::deduct_gas(gas_coin, gas_spent)
         .expect("gas coin content must be deductible");
 
     let new_version = versioning::bump_version(gas_coin);

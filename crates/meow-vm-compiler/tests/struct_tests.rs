@@ -41,7 +41,7 @@ fn struct_id_field_is_arbitrary() {
         struct Receipt { id: u64, amount: u64 }
 
         pub fn make(id: u64, amount: u64) -> Receipt { Receipt { id: id, amount: amount } }
-        pub fn get_id(r: Receipt) -> u64 { r.id }
+        pub fn to_id(r: Receipt) -> u64 { let Receipt { id, .. } = r; id }
     "#;
     assert!(utils::compile(src).is_ok());
 }
@@ -96,6 +96,110 @@ fn struct_cycle_indirect_rejected() {
     assert!(matches!(
         utils::compile(src).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("cycle")
+    ));
+}
+
+//
+// ─── Move semantics (linearity) ───
+//
+
+#[test]
+fn struct_typed_field_read_rejected() {
+    // `let b = outer.inner;` where `inner: Inner` — struct-typed field access is forbidden.
+    // Structs have move semantics; use destructuring to extract struct-typed fields.
+    let src = r#"
+        mod test;
+
+        struct Inner { value: u64 }
+        struct Outer { inner: Inner, amount: u64 }
+
+        pub fn bad(o: Outer) -> u64 {
+            let b = o.inner;
+            let Inner { value } = b;
+            value
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("struct type") && msg.contains("inner")
+    ));
+}
+
+#[test]
+fn struct_typed_field_write_rejected() {
+    // `outer.inner = new_inner;` — writing a struct into a struct-typed field is forbidden.
+    // The old field value would be implicitly dropped, violating linearity.
+    let src = r#"
+        mod test;
+
+        struct Inner { value: u64 }
+        struct Outer { inner: Inner, amount: u64 }
+
+        pub fn bad(o: Outer) -> Outer {
+            let new_inner = Inner { value: 99 };
+            o.inner = new_inner;
+            o
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("move semantics") && msg.contains("inner")
+    ));
+}
+
+#[test]
+fn getfield_on_call_result_struct_typed_field_rejected() {
+    // make_outer().inner — GetField fallback path (root is a Call, not an Ident).
+    // The accessed field 'inner' has struct type — forbidden even via the fallback path.
+    let src = r#"
+        mod test;
+
+        struct Inner { value: u64 }
+        struct Outer { inner: Inner, amount: u64 }
+
+        fn make_outer() -> Outer { Outer { inner: Inner { value: 1 }, amount: 2 } }
+
+        pub fn bad() -> Inner { make_outer().inner }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("struct type") && msg.contains("inner")
+    ));
+}
+
+#[test]
+fn getfield_on_call_result_drops_linear_field_rejected() {
+    // make_outer().amount — result is u64 but inner: Inner would be silently dropped.
+    let src = r#"
+        mod test;
+
+        struct Inner { value: u64 }
+        struct Outer { inner: Inner, amount: u64 }
+
+        fn make_outer() -> Outer { Outer { inner: Inner { value: 1 }, amount: 2 } }
+
+        pub fn bad() -> u64 { make_outer().amount }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("inner") && msg.contains("dropped")
+    ));
+}
+
+#[test]
+fn struct_param_not_consumed_rejected() {
+    // A struct parameter that is never moved or destroyed must be rejected.
+    // Unconsumed struct params violate linearity — the value is silently lost.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        pub fn noop(tok: Token) {}
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("must be consumed") && msg.contains("tok")
     ));
 }
 

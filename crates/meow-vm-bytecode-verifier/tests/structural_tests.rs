@@ -1,5 +1,4 @@
 mod utils;
-use utils::*;
 
 use meow_vm_bytecode_verifier::VerificationError;
 use meow_vm_types::{
@@ -16,7 +15,7 @@ use meow_vm_types::{
 
 #[test]
 fn valid_module_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -25,12 +24,12 @@ fn valid_module_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn if_else_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -39,7 +38,7 @@ fn if_else_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 //
@@ -48,7 +47,7 @@ fn if_else_passes() {
 
 #[test]
 fn invalid_module_name_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod valid;
 
@@ -56,7 +55,7 @@ fn invalid_module_name_rejected() {
     "#,
     );
     module.name = "1invalid".to_string();
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::InvalidIdentifier { name, .. } if name == "1invalid"
@@ -65,7 +64,7 @@ fn invalid_module_name_rejected() {
 
 #[test]
 fn invalid_struct_name_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -75,7 +74,7 @@ fn invalid_struct_name_rejected() {
     "#,
     );
     module.structs[0].name = "bad-name".to_string();
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::InvalidIdentifier { .. }))
@@ -84,7 +83,7 @@ fn invalid_struct_name_rejected() {
 
 #[test]
 fn invalid_field_name_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -94,7 +93,7 @@ fn invalid_field_name_rejected() {
     "#,
     );
     module.structs[0].fields[0].name = "bad name".to_string();
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::InvalidIdentifier { .. }))
@@ -107,7 +106,7 @@ fn invalid_field_name_rejected() {
 
 #[test]
 fn duplicate_struct_name_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -118,7 +117,7 @@ fn duplicate_struct_name_rejected() {
     );
     let dup = module.structs[0].clone();
     module.structs.push(dup);
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::DuplicateStructName { name } if name == "S"
@@ -127,7 +126,7 @@ fn duplicate_struct_name_rejected() {
 
 #[test]
 fn duplicate_function_name_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -136,7 +135,7 @@ fn duplicate_function_name_rejected() {
     );
     let dup = module.functions[0].clone();
     module.functions.push(dup);
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::DuplicateFunctionName { name } if name == "f"
@@ -149,7 +148,7 @@ fn duplicate_function_name_rejected() {
 
 #[test]
 fn unknown_struct_type_in_new_struct_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -158,14 +157,14 @@ fn unknown_struct_type_in_new_struct_rejected() {
         fn make(v: u64) -> S { S { x: v } }
     "#,
     );
-    tamper(&mut module, "make", |code| {
+    utils::tamper(&mut module, "make", |code| {
         for instr in code.iter_mut() {
             if let Instruction::NewStruct { type_name, .. } = instr {
                 *type_name = "Ghost".to_string();
             }
         }
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -177,7 +176,7 @@ fn unknown_struct_type_in_new_struct_rejected() {
 
 #[test]
 fn new_struct_field_mismatch_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -186,14 +185,14 @@ fn new_struct_field_mismatch_rejected() {
         fn make(v: u64) -> S { S { x: v } }
     "#,
     );
-    tamper(&mut module, "make", |code| {
+    utils::tamper(&mut module, "make", |code| {
         for instr in code.iter_mut() {
             if let Instruction::NewStruct { field_names, .. } = instr {
                 *field_names = vec!["wrong_field".to_string()];
             }
         }
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -209,7 +208,7 @@ fn new_struct_field_mismatch_rejected() {
 
 #[test]
 fn local_count_too_small_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -217,7 +216,7 @@ fn local_count_too_small_rejected() {
     "#,
     );
     module.functions[0].local_count = 0;
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::LocalCountTooSmall { .. }))
@@ -226,17 +225,17 @@ fn local_count_too_small_rejected() {
 
 #[test]
 fn slot_out_of_range_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Load(5));
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::SlotOutOfRange { slot: 5, .. }))
@@ -249,17 +248,17 @@ fn slot_out_of_range_rejected() {
 
 #[test]
 fn backward_jump_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Jump(-1));
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::BackwardJump { .. }))
@@ -268,17 +267,17 @@ fn backward_jump_rejected() {
 
 #[test]
 fn jump_out_of_bounds_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Jump(10000));
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::JumpOutOfBounds { .. }))
@@ -290,19 +289,19 @@ fn jump_to_past_end_rejected() {
     // A reachable Jump(offset) with target == code_len escapes the function
     // without a Return, bypassing MissingReturn and UnconsumedObject checks.
     // The abstract interpreter must catch it via the pending[code_len] path.
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         // Replace code with just Jump(1), which lands at code_len = 1.
         // No Return follows — the MissingReturn must be detected.
         *code = vec![Instruction::Jump(1)];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::MissingReturn { .. })),
@@ -317,7 +316,7 @@ fn jump_to_past_end_rejected() {
 #[test]
 fn tuple_too_large_in_return_type_rejected() {
     let limit = CompilerConfig::default().max_tuple_elements();
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -325,10 +324,10 @@ fn tuple_too_large_in_return_type_rejected() {
     "#,
     );
     // Inject an oversized MakeTuple instruction directly.
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::MakeTuple(limit + 1), Instruction::Return];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::TupleTooLarge { .. })),
@@ -342,7 +341,7 @@ fn tuple_too_large_in_return_type_rejected() {
 
 #[test]
 fn too_many_structs_rejected() {
-    let mut module = compile(r#"mod m; struct S { x: u64 } fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; struct S { x: u64 } fn f() -> u64 { 1 }"#);
     module.structs.push(StructDef {
         name: "T".to_string(),
         fields: vec![],
@@ -359,7 +358,7 @@ fn too_many_structs_rejected() {
 
 #[test]
 fn too_many_functions_rejected() {
-    let mut module = compile(r#"mod m; fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; fn f() -> u64 { 1 }"#);
     let dup = Function {
         name: "g".to_string(),
         ..module.functions[0].clone()
@@ -382,7 +381,7 @@ fn too_many_functions_rejected() {
 
 #[test]
 fn too_many_fields_rejected() {
-    let mut module = compile(r#"mod m; struct S { x: u64 } fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; struct S { x: u64 } fn f() -> u64 { 1 }"#);
     module.structs[0].fields.push(FieldDef {
         name: "y".to_string(),
         ty: Type::U64,
@@ -405,7 +404,7 @@ fn too_many_fields_rejected() {
 
 #[test]
 fn too_many_params_rejected() {
-    let mut module = compile(r#"mod m; fn f(a: u64) -> u64 { a }"#);
+    let mut module = utils::compile(r#"mod m; fn f(a: u64) -> u64 { a }"#);
     module.functions[0]
         .params
         .push(("b".to_string(), Type::U64));
@@ -424,7 +423,7 @@ fn too_many_params_rejected() {
 
 #[test]
 fn function_too_large_rejected() {
-    let module = compile(r#"mod m; fn f() -> u64 { 1 }"#);
+    let module = utils::compile(r#"mod m; fn f() -> u64 { 1 }"#);
     let cfg = CompilerConfig::default().with_max_fun_code_size(1);
     let errs = verify_errors_cfg(&module, cfg);
     assert!(
@@ -439,7 +438,7 @@ fn function_too_large_rejected() {
 
 #[test]
 fn too_many_locals_rejected() {
-    let mut module = compile(r#"mod m; fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; fn f() -> u64 { 1 }"#);
     module.functions[0].local_count = 5;
     let cfg = CompilerConfig::default().with_max_locals(4);
     let errs = verify_errors_cfg(&module, cfg);
@@ -459,7 +458,7 @@ fn too_many_locals_rejected() {
 
 #[test]
 fn too_many_imports_rejected() {
-    let mut module = compile(r#"mod m; fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; fn f() -> u64 { 1 }"#);
     module.imports.push(Address::from([1u8; 32]));
     module.imports.push(Address::from([2u8; 32]));
     let cfg = CompilerConfig::default().with_max_imports(1);
@@ -477,7 +476,7 @@ fn too_many_imports_rejected() {
 
 #[test]
 fn config_reserved_function_name_rejected() {
-    let mut module = compile(r#"mod m; fn f() -> u64 { 1 }"#);
+    let mut module = utils::compile(r#"mod m; fn f() -> u64 { 1 }"#);
     module.functions[0].name = "my_native".to_string();
     let cfg = CompilerConfig::default().with_reserved_function_names(&["my_native"]);
     let errs = verify_errors_cfg(&module, cfg);
@@ -498,6 +497,6 @@ fn verify_errors_cfg(
     module: &meow_vm_types::module::Module,
     cfg: CompilerConfig,
 ) -> Vec<VerificationError> {
-    meow_vm_bytecode_verifier::verify(module, &no_deps(), &[], &cfg)
+    meow_vm_bytecode_verifier::verify(module, &utils::no_deps(), &[], &cfg)
         .expect_err("expected verification errors but verification passed")
 }

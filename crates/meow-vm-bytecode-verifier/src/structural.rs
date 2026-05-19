@@ -1,3 +1,8 @@
+//! Phase 1 of bytecode verification: purely syntactic checks that need no stack state.
+//!
+//! Runs before abstract interpretation because it is cheaper and its errors are independent
+//! of type information. If Phase 1 finds errors, Phase 2 is skipped entirely.
+
 use std::collections::{HashMap, HashSet};
 
 use meow_vm_types::module_ref;

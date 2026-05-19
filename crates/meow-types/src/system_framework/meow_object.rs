@@ -1,23 +1,17 @@
 use meow_vm_types::{
-    convert,
+    convert::{self, VmTypeNames, struct_from_rust},
     types::{StructDef, Type, Value},
 };
 use serde::{Deserialize, Serialize};
 
 use crate::{address::Address, system_framework::utils};
 
-/// The meow object module address is a reserved address where the meow object module is deployed.
+/// The `meow_object` module address is a reserved address where the `meow_object` module is deployed.
 pub const MEOW_OBJECT_MODULE_ADDRESS: Address = utils::builtin_address(0x01);
-/// The meow object module name.
+/// The `meow_object` module name.
 pub const MEOW_OBJECT_MODULE_NAME: &str = "meow_object";
-/// The meow object id struct name.
+/// The `meow_object::Id` struct name.
 pub const MEOW_OBJECT_ID_OBJECT_NAME: &str = "Id";
-
-/// The MEOW object module file path.
-pub const MEOW_OBJECT_MODULE_PATH: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../meow-framework/modules/meow_object.meow"
-);
 
 /// The name of the object identity field required as the first field of every object struct.
 pub const MEOW_OBJECT_ID_FIELD_NAME: &str = "id";
@@ -30,7 +24,7 @@ pub const MEOW_OBJECT_ID_FIELD_NAME: &str = "id";
 pub const MEOW_OBJECT_ID_BYTECODE_TYPE_NAME: &str =
     "@0x0000000000000000000000000000000000000000000000000000000000000001::Id";
 
-/// The MeowObjectId struct represents a unique object id.
+/// The `MeowObjectId` struct represents a unique object id.
 #[derive(Serialize, Deserialize)]
 pub struct MeowObjectId {
     /// The unique on-chain object identifier represented as an address.
@@ -38,22 +32,26 @@ pub struct MeowObjectId {
 }
 
 impl MeowObjectId {
-    /// Creates a new MeowObjectId with the given id.
+    /// Creates a new `MeowObjectId` with the given id.
     pub fn new(id: Address) -> Self {
         Self { inner: id }
     }
 
-    /// Returns the inner address the MeowObjectId.
+    /// Returns the inner address of the `MeowObjectId`.
     pub fn inner(&self) -> &Address {
         &self.inner
     }
+}
 
-    /// Convert to fully qualified VM [`Value::Struct`] representation used in bytecode.
-    pub fn to_qualified_vm_value(&self) -> Value {
-        Value::Struct {
-            type_name: MEOW_OBJECT_ID_BYTECODE_TYPE_NAME.to_string(),
-            fields: vec![("inner".to_string(), Value::Address(self.inner.into()))],
-        }
+impl From<MeowObjectId> for Value {
+    fn from(id: MeowObjectId) -> Self {
+        struct_from_rust(&id).expect("MeowObjectId must convert to Value")
+    }
+}
+
+impl VmTypeNames for MeowObjectId {
+    fn type_names() -> &'static [(&'static str, &'static str)] {
+        &[(stringify!(MeowObjectId), MEOW_OBJECT_ID_BYTECODE_TYPE_NAME)]
     }
 }
 
@@ -82,20 +80,10 @@ pub fn is_object_struct(s: &StructDef) -> bool {
 ///
 /// Handles one format:
 /// - `id: meow_object::Id { inner: address }` — production format introduced with the
-///   meow_object module; address extracted from the `inner` field.
-pub fn object_id(value: &Value) -> Option<Address> {
-    match value {
-        Value::Struct { fields, .. } => fields
-            .iter()
-            .find(|(name, _)| name == MEOW_OBJECT_ID_FIELD_NAME)
-            .and_then(|(_, v)| {
-                let id = convert::value_to_rust::<MeowObjectId>(v);
-
-                match id {
-                    Ok(id) => Some(*id.inner()),
-                    Err(_) => None,
-                }
-            }),
-        _ => None,
-    }
+///   `meow_object` module; address extracted from the `inner` field.
+pub fn object_address(value: &Value) -> Option<Address> {
+    let id_val = value.field(MEOW_OBJECT_ID_FIELD_NAME)?;
+    convert::value_to_rust::<MeowObjectId>(id_val)
+        .ok()
+        .map(|id| *id.inner())
 }

@@ -1,3 +1,5 @@
+//! Error type for adapter-level bytecode verification.
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, thiserror::Error)]
 pub enum BytecodeVerifierError {
@@ -17,14 +19,5 @@ pub enum BytecodeVerifierError {
         struct_name: String,
         field_name: String,
         object_type: String,
-    },
-
-    #[error(
-        "in '{function}' at pc {pc}: '{object}' id field is immutable — object id fields cannot be mutated"
-    )]
-    ObjectIdFieldMutated {
-        function: String,
-        pc: usize,
-        object: String,
     },
 }

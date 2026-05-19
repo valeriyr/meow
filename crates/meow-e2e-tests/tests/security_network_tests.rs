@@ -5,7 +5,7 @@ use meow_genesis::Genesis;
 use meow_types::{
     address::Address,
     identifier::Identifier,
-    system_framework::meow_coin,
+    system_framework::meow_coin::{self, meow_coin_object},
     transaction::{
         SignedTransaction, Transaction, call::Call, execution_result::ExecutionStatus,
         input::Input, transaction_type::TransactionType,
@@ -81,7 +81,7 @@ async fn forged_sender_transaction_is_rejected() {
     test_utils::assert_tx_not_found_on_nodes(&[&node1, &node2, &node3], &tx_digest).await;
 
     let coin_after = test_utils::get_object(node1.client(), &coin_addr).await;
-    let balance_after = meow_coin::gas_meow_coin_balance(&coin_after).unwrap();
+    let balance_after = meow_coin_object::balance_from_object(&coin_after).unwrap();
     assert_eq!(
         balance_after, 10_000,
         "victim balance must be unchanged after spoofed transaction rejection"

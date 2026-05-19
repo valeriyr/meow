@@ -21,16 +21,16 @@ Source: [`crates/meow-vm-examples/modules/hero_game.meow`](../crates/meow-vm-exa
 
 ```bash
 # Check that the module compiles cleanly
-meow contract build hero.meow
+meow contract build hero_game.meow
 
 # Run spawn locally — no node needed
-meow contract run hero.meow spawn Thorin
+meow contract run hero_game.meow spawn Thorin
 ```
 
 To test `duel` or `retire` locally, the `Hero` objects must already be on-chain. Use the `0x<hex>` form (no `@`) so the CLI fetches them from the node:
 
 ```bash
-meow contract run hero.meow duel <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
+meow contract run hero_game.meow duel <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
 ```
 
 ## Publish on-chain
@@ -39,7 +39,7 @@ Publishing creates a module object on-chain. You need a running node and a funde
 
 ```bash
 # 1. Build and create the publish transaction
-meow transaction publish hero.meow --sender <YOUR_ADDRESS> --gas-coin <GAS_COIN_ADDRESS>
+meow transaction publish hero_game.meow --sender <YOUR_ADDRESS> --gas-coin <GAS_COIN_ADDRESS>
 
 # 2. Sign the output transaction
 meow transaction sign <BASE64_TRANSACTION>
@@ -110,7 +110,7 @@ meow transaction meow-call \
   <ATTACKER_HERO_ADDRESS> <DEFENDER_HERO_ADDRESS>
 ```
 
-After the duel both heroes survive in-place (neither is transferred nor destroyed), so the executor writes them back to the sender automatically with updated `experience` and `wins`.
+After the duel both heroes are explicitly transferred back to the transaction sender with their updated stats.
 
 ## Inspect the hero
 

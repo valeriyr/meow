@@ -1,3 +1,5 @@
+//! VM runtime error type.
+
 /// Errors that can occur during VM execution.
 #[derive(Debug, thiserror::Error)]
 pub enum VmError {
@@ -31,23 +33,18 @@ pub enum VmError {
     #[error("too many dependency modules (max {0})")]
     TooManyDepModules(usize),
 
-    /// Attempted to use a struct value after it was moved out of its slot.
     #[error("use after move: {0}")]
     UseAfterMove(String),
 
-    /// Execution was aborted by meow_vm_abort.
     #[error("aborted with code {code}: {message}")]
     Aborted { code: u64, message: String },
 
-    /// A native function returned an error (e.g. wrong argument type).
     #[error("native function error: {0}")]
     NativeError(String),
 
-    /// A private function was called from outside its module (e.g. directly from a transaction).
     #[error("function '{0}' is private — only `pub fn` can be called from outside the module")]
     PrivateFunction(String),
 
-    /// A native built-in was used as a direct call target (e.g. from a transaction).
     #[error("'{0}' is a native function and cannot be called directly from outside a contract")]
     NativeFunctionCallDirect(String),
 }

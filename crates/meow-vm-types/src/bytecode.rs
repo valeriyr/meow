@@ -1,3 +1,5 @@
+//! Bytecode instruction set executed by the Meow VM.
+
 use serde::{Deserialize, Serialize};
 
 use crate::address::Address;

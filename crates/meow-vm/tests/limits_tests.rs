@@ -1,13 +1,14 @@
+mod utils;
+
 use std::{collections::HashMap, str::FromStr};
 
-use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm::error::VmError;
+use meow_vm::gas_meter::GasMeter;
 use meow_vm_compiler::Compiler;
 use meow_vm_types::{
     address::Address,
     config::{CompilerConfig, VmConfig},
 };
-
-mod utils;
 
 //
 // ─── max_dep_modules ───
@@ -62,12 +63,10 @@ fn dep_count_at_limit_succeeds() {
     deps.insert(b_addr, b_module);
     deps.insert(c_addr, c_module);
 
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         main_module,
-        vec![],
-        GasSchedule::default(),
         deps,
-        VmConfig::default().with_max_dep_modules(2), // exactly 2 deps — at the limit
+        VmConfig::default().with_max_dep_modules(2),
     );
     let mut gas = GasMeter::unlimited();
     assert!(vm.call("run", vec![], &mut gas).is_ok());
@@ -122,12 +121,10 @@ fn dep_count_exceeding_limit_returns_error() {
     deps.insert(b_addr, b_module);
     deps.insert(c_addr, c_module);
 
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         main_module,
-        vec![],
-        GasSchedule::default(),
         deps,
-        VmConfig::default().with_max_dep_modules(1), // 2 deps provided, only 1 allowed
+        VmConfig::default().with_max_dep_modules(1),
     );
     let mut gas = GasMeter::unlimited();
     let err = vm.call("run", vec![], &mut gas).unwrap_err();
@@ -155,10 +152,8 @@ fn call_depth_at_limit_succeeds() {
     "#,
     );
 
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         module,
-        vec![],
-        GasSchedule::default(),
         HashMap::new(),
         VmConfig::default().with_max_call_depth(2),
     );
@@ -180,10 +175,8 @@ fn call_depth_exceeding_limit_returns_error() {
     "#,
     );
 
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         module,
-        vec![],
-        GasSchedule::default(),
         HashMap::new(),
         VmConfig::default().with_max_call_depth(1),
     );

@@ -1,3 +1,8 @@
+//! Compiles Meow source into a bytecode module ready for on-chain publishing.
+//!
+//! Enforces size limits on both the raw source and the serialized output so that publishing
+//! transactions stay within the bounds validators will accept.
+
 pub mod error;
 
 use std::{

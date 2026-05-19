@@ -31,9 +31,14 @@ impl FileBasedKeystore {
 
     /// Adds a key to the keystore.
     pub fn add_key(&mut self, keypair: KeyPair) -> Result<()> {
+        let address = keypair.public().into();
         self.inner.add_key(keypair)?;
-        // TODO: Should we remove the keypair from the store if the save fails?
-        self.save()
+        if let Err(e) = self.save() {
+            // Roll back the in-memory add so memory and disk stay in sync.
+            let _ = self.inner.remove_key(&address);
+            return Err(e);
+        }
+        Ok(())
     }
 
     /// Gets a key from the keystore.
@@ -43,10 +48,17 @@ impl FileBasedKeystore {
 
     /// Removes a key from the keystore.
     pub fn remove_key(&mut self, address: &Address) -> Result<Option<KeyPair>> {
-        let result = self.inner.remove_key(address)?;
-        // TODO: Should we add the keypair back if the save fails?
-        self.save()?;
-        Ok(result)
+        let removed = self.inner.remove_key(address)?;
+        match self.save() {
+            Ok(()) => Ok(removed),
+            Err(e) => {
+                // Roll back the in-memory remove so memory and disk stay in sync.
+                if let Some(keypair) = removed {
+                    let _ = self.inner.add_key(keypair);
+                }
+                Err(e)
+            }
+        }
     }
 
     /// Gets an iterator over the keys, sorted by address.

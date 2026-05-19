@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{fs, os::unix::fs::PermissionsExt, path::Path};
 
 use meow_types::{
     address::Address,
@@ -215,6 +215,73 @@ fn remove_key_from_file_based_keystore() {
         assert_eq!(keystore.get_key(&address1), Some(&keypair1));
         assert_eq!(keystore.get_key(&address2), None);
     }
+}
+
+// The two tests below verify that a failed disk write does not corrupt in-memory state.
+// They are Unix-only because they rely on file permission manipulation to force a write failure.
+
+#[cfg(unix)]
+#[test]
+fn add_key_save_failure_rolls_back_in_memory_state() {
+    let tmp_dir = TempDir::new().unwrap();
+    let keystore_file = tmp_dir.path().join("keystore.json");
+
+    let mut keystore = Keystore::file_based(&keystore_file).unwrap();
+    let (_, keypair1) = test_keypair1();
+    keystore.add_key(keypair1).unwrap();
+
+    // Make the file read-only to force a save failure on the next write.
+    let mut perms = fs::metadata(&keystore_file).unwrap().permissions();
+    perms.set_mode(0o444);
+    fs::set_permissions(&keystore_file, perms).unwrap();
+
+    let (address2, keypair2) = test_keypair2();
+    assert!(
+        keystore.add_key(keypair2).is_err(),
+        "add_key must return an error when saving fails"
+    );
+
+    // In-memory state must be rolled back — only the first key remains.
+    let (address1, keypair1) = test_keypair1();
+    assert_eq!(keystore.iter().count(), 1);
+    assert_eq!(keystore.get_key(&address1), Some(&keypair1));
+    assert_eq!(keystore.get_key(&address2), None);
+
+    // Restore permissions so the temp dir can be cleaned up.
+    let mut perms = fs::metadata(&keystore_file).unwrap().permissions();
+    perms.set_mode(0o644);
+    fs::set_permissions(&keystore_file, perms).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn remove_key_save_failure_rolls_back_in_memory_state() {
+    let tmp_dir = TempDir::new().unwrap();
+    let keystore_file = tmp_dir.path().join("keystore.json");
+
+    let mut keystore = Keystore::file_based(&keystore_file).unwrap();
+    let (address1, keypair1) = test_keypair1();
+    keystore.add_key(keypair1).unwrap();
+
+    // Make the file read-only to force a save failure on the next write.
+    let mut perms = fs::metadata(&keystore_file).unwrap().permissions();
+    perms.set_mode(0o444);
+    fs::set_permissions(&keystore_file, perms).unwrap();
+
+    assert!(
+        keystore.remove_key(&address1).is_err(),
+        "remove_key must return an error when saving fails"
+    );
+
+    // In-memory state must be rolled back — the key must still be present.
+    let (address1, keypair1) = test_keypair1();
+    assert_eq!(keystore.iter().count(), 1);
+    assert_eq!(keystore.get_key(&address1), Some(&keypair1));
+
+    // Restore permissions so the temp dir can be cleaned up.
+    let mut perms = fs::metadata(&keystore_file).unwrap().permissions();
+    perms.set_mode(0o644);
+    fs::set_permissions(&keystore_file, perms).unwrap();
 }
 
 //

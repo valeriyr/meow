@@ -1,5 +1,11 @@
+//! Genesis state builder for the Meow blockchain.
+//!
+//! Publishes the system framework modules and mints the initial coin allocations
+//! to produce the set of objects that form block zero.
+
 pub mod error;
 
+use meow_framework::framework_module_objects;
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -7,17 +13,14 @@ use meow_types::{
     object::{Object, object_ref::ObjectRef, object_version::ObjectVersion},
     system_framework::{
         MEOW_SYSTEM_ADDRESS,
-        meow_coin::{
-            self, MEOW_COIN_MINT_FUNCTION_NAME, MEOW_COIN_MODULE_ADDRESS, MEOW_COIN_MODULE_PATH,
-        },
-        meow_object::{MEOW_OBJECT_MODULE_ADDRESS, MEOW_OBJECT_MODULE_PATH},
+        meow_coin::{self, MEOW_COIN_MINT_FUNCTION_NAME, MEOW_COIN_MODULE_ADDRESS},
     },
     transaction::{
         Transaction, call::Call, execution_result::ExecutionStatus, input::Input,
         transaction_type::TransactionType,
     },
 };
-use meow_vm_adapter::{Module, builder, executor};
+use meow_vm_adapter::executor;
 use serde::{Deserialize, Serialize};
 
 use crate::error::GenesisError;
@@ -35,18 +38,10 @@ pub struct Genesis {
 impl Genesis {
     /// Builds the genesis state.
     pub fn build(allocations: &[(Address, u64)]) -> Result<Self> {
-        let meow_object_module = build_meow_object_module()?;
-        let meow_object_vm_module: Module = bcs::from_bytes(meow_object_module.content())?;
+        let framework_modules = framework_module_objects();
+        let meow_coins = mint_meow_coins(allocations, &framework_modules)?;
 
-        let meow_coin_module =
-            build_meow_coin_module(&[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_vm_module)])?;
-        let meow_coins = mint_meow_coins(
-            meow_object_module.clone(),
-            meow_coin_module.clone(),
-            allocations,
-        )?;
-
-        let mut objects = vec![meow_object_module, meow_coin_module];
+        let mut objects = framework_modules;
         objects.extend(meow_coins);
 
         Ok(Self { objects })
@@ -58,33 +53,10 @@ impl Genesis {
     }
 }
 
-/// Builds the meow_object framework module object (published at 0x01).
-fn build_meow_object_module() -> Result<Object> {
-    let module = builder::build_from_file(MEOW_OBJECT_MODULE_PATH, &[])?;
-    let module_bytes = bcs::to_bytes(&module)?;
-    Ok(Object::fresh_module(
-        MEOW_OBJECT_MODULE_ADDRESS,
-        Digest::ZERO,
-        module_bytes,
-    ))
-}
-
-/// Builds the meow_coin framework module object (published at 0x10).
-fn build_meow_coin_module(deps: &[(Address, &Module)]) -> Result<Object> {
-    let module = builder::build_from_file(MEOW_COIN_MODULE_PATH, deps)?;
-    let module_bytes = bcs::to_bytes(&module)?;
-    Ok(Object::fresh_module(
-        MEOW_COIN_MODULE_ADDRESS,
-        Digest::ZERO,
-        module_bytes,
-    ))
-}
-
 /// Mints Meow Coins according to the provided minting instructions.
 fn mint_meow_coins(
-    meow_object_module: Object,
-    meow_coin_module: Object,
     allocations: &[(Address, u64)],
+    framework_modules: &[Object],
 ) -> Result<Vec<Object>> {
     let function =
         Identifier::new(MEOW_COIN_MINT_FUNCTION_NAME).expect("mint function name is always valid");
@@ -107,10 +79,8 @@ fn mint_meow_coins(
                 )),
             );
 
-            let execution_result = executor::execute_genesis_transaction(
-                &transaction,
-                vec![meow_object_module.clone(), meow_coin_module.clone()],
-            )?;
+            let execution_result =
+                executor::execute_genesis_transaction(&transaction, framework_modules.to_vec())?;
 
             match execution_result.status() {
                 ExecutionStatus::Success => {

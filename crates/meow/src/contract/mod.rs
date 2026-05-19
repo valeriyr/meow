@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use meow_node_client::NodeClient;
-use meow_types::identifier::Identifier;
+use meow_types::{address::Address, identifier::Identifier};
 use meow_vm_adapter::{external_context::ExternalContext, runner};
 
 use crate::{
@@ -74,8 +74,13 @@ impl ContractCommand {
                     values.push(arg.into_value(client).await?);
                 }
 
-                let result =
-                    runner::run(module, &function, values, deps, ExternalContext::default())?;
+                let result = runner::run(
+                    (Address::ZERO, module),
+                    &function,
+                    values,
+                    deps,
+                    ExternalContext::default(),
+                )?;
 
                 ContractCommandOutput::Run(result.into())
             }
@@ -92,7 +97,7 @@ impl ContractCommand {
                 }
 
                 let result = runner::run_privileged(
-                    module,
+                    (Address::ZERO, module),
                     &function,
                     values,
                     deps,

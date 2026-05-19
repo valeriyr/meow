@@ -17,8 +17,7 @@ pub struct MeowCoin {
     balance: u64
 }
 
-/// A Meow Coin balance.
-/// Makes it possible to store specific Meow Coin amount.
+/// A bare coin amount that can be embedded as a field in other on-chain objects.
 pub struct MeowCoinBalance {
     amount: u64
 }
@@ -52,18 +51,27 @@ pub fn transfer(coin: MeowCoin, to: address) {
     meow_vm_transfer(coin, to);
 }
 
-/// Merges `from` into `to`: adds `from.balance` to `to.balance`, then destroys `from`.
-/// Both coins must be owned by the transaction sender.
-pub fn merge(from: MeowCoin, to: MeowCoin) {
+/// Merges `from` into `to`: adds `from.balance` to `to.balance`, destroys `from`,
+/// then transfers `to` to `recipient`.
+pub fn merge_and_transfer(from: MeowCoin, to: MeowCoin, recipient: address) {
     to.balance = to.balance + from.balance;
 
     let MeowCoin { id, .. } = from;
+
     meow_vm_destroy(id);
+    meow_vm_transfer(to, recipient);
 }
 
-/// Splits amount out of `from` and sends the new coin to the transaction sender.
-/// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
-pub fn split(from: MeowCoin, amount: u64) {
+/// Merges `from` into `to` and sends the result to the transaction sender.
+/// Both coins must be owned by the transaction sender.
+pub fn merge(from: MeowCoin, to: MeowCoin) {
+    merge_and_transfer(from, to, meow_vm_sender());
+}
+
+/// Splits `amount` out of `from` and sends the new coin to `to`.
+/// `from` is returned to the transaction sender with its balance reduced by `amount`.
+/// Aborts with code `1` if `from.balance` < `amount`.
+pub fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
     meow_vm_abort(from.balance >= amount, 1, "The balance is insufficient");
 
     from.balance = from.balance - amount;
@@ -73,22 +81,15 @@ pub fn split(from: MeowCoin, amount: u64) {
         balance: amount
     };
 
-    meow_vm_transfer(coin, meow_vm_sender());
+    meow_vm_transfer(coin, to);
+    meow_vm_transfer(from, meow_vm_sender());
 }
 
-/// Splits `amount` out of `from` and sends the new coin to `to`.
-/// `from.balance` is reduced by `amount`. Aborts with code `1` if `from.balance` < `amount`.
-pub fn split_and_transfer(from: MeowCoin, amount: u64, to: address) {
-    meow_vm_abort(from.balance  >= amount, 1, "The balance is insufficient");
-
-    from.balance  = from.balance  - amount;
-
-    let coin = MeowCoin {
-        id: meow_vm_fresh_id(),
-        balance: amount
-    };
-
-    meow_vm_transfer(coin, to);
+/// Splits `amount` out of `from` and sends the new coin to the transaction sender.
+/// `from` is also returned to the transaction sender with its balance reduced by `amount`.
+/// Aborts with code `1` if `from.balance` < `amount`.
+pub fn split(from: MeowCoin, amount: u64) {
+    split_and_transfer(from, amount, meow_vm_sender());
 }
 
 /// Converts `coin` to a `MeowCoinBalance` instance.

@@ -2,7 +2,7 @@ mod utils;
 
 use std::collections::HashMap;
 
-use meow_vm::{Vm, error::VmError, gas_meter::GasMeter, gas_schedule::GasSchedule};
+use meow_vm::{error::VmError, gas_meter::GasMeter};
 use meow_vm_types::{
     config::VmConfig,
     natives::{NativeFnEntry, NativeResult},
@@ -105,13 +105,7 @@ fn calling_registered_native_fn_directly_is_rejected() {
         gas_cost: 0,
         func: Box::new(|_| NativeResult::Return(None)),
     };
-    let vm = Vm::new(
-        module,
-        vec![native],
-        GasSchedule::default(),
-        HashMap::new(),
-        VmConfig::default(),
-    );
+    let vm = utils::vm_with_deps_and_natives(module, HashMap::new(), vec![native]);
     let mut gas = GasMeter::unlimited();
     let err = vm.call("my_native", vec![], &mut gas).unwrap_err();
     assert!(
@@ -135,10 +129,8 @@ fn enable_call_private_functions_allows_private_fn() {
             fn secret() -> u64 { 99 }
         "#,
     );
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         module,
-        vec![],
-        GasSchedule::default(),
         HashMap::new(),
         VmConfig::default().with_enable_call_private_functions(true),
     );
@@ -157,10 +149,8 @@ fn enable_call_private_functions_does_not_affect_natives() {
             fn noop() {}
         "#,
     );
-    let vm = Vm::new(
+    let vm = utils::vm_with_deps_and_config(
         module,
-        vec![],
-        GasSchedule::default(),
         HashMap::new(),
         VmConfig::default().with_enable_call_private_functions(true),
     );

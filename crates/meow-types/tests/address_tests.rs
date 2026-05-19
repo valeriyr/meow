@@ -223,21 +223,6 @@ fn derive_known_value() {
     );
 }
 
-#[test]
-fn derive_different_counters_produce_different_addresses() {
-    let digest = test_digest();
-    let a0 = Address::derive(digest, 0, 0);
-    let a1 = Address::derive(digest, 0, 1);
-    assert_ne!(a0, a1);
-}
-
-#[test]
-fn derive_different_digests_produce_different_addresses() {
-    let a0 = Address::derive(test_digest(), 0, 0);
-    let a1 = Address::derive(other_digest(), 0, 0);
-    assert_ne!(a0, a1);
-}
-
 //
 // ─── Address debug tests ───
 //

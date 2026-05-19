@@ -19,8 +19,6 @@ pub struct ModuleOutput {
 pub struct RunResultOutput {
     /// The return value of the call, if any.
     pub return_value: Option<String>,
-    /// Post-call slot state: `None` means the object was consumed (moved out).
-    pub final_args: Vec<Option<String>>,
     /// Objects transferred out during the call: `(object, new_owner)`.
     pub transfers: Vec<(String, String)>,
     /// Objects destroyed during the call.
@@ -54,11 +52,6 @@ impl ContractCommandOutput {
 impl From<RunResult> for RunResultOutput {
     fn from(result: RunResult) -> Self {
         let return_value = result.return_value.map(|v| v.to_string());
-        let final_args = result
-            .final_args
-            .into_iter()
-            .map(|arg| arg.map(|v| v.to_string()))
-            .collect();
         let transfers = result
             .transfers
             .into_iter()
@@ -72,7 +65,6 @@ impl From<RunResult> for RunResultOutput {
 
         RunResultOutput {
             return_value,
-            final_args,
             transfers,
             destroyed,
             gas_spent: result.gas_spent,

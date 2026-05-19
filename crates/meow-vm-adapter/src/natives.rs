@@ -1,3 +1,10 @@
+//! Native functions that give contracts access to chain operations.
+//!
+//! The VM itself has no built-in object management — creating IDs, transferring ownership,
+//! and reading execution context are all provided as native functions registered before each call.
+//! Two representations exist: full runtime entries with closures, and lightweight signatures
+//! for type-checking at compile and verify time.
+
 use std::{cell::RefCell, rc::Rc};
 
 use meow_types::system_framework::meow_object::{
@@ -44,7 +51,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
             func: Box::new(move |_| {
                 let address = c.borrow_mut().next_fresh_id();
                 let id = MeowObjectId::from(address);
-                NativeResult::Return(Some(id.to_qualified_vm_value()))
+                NativeResult::Return(Some(id.into()))
             }),
         }
     };
@@ -70,7 +77,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
                         ));
                     }
                 };
-                if meow_object::object_id(&obj_val).is_none() {
+                if meow_object::object_address(&obj_val).is_none() {
                     return NativeResult::Error(format!(
                         "meow_vm_transfer: expected struct with id: meow_object::Id as first field, got {}",
                         obj_val.type_name()

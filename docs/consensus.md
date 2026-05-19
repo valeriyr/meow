@@ -90,7 +90,7 @@ Because the miner has discretion within these bounds, contracts that depend on `
 
 **Miner-bias attack:** a miner can inspect the random outcome after solving PoW and, if unfavorable, discard the block and re-mine. Each attempt costs one block reward, so manipulation is only rational for high-value outcomes.
 
-`meow_vm_rand()` is suitable for low-stakes game mechanics or cosmetic variation. Avoid it where a rational miner would profit from biasing the result. See [Contracts — Native functions](contracts.md#native-functions) for the call signature.
+`meow_vm_rand()` is suitable for low-stakes game mechanics or cosmetic variation. Avoid it where a rational miner would profit from biasing the result. See [Adapter — Native functions](adapter.md#native-functions) for the call signature.
 
 ---
 

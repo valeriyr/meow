@@ -1,3 +1,5 @@
+//! 32-byte VM address type.
+
 pub mod error;
 
 use std::str::FromStr;

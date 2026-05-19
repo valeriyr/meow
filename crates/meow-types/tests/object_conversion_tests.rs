@@ -5,7 +5,8 @@ use meow_types::{
     object::{
         Object,
         object_conversion::{
-            extract_human_readable_content, object_to_vm_object_value, vm_object_value_to_object,
+            error::ObjectConversionError, extract_human_readable_content,
+            object_to_vm_object_value, vm_object_value_to_object,
         },
         object_decl_ref::ObjectDeclRef,
         object_owner::ObjectOwner,
@@ -13,7 +14,7 @@ use meow_types::{
     },
     system_framework::meow_object::{MEOW_OBJECT_ID_FIELD_NAME, MeowObjectId},
 };
-use meow_vm_types::types::Value;
+use meow_vm_types::{module_ref, types::Value};
 
 /// Fixed module address used in all tests.
 const MODULE_ADDR: Address = Address::fill(0x01);
@@ -35,7 +36,7 @@ fn object_to_vm_injects_id_as_first_field() {
     let fields = vm_object_fields(&val);
     assert_eq!(fields[0].0, MEOW_OBJECT_ID_FIELD_NAME);
     // id is injected as meow_object::Id { inner: address }
-    let expected = MeowObjectId::new(OBJECT_ID).to_qualified_vm_value();
+    let expected = MeowObjectId::new(OBJECT_ID).into();
     assert_eq!(fields[0].1, expected);
 }
 
@@ -63,7 +64,7 @@ fn object_to_vm_carries_type_name() {
 
     let val = object_to_vm_object_value(&obj).unwrap();
 
-    assert_eq!(val.type_name(), "Foo");
+    assert_eq!(val.type_name(), foo_qualified_type_name());
 }
 
 #[test]
@@ -80,11 +81,11 @@ fn object_to_vm_fails_for_module_type() {
 #[test]
 fn vm_to_object_strips_id_from_content() {
     let val = Value::Struct {
-        type_name: "Foo".to_string(),
+        type_name: foo_qualified_type_name(),
         fields: vec![
             (
                 MEOW_OBJECT_ID_FIELD_NAME.to_string(),
-                Value::Address(OBJECT_ID.into()),
+                MeowObjectId::new(OBJECT_ID).into(),
             ),
             ("balance".to_string(), Value::U64(99)),
         ],
@@ -106,11 +107,11 @@ fn vm_to_object_strips_id_from_content() {
 #[test]
 fn vm_to_object_sets_address_from_id_field() {
     let val = Value::Struct {
-        type_name: "Foo".to_string(),
+        type_name: foo_qualified_type_name(),
         fields: vec![
             (
                 MEOW_OBJECT_ID_FIELD_NAME.to_string(),
-                Value::Address(OBJECT_ID.into()),
+                MeowObjectId::new(OBJECT_ID).into(),
             ),
             ("balance".to_string(), Value::U64(1)),
         ],
@@ -123,16 +124,49 @@ fn vm_to_object_sets_address_from_id_field() {
 
 #[test]
 fn vm_to_object_fails_for_non_object_value() {
-    assert!(
-        vm_object_value_to_object(
-            &Value::U64(42),
-            ObjectOwner::Address(OWNER),
-            Digest::ZERO,
-            ObjectVersion::ZERO,
-            &MODULE_ADDR,
-        )
-        .is_err()
-    );
+    let err = vm_object_value_to_object(
+        &Value::U64(42),
+        ObjectOwner::Address(OWNER),
+        Digest::ZERO,
+        ObjectVersion::ZERO,
+    )
+    .unwrap_err();
+    assert!(matches!(err, ObjectConversionError::InvalidVMValueType));
+}
+
+#[test]
+fn vm_to_object_fails_for_unqualified_type_name() {
+    let val = Value::Struct {
+        type_name: "Foo".to_string(),
+        fields: vec![(
+            MEOW_OBJECT_ID_FIELD_NAME.to_string(),
+            MeowObjectId::new(OBJECT_ID).into(),
+        )],
+    };
+    let err = vm_object_value_to_object(
+        &val,
+        ObjectOwner::Address(OWNER),
+        Digest::ZERO,
+        ObjectVersion::ZERO,
+    )
+    .unwrap_err();
+    assert!(matches!(err, ObjectConversionError::InvalidTypeName));
+}
+
+#[test]
+fn vm_to_object_fails_when_id_field_missing() {
+    let val = Value::Struct {
+        type_name: foo_qualified_type_name(),
+        fields: vec![("balance".to_string(), Value::U64(42))],
+    };
+    let err = vm_object_value_to_object(
+        &val,
+        ObjectOwner::Address(OWNER),
+        Digest::ZERO,
+        ObjectVersion::ZERO,
+    )
+    .unwrap_err();
+    assert!(matches!(err, ObjectConversionError::MissingIdField));
 }
 
 //
@@ -155,7 +189,6 @@ fn round_trip_object_to_vm_and_back() {
         *original.owner(),
         original.digest(),
         *original.version(),
-        &MODULE_ADDR,
     )
     .unwrap();
 
@@ -222,9 +255,12 @@ fn make_vm_to_object(val: &Value) -> Object {
         ObjectOwner::Address(OWNER),
         Digest::ZERO,
         ObjectVersion::ZERO,
-        &MODULE_ADDR,
     )
     .expect("conversion must succeed")
+}
+
+fn foo_qualified_type_name() -> String {
+    module_ref::qualify(&MODULE_ADDR.into(), "Foo")
 }
 
 fn vm_object_fields(val: &Value) -> &Vec<(String, Value)> {

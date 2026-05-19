@@ -1,3 +1,9 @@
+//! 32-byte content digest for transaction signing and object content-addressing.
+//!
+//! Objects carry a digest of their content so that the executor can verify input objects
+//! have not been tampered with. Transactions are signed over their digest so that any
+//! modification invalidates the signature.
+
 pub mod error;
 
 use std::str::FromStr;

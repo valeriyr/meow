@@ -1,11 +1,10 @@
 mod utils;
-use utils::*;
 
 use std::collections::HashMap;
 use std::str::FromStr;
 
 use meow_vm_bytecode_verifier::VerificationError;
-use meow_vm_types::{address::Address, bytecode::Instruction, config::CompilerConfig};
+use meow_vm_types::{address::Address, bytecode::Instruction, config::CompilerConfig, module_ref};
 
 //
 // ─── Happy paths ───
@@ -14,14 +13,14 @@ use meow_vm_types::{address::Address, bytecode::Instruction, config::CompilerCon
 #[test]
 fn cross_module_call_chain_passes() {
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
         pub fn double(x: u64) -> u64 { x + x }
     "#,
     );
-    let main = compile_with_deps(
+    let main = utils::compile_with_deps(
         r#"
             mod main;
 
@@ -32,7 +31,7 @@ fn cross_module_call_chain_passes() {
         &[(addr, &dep)],
     );
     let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
-    verify_ok(&main, &deps);
+    utils::verify_ok(&main, &deps);
 }
 
 //
@@ -42,14 +41,14 @@ fn cross_module_call_chain_passes() {
 #[test]
 fn call_public_cross_module_function_passes() {
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
         pub fn get() -> u64 { 42 }
     "#,
     );
-    let main = compile_with_deps(
+    let main = utils::compile_with_deps(
         r#"
             mod main;
 
@@ -60,22 +59,22 @@ fn call_public_cross_module_function_passes() {
         &[(addr, &dep)],
     );
     let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
-    verify_ok(&main, &deps);
+    utils::verify_ok(&main, &deps);
 }
 
 #[test]
 fn call_private_cross_module_function_rejected() {
     // The compiler blocks cross-module calls to private functions at source level,
-    // so we compile main without the call and inject it via bytecode tamper.
+    // so we utils::compile main without the call and inject it via bytecode utils::tamper.
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
         fn secret() -> u64 { 99 }
     "#,
     );
-    let mut main = compile(
+    let mut main = utils::compile(
         r#"
         mod main;
 
@@ -83,13 +82,12 @@ fn call_private_cross_module_function_rejected() {
     "#,
     );
     main.imports.push(addr);
-    let addr_str = addr.to_string();
     main.functions[0].code = vec![
-        Instruction::Call(format!("@{addr_str}::secret")),
+        Instruction::Call(module_ref::qualify(&addr, "secret")),
         Instruction::Return,
     ];
     let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
-    let errs = verify_errors(&main, &deps);
+    let errs = utils::verify_errors(&main, &deps);
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -107,7 +105,7 @@ fn call_private_cross_module_function_rejected() {
 fn cross_module_struct_construction_rejected() {
     // The compiler never emits NewStruct for cross-module types, so inject it directly.
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
@@ -116,7 +114,7 @@ fn cross_module_struct_construction_rejected() {
         fn noop() -> u64 { 0 }
     "#,
     );
-    let mut main = compile_with_deps(
+    let mut main = utils::compile_with_deps(
         r#"
             mod main;
             use dep@0x42;
@@ -124,18 +122,17 @@ fn cross_module_struct_construction_rejected() {
         "#,
         &[(addr, &dep)],
     );
-    let addr_str = addr.to_string();
     main.functions[0].code = vec![
         Instruction::PushU64(1),
         Instruction::PushU64(2),
         Instruction::NewStruct {
-            type_name: format!("@{addr_str}::Point"),
+            type_name: module_ref::qualify(&addr, "Point"),
             field_names: vec!["x".to_string(), "y".to_string()],
         },
         Instruction::Return,
     ];
     let deps: HashMap<Address, &_> = [(addr, &dep)].into_iter().collect();
-    let errs = verify_errors(&main, &deps);
+    let errs = utils::verify_errors(&main, &deps);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::CrossModuleStructConstruction { .. })),
@@ -149,43 +146,44 @@ fn cross_module_struct_construction_rejected() {
 
 #[test]
 fn cross_module_private_field_read_via_load_field_rejected() {
-    // A cross-module struct can land on the stack via LoadField reading a
-    // same-module field whose *type* is cross-module (e.g. `hero.id` yields
-    // `dep::Id`). A subsequent GetField("inner") on it must be rejected.
+    // A function that accepts a cross-module struct and tries to read a private
+    // field via LoadField must be rejected by the bytecode verifier.
+    // We craft the bytecode directly since the compiler rejects struct-typed field access.
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
             mod dep;
 
-            pub struct Id { inner: u64 }
+            pub struct Pair { a: u64, b: u64 }
         "#,
     );
-    // Compile a module that has a struct containing a dep::Id field.
-    // The compiler emits LoadField(slot, ["id"]) to read the field (same-module
-    // read, allowed). We then tamper to append GetField("inner") to read the
-    // private field of dep::Id directly from the stack.
-    let mut main = compile_with_deps(
+    // Compile a pass-through function accepting dep::Pair, then tamper.
+    let mut main = utils::compile_with_deps(
         r#"
             mod main;
 
             use dep@0x42;
 
-            struct Wrapper { id: dep::Id }
-
-            pub fn get_id(w: Wrapper) -> dep::Id { w.id }
+            fn pass(p: dep::Pair) -> dep::Pair { p }
         "#,
         &[(addr, &dep)],
     );
-    tamper(&mut main, "get_id", |code| {
-        // Remove the Return, append GetField("inner") then Return so the
-        // tampered function tries to read the private `inner` field.
-        code.retain(|i| !matches!(i, Instruction::Return));
-        code.push(Instruction::GetField("inner".to_string()));
-        code.push(Instruction::Return);
+    // Replace body with LoadField(0, ["a"])/Return — private field read on cross-module struct.
+    utils::tamper(&mut main, "pass", |code| {
+        *code = vec![
+            Instruction::LoadField(0, vec!["a".to_string()]),
+            Instruction::Return,
+        ];
     });
+    main.functions
+        .iter_mut()
+        .find(|f| f.name == "pass")
+        .unwrap()
+        .return_type = Some(meow_vm_types::types::Type::U64);
 
     let deps = HashMap::from([(addr, &dep)]);
-    let errs = verify_errors(&main, &deps);
+    let errs = meow_vm_bytecode_verifier::verify(&main, &deps, &[], &CompilerConfig::default())
+        .expect_err("cross-module LoadField must be rejected");
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::CrossModulePrivateFieldRead { .. })),
@@ -201,16 +199,16 @@ fn cross_module_private_field_read_via_load_field_rejected() {
 fn cross_module_field_write_rejected() {
     // CrossModuleFieldWrite: StoreField on a slot holding a cross-module struct.
     // Compile a function that passes through a dep::Pair without field access
-    // (compiler allows this), then tamper the body to inject StoreField.
+    // (compiler allows this), then utils::tamper the body to inject StoreField.
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
         pub struct Pair { a: u64, b: u64 }
     "#,
     );
-    let mut main = compile_with_deps(
+    let mut main = utils::compile_with_deps(
         r#"
             mod main;
 
@@ -222,7 +220,7 @@ fn cross_module_field_write_rejected() {
     );
     // Inject PushU64 + StoreField before the Load/Return — StoreField on slot 0
     // (which the abstract interpreter knows holds a dep::Pair) triggers CrossModuleFieldWrite.
-    tamper(&mut main, "pass", |code| {
+    utils::tamper(&mut main, "pass", |code| {
         code.splice(
             0..0,
             [
@@ -248,14 +246,14 @@ fn cross_module_field_write_rejected() {
 #[test]
 fn missing_dep_causes_undefined_function_error() {
     let addr = dep_addr();
-    let dep = compile(
+    let dep = utils::compile(
         r#"
         mod dep;
 
         pub fn get() -> u64 { 42 }
     "#,
     );
-    let main = compile_with_deps(
+    let main = utils::compile_with_deps(
         r#"
             mod main;
 
@@ -265,7 +263,7 @@ fn missing_dep_causes_undefined_function_error() {
         "#,
         &[(addr, &dep)],
     );
-    let errs = verify_errors(&main, &no_deps());
+    let errs = utils::verify_errors(&main, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UndefinedFunction { .. })),

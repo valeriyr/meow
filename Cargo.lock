@@ -2278,6 +2278,7 @@ dependencies = [
 name = "meow-framework"
 version = "0.1.0"
 dependencies = [
+ "bcs",
  "meow-types",
  "meow-vm-adapter",
  "meow-vm-types",
@@ -2287,7 +2288,7 @@ dependencies = [
 name = "meow-genesis"
 version = "0.1.0"
 dependencies = [
- "bcs",
+ "meow-framework",
  "meow-types",
  "meow-vm-adapter",
  "serde",
@@ -2421,6 +2422,7 @@ name = "meow-vm-adapter"
 version = "0.1.0"
 dependencies = [
  "bcs",
+ "meow-framework",
  "meow-types",
  "meow-vm",
  "meow-vm-bytecode-verifier",
@@ -2454,6 +2456,7 @@ dependencies = [
 name = "meow-vm-examples"
 version = "0.1.0"
 dependencies = [
+ "meow-framework",
  "meow-types",
  "meow-vm-adapter",
  "meow-vm-types",

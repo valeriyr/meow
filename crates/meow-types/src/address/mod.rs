@@ -1,3 +1,9 @@
+//! 32-byte identifier used for both user accounts and on-chain objects.
+//!
+//! The same address type covers both accounts (derived from public keys) and objects
+//! (derived from the transaction digest and a counter), so any address can be used
+//! as an object reference or an ownership target without conversion.
+
 pub mod error;
 
 use std::str::FromStr;

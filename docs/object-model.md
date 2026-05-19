@@ -71,7 +71,7 @@ During execution objects follow exactly one of four paths:
 
 An object created and destroyed within the same transaction has no net effect on the store.
 
-Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroyed by the time the function returns. If it is not, execution fails with an error.
+Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroyed before the transaction ends. If it is not, execution fails with an error.
 
 ## Object IDs
 

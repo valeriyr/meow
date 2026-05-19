@@ -1,3 +1,5 @@
+//! Gas meter that tracks spending and enforces per-call limits.
+
 use crate::{Result, error::VmError};
 
 /// Tracks gas spending during execution.

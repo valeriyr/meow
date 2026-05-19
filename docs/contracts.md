@@ -44,7 +44,7 @@ See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and
 Only `pub fn` functions can be called directly from a transaction. Two things are rejected before execution begins:
 
 - Targeting a private function.
-- Targeting a `pub fn` that returns an on-chain object (a struct with `id: meow_object::Id` as its first field), either directly or inside a tuple. This restriction applies only at the transaction entry point; the same function can be called freely from other contract functions. Primitive return values and plain struct return values are allowed and simply ignored by the caller.
+- Targeting a `pub fn` whose return type contains any struct value — either directly or inside a tuple. This restriction applies only at the transaction entry point; the same function can be called freely from other contract functions. Only primitive return values (`bool`, `u64`, `address`, `string`) are allowed at transaction entry points; they are silently ignored by the caller.
 
 Native built-in functions (`meow_vm_transfer`, `meow_vm_fresh_id`, etc.) cannot be called directly from a transaction — they are only available from within contract code.
 
@@ -54,7 +54,7 @@ mod vault;
 fn internal_helper() -> u64 { return 1; }  // cannot be called from a transaction (private)
 pub fn mint() -> Coin { ... }              // cannot be called from a transaction (returns on-chain object)
 
-pub fn get_balance(coin: Coin) -> u64 { ... } // valid — primitive return is discarded
+pub fn get_balance(coin: Coin) -> u64 { ... } // valid — u64 return is discarded
 pub fn deposit(amount: u64) { ... }           // valid transaction target
 pub fn withdraw(amount: u64) { ... }          // valid transaction target
 ```
@@ -75,6 +75,14 @@ Compiles and executes a function in a local VM without submitting a transaction.
 
 ```bash
 meow contract run my_module.meow function_name arg1 arg2
+```
+
+### Run locally (privileged)
+
+Like `run`, but allows calling private functions. Useful for testing functions that are intentionally private (e.g. `mint`). Never submits a transaction.
+
+```bash
+meow contract run-privileged my_module.meow function_name arg1 arg2
 ```
 
 ### Publish on-chain

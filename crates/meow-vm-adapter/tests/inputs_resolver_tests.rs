@@ -1,17 +1,14 @@
+mod utils;
+
 use std::str::FromStr;
 
 use meow_types::{
     address::Address,
     digest::Digest,
-    identifier::Identifier,
-    object::{
-        Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
-        object_type::ObjectType, object_version::ObjectVersion,
-    },
-    system_framework::meow_coin::MEOW_COIN_MODULE_ADDRESS,
-    transaction::{Transaction, call::Call, input::Input, transaction_type::TransactionType},
+    object::{object_ref::ObjectRef, object_version::ObjectVersion},
+    transaction::input::Input,
 };
-use meow_vm_adapter::{Module, Value, builder, inputs_resolver};
+use meow_vm_adapter::{Module, inputs_resolver};
 
 //
 // ─── collect_inputs ───
@@ -19,8 +16,8 @@ use meow_vm_adapter::{Module, Value, builder, inputs_resolver};
 
 #[test]
 fn collect_inputs_publish_tx_returns_only_gas_coin() {
-    let gas_obj = make_gas_obj();
-    let tx = make_publish_tx(vec![]);
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_meow_module_publish_transaction(vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -38,14 +35,14 @@ fn collect_inputs_publish_tx_returns_only_gas_coin() {
 fn collect_inputs_publish_tx_includes_dep_module() {
     let dep_addr = Address::from_str("0x10").unwrap();
 
-    let dep_module = compile(DEP_SRC, &[]);
-    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
+    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
-    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
-    let gas_obj = make_gas_obj();
+    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let gas_obj = utils::make_gas_coin_object();
 
     let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
-    let tx = make_publish_tx(module_bytes);
+    let tx = utils::make_meow_module_publish_transaction(module_bytes);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -69,27 +66,30 @@ fn collect_inputs_publish_tx_transitive_dep() {
     let point_addr = Address::from_str("0x10").unwrap();
     let shapes_addr = Address::from_str("0x20").unwrap();
 
-    let point_module = compile(DEP_SRC, &[]);
-    let shapes_module = compile(&main_src(point_addr), &[(point_addr, &point_module)]);
+    let point_module = utils::build_module(DEP_SRC, &[]);
+    let shapes_module = utils::build_module(&main_src(point_addr), &[(point_addr, &point_module)]);
     let outer_src = format!(
         r#"
             mod outer;
+
             use shapes@{shapes_addr};
+
             pub struct Path {{ line: shapes::Line }}
+
             pub fn noop() {{}}
         "#
     );
-    let outer_module = compile(
+    let outer_module = utils::build_module(
         &outer_src,
         &[(shapes_addr, &shapes_module), (point_addr, &point_module)],
     );
 
-    let point_obj = make_obj_from_module(point_addr, &point_module);
-    let shapes_obj = make_obj_from_module(shapes_addr, &shapes_module);
-    let gas_obj = make_gas_obj();
+    let point_obj = utils::make_module_object_from_compiled(point_addr, &point_module);
+    let shapes_obj = utils::make_module_object_from_compiled(shapes_addr, &shapes_module);
+    let gas_obj = utils::make_gas_coin_object();
 
     let module_bytes = bcs::to_bytes(&outer_module).expect("must serialize");
-    let tx = make_publish_tx(module_bytes);
+    let tx = utils::make_meow_module_publish_transaction(module_bytes);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -118,9 +118,10 @@ fn collect_inputs_publish_tx_transitive_dep() {
 #[test]
 fn collect_inputs_meow_call_returns_gas_then_module() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
-    let gas_obj = make_gas_obj();
-    let tx = make_call_tx(module_addr, "noop", vec![]);
+    let module_obj =
+        utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -142,14 +143,14 @@ fn collect_inputs_dep_module_comes_before_main_module() {
     let dep_addr = Address::from_str("0x10").unwrap();
     let main_addr = Address::from_str("0x20").unwrap();
 
-    let dep_module = compile(DEP_SRC, &[]);
-    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
+    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
-    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
-    let main_obj = make_obj_from_module(main_addr, &main_module);
-    let gas_obj = make_gas_obj();
+    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let main_obj = utils::make_module_object_from_compiled(main_addr, &main_module);
+    let gas_obj = utils::make_gas_coin_object();
 
-    let tx = make_call_tx(main_addr, "noop", vec![]);
+    let tx = utils::make_call_transaction(main_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -174,8 +175,9 @@ fn collect_inputs_dep_module_comes_before_main_module() {
 #[test]
 fn collect_inputs_missing_gas_coin_is_skipped() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
-    let tx = make_call_tx(module_addr, "noop", vec![]);
+    let module_obj =
+        utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
+    let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == &module_addr {
@@ -186,15 +188,15 @@ fn collect_inputs_missing_gas_coin_is_skipped() {
     });
 
     // Gas coin missing — only module present
-    assert!(!inputs.iter().any(|o| o.address() == &GAS_ADDR));
+    assert!(!inputs.iter().any(|o| o.address() == &utils::GAS_ADDR));
     assert!(inputs.iter().any(|o| o.address() == &module_addr));
 }
 
 #[test]
 fn collect_inputs_missing_module_is_skipped() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let gas_obj = make_gas_obj();
-    let tx = make_call_tx(module_addr, "noop", vec![]);
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -213,12 +215,13 @@ fn collect_inputs_missing_module_is_skipped() {
 fn collect_inputs_includes_object_call_args() {
     let module_addr = Address::from_str("0x01").unwrap();
     let arg_addr = Address::from_str("0xCC").unwrap();
-    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
-    let arg_obj = make_gas_obj_at(arg_addr);
-    let gas_obj = make_gas_obj();
+    let module_obj =
+        utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
+    let arg_obj = utils::make_coin_object(arg_addr, utils::SENDER, utils::GAS_BALANCE);
+    let gas_obj = utils::make_gas_coin_object();
 
     let arg_ref = ObjectRef::new(arg_addr, ObjectVersion::ONE, Digest::ZERO);
-    let tx = make_call_tx(module_addr, "noop", vec![Input::Object(arg_ref)]);
+    let tx = utils::make_call_transaction(module_addr, "noop", vec![Input::Object(arg_ref)]);
 
     let inputs = inputs_resolver::collect_inputs(&tx, |addr| {
         if addr == gas_obj.address() {
@@ -244,9 +247,10 @@ fn collect_inputs_includes_object_call_args() {
 #[tokio::test]
 async fn collect_inputs_async_returns_gas_and_module() {
     let module_addr = Address::from_str("0x01").unwrap();
-    let module_obj = make_module_obj(module_addr, SIMPLE_SRC, &[]);
-    let gas_obj = make_gas_obj();
-    let tx = make_call_tx(module_addr, "noop", vec![]);
+    let module_obj =
+        utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs_async(&tx, |addr| {
         let gas = gas_obj.clone();
@@ -273,14 +277,14 @@ async fn collect_inputs_async_fetches_transitive_dep() {
     let dep_addr = Address::from_str("0x10").unwrap();
     let main_addr = Address::from_str("0x20").unwrap();
 
-    let dep_module = compile(DEP_SRC, &[]);
-    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
+    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
-    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
-    let main_obj = make_obj_from_module(main_addr, &main_module);
-    let gas_obj = make_gas_obj();
+    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let main_obj = utils::make_module_object_from_compiled(main_addr, &main_module);
+    let gas_obj = utils::make_gas_coin_object();
 
-    let tx = make_call_tx(main_addr, "noop", vec![]);
+    let tx = utils::make_call_transaction(main_addr, "noop", vec![]);
 
     let inputs = inputs_resolver::collect_inputs_async(&tx, |addr| {
         let gas = gas_obj.clone();
@@ -311,14 +315,14 @@ async fn collect_inputs_async_fetches_transitive_dep() {
 async fn collect_inputs_async_publish_tx_includes_dep_module() {
     let dep_addr = Address::from_str("0x10").unwrap();
 
-    let dep_module = compile(DEP_SRC, &[]);
-    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
+    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
-    let dep_obj = make_obj_from_module(dep_addr, &dep_module);
-    let gas_obj = make_gas_obj();
+    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let gas_obj = utils::make_gas_coin_object();
 
     let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
-    let tx = make_publish_tx(module_bytes);
+    let tx = utils::make_meow_module_publish_transaction(module_bytes);
 
     let inputs = inputs_resolver::collect_inputs_async(&tx, |addr| {
         let gas = gas_obj.clone();
@@ -353,7 +357,7 @@ async fn load_deps_async_returns_empty_for_no_deps() {
 #[tokio::test]
 async fn load_deps_async_fetches_direct_dep() {
     let dep_addr = Address::from_str("0x10").unwrap();
-    let dep_module = compile(DEP_SRC, &[]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
 
     let dep_addresses = vec![dep_addr];
     let loaded = inputs_resolver::load_deps_async(&dep_addresses, |addr| {
@@ -371,8 +375,8 @@ async fn load_deps_async_follows_transitive_imports() {
     let dep_addr = Address::from_str("0x10").unwrap();
     let main_addr = Address::from_str("0x20").unwrap();
 
-    let dep_module = compile(DEP_SRC, &[]);
-    let main_module = compile(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let dep_module = utils::build_module(DEP_SRC, &[]);
+    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
 
     // Caller only declares main as a direct dep; dep should be discovered transitively.
     let dep_addresses = vec![main_addr];
@@ -407,9 +411,9 @@ async fn load_deps_async_deduplicates_diamond_deps() {
     let a_addr = Address::from_str("0x20").unwrap();
     let b_addr = Address::from_str("0x30").unwrap();
 
-    let c_module = compile(DEP_SRC, &[]);
-    let a_module = compile(&main_src(c_addr), &[(c_addr, &c_module)]);
-    let b_module = compile(&main_src(c_addr), &[(c_addr, &c_module)]);
+    let c_module = utils::build_module(DEP_SRC, &[]);
+    let a_module = utils::build_module(&main_src(c_addr), &[(c_addr, &c_module)]);
+    let b_module = utils::build_module(&main_src(c_addr), &[(c_addr, &c_module)]);
 
     let dep_addresses = vec![a_addr, b_addr];
 
@@ -448,17 +452,16 @@ async fn load_deps_async_deduplicates_diamond_deps() {
 // ─── Helpers ───
 //
 
-const SENDER: Address = Address::fill(0xAA);
-const GAS_ADDR: Address = Address::fill(0xBB);
-
 const SIMPLE_SRC: &str = r#"
     mod simple;
+
     pub fn noop() {}
-    "#;
+"#;
 const DEP_SRC: &str = r#"
     mod point;
+
     pub struct Point { x: u64, y: u64 }
-    "#;
+"#;
 
 /// Returns source for a module that imports `point` at `dep_addr`.
 /// The address is embedded in the `use` declaration so the compiler can resolve it.
@@ -470,53 +473,8 @@ fn main_src(dep_addr: Address) -> String {
             use point@{dep_addr};
 
             pub struct Line {{ a: point::Point, b: point::Point }}
+
             pub fn noop() {{}}
-         "#
+        "#
     )
-}
-
-fn compile(src: &str, deps: &[(Address, &Module)]) -> Module {
-    builder::build(src, deps).expect("must compile")
-}
-
-fn make_module_obj(addr: Address, src: &str, deps: &[(Address, &Module)]) -> Object {
-    let module = compile(src, deps);
-    make_obj_from_module(addr, &module)
-}
-
-fn make_obj_from_module(addr: Address, module: &Module) -> Object {
-    let bytes = bcs::to_bytes(module).expect("module must serialize");
-    Object::fresh_module(addr, Digest::ZERO, bytes)
-}
-
-fn make_gas_obj() -> Object {
-    make_gas_obj_at(GAS_ADDR)
-}
-
-fn make_gas_obj_at(addr: Address) -> Object {
-    let fields: Vec<(String, Value)> = vec![("balance".to_string(), Value::U64(1_000_000))];
-    let content = bcs::to_bytes(&fields).expect("fields must serialize");
-    let decl_ref = ObjectDeclRef::new(
-        MEOW_COIN_MODULE_ADDRESS,
-        Identifier::new("MeowCoin").unwrap(),
-    );
-    Object::new(
-        addr,
-        ObjectOwner::Address(SENDER),
-        Digest::ZERO,
-        ObjectVersion::ONE,
-        ObjectType::Object(decl_ref),
-        content,
-    )
-}
-
-fn make_call_tx(module: Address, fn_name: &str, args: Vec<Input>) -> Transaction {
-    let gas_ref = ObjectRef::new(GAS_ADDR, ObjectVersion::ONE, Digest::ZERO);
-    let call = Call::new(module, Identifier::new(fn_name).unwrap(), args);
-    Transaction::new(SENDER, gas_ref, TransactionType::MeowCall(call))
-}
-
-fn make_publish_tx(bytes: Vec<u8>) -> Transaction {
-    let gas_ref = ObjectRef::new(GAS_ADDR, ObjectVersion::ONE, Digest::ZERO);
-    Transaction::new(SENDER, gas_ref, TransactionType::MeowModulePublish(bytes))
 }

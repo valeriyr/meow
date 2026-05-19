@@ -7,19 +7,19 @@ mod timelock_coin;
 use meow_object@0x01;
 use meow_coin@0x10;
 
-// A `MeowCoin` balance sealed on-chain until a future block timestamp.
+/// A `MeowCoin` balance sealed on-chain until a future block timestamp.
 pub struct TimelockCoin {
-    // Unique on-chain identity, set at creation and immutable.
+    /// Unique on-chain identity, set at creation and immutable.
     id: meow_object::Id,
-    // Locked amount in MEOW.
+    /// Locked amount in MEOW.
     balance: meow_coin::MeowCoinBalance,
-    // Unix milliseconds after which claim is permitted.
+    /// Unix milliseconds after which claim is permitted.
     unlock_time: u64
 }
 
-// Locks `coin` for at least `delay_ms` milliseconds after the current block timestamp.
-// Burns the input coin and stores its balance in a new `TimelockCoin`.
-// Transfers the `TimelockCoin` to the sender.
+/// Locks `coin` for at least `delay_ms` milliseconds after the current block timestamp.
+/// Burns the input coin and stores its balance in a new `TimelockCoin`.
+/// Transfers the `TimelockCoin` to the sender.
 pub fn lock(coin: meow_coin::MeowCoin, delay_ms: u64) {
     let balance = meow_coin::to_balance(coin);
 
@@ -32,7 +32,8 @@ pub fn lock(coin: meow_coin::MeowCoin, delay_ms: u64) {
     meow_vm_transfer(lock, meow_vm_sender());
 }
 
-// Destroys the `TimelockCoin` and sends a fresh `MeowCoin` with the stored balance to the sender.
+/// Destroys the `TimelockCoin` and sends a fresh `MeowCoin` with the stored balance to the sender.
+/// Aborts with code `1` if the current block timestamp is before `unlock_time`.
 pub fn claim(lock: TimelockCoin) {
     let TimelockCoin { id, balance, unlock_time } = lock;
     meow_vm_destroy(id);
@@ -43,7 +44,7 @@ pub fn claim(lock: TimelockCoin) {
     meow_vm_transfer(coin, meow_vm_sender());
 }
 
-// Transfers `lock` to a new owner.
+/// Transfers `lock` to a new owner.
 pub fn transfer(lock: TimelockCoin, to: address) {
     meow_vm_transfer(lock, to);
 }

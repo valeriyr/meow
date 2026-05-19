@@ -1,3 +1,5 @@
+//! Object version utilities used during result assembly.
+
 use meow_types::object::{Object, object_version::ObjectVersion};
 
 /// Bump an object's version by 1.

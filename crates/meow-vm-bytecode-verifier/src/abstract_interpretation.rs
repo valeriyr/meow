@@ -1,3 +1,10 @@
+//! Phase 2 of bytecode verification: type safety and linearity via abstract interpretation.
+//!
+//! Simulates execution with abstract types instead of real values, tracking what is on the
+//! stack and in every local slot at each program point. This catches type mismatches,
+//! use-after-move of structs, incomplete return paths, and field visibility violations —
+//! things that cannot be detected by structural inspection alone.
+
 use std::collections::HashMap;
 
 use meow_vm_types::{
@@ -5,7 +12,7 @@ use meow_vm_types::{
     bytecode::Instruction,
     module::{Function, Module},
     module_ref,
-    types::{self, Type},
+    types::Type,
 };
 
 use meow_vm_types::natives::{NativeParam, NativeSig};
@@ -196,7 +203,7 @@ fn resolve_field_type(
         AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
-    if types::is_cross_module_type_name(type_name) {
+    if module_ref::parse_module_ref(type_name).is_some() {
         return None; // can't resolve without dep-name→address mapping
     }
     let def = module.get_struct(type_name)?;
@@ -224,9 +231,10 @@ fn check_field_read_visibility(ty: &AbstractType, field_name: &str) -> Option<Ve
         AbstractType::Struct(n) => n.as_str(),
         _ => return None,
     };
-    if !types::is_cross_module_type_name(type_name) {
-        return None; // same-module: always allowed
-    }
+
+    // same-module: always allowed
+    module_ref::parse_module_ref(type_name)?;
+
     Some(VerificationError::CrossModulePrivateFieldRead {
         function: String::new(), // filled by caller
         pc: 0,
@@ -394,6 +402,13 @@ pub(crate) fn check_function(
                 // Walk path: resolve type at each step, push terminal type.
                 let terminal_ty = resolve_field_path_type(&root_ty, path, module)
                     .unwrap_or(AbstractType::Address);
+                if matches!(terminal_ty, AbstractType::Struct(_)) {
+                    errors.push(VerificationError::StructTypedFieldLoaded {
+                        function: fn_name.clone(),
+                        pc,
+                        field: path.last().cloned().unwrap_or_default(),
+                    });
+                }
                 state.push(terminal_ty);
                 // Slot stays live — LoadField never consumes the slot.
             }
@@ -431,7 +446,7 @@ pub(crate) fn check_function(
                     _ => None,
                 };
                 if let Some(n) = &root_name
-                    && types::is_cross_module_type_name(n)
+                    && module_ref::parse_module_ref(n).is_some()
                 {
                     errors.push(VerificationError::CrossModuleFieldWrite {
                         function: fn_name.clone(),
@@ -440,16 +455,23 @@ pub(crate) fn check_function(
                         field: path[0].clone(),
                     });
                 } else {
-                    // Type-check: value must match declared type of terminal field.
-                    if let Some(expected_ty) = resolve_field_path_type(&root_ty, path, module)
-                        && !types_compatible(&val, &expected_ty)
-                    {
-                        errors.push(VerificationError::TypeMismatch {
-                            function: fn_name.clone(),
-                            pc,
-                            expected: expected_ty.display_name(),
-                            found: val.display_name(),
-                        });
+                    // Reject struct-typed field targets — writing a struct into a struct
+                    // field would implicitly drop the old value, violating linearity.
+                    if let Some(expected_ty) = resolve_field_path_type(&root_ty, path, module) {
+                        if matches!(expected_ty, AbstractType::Struct(_)) {
+                            errors.push(VerificationError::StructTypedFieldWritten {
+                                function: fn_name.clone(),
+                                pc,
+                                field: path.last().cloned().unwrap_or_default(),
+                            });
+                        } else if !types_compatible(&val, &expected_ty) {
+                            errors.push(VerificationError::TypeMismatch {
+                                function: fn_name.clone(),
+                                pc,
+                                expected: expected_ty.display_name(),
+                                found: val.display_name(),
+                            });
+                        }
                     }
                 }
                 // Slot stays live — field updated in place.
@@ -651,6 +673,30 @@ pub(crate) fn check_function(
                             }
                             let field_ty = resolve_field_type(&ty, field_name, module)
                                 .unwrap_or(AbstractType::Address);
+                            if matches!(field_ty, AbstractType::Struct(_)) {
+                                // Extracting a struct-typed field: the result itself is linear.
+                                errors.push(VerificationError::StructTypedFieldLoaded {
+                                    function: fn_name.clone(),
+                                    pc,
+                                    field: field_name.clone(),
+                                });
+                            } else if let AbstractType::Struct(ref type_name) = ty {
+                                // Result is primitive but the consumed struct may have other
+                                // struct-typed fields that would be silently dropped.
+                                if let Some(def) = module.get_struct(type_name)
+                                    && let Some(linear_field) = def.fields.iter().find(|f| {
+                                        matches!(from_type(&f.ty), AbstractType::Struct(_))
+                                    })
+                                {
+                                    errors.push(VerificationError::GetFieldDropsLinearField {
+                                        function: fn_name.clone(),
+                                        pc,
+                                        type_name: type_name.clone(),
+                                        linear_field: linear_field.name.clone(),
+                                    });
+                                }
+                            }
+
                             state.push(field_ty);
                         }
                         other => {
@@ -1087,11 +1133,10 @@ fn check_return(func: &Function, state: &AbstractState, errors: &mut Vec<Verific
         }
     }
 
-    // Unconsumed linear values (Struct) in non-param local slots.
-    // Param slots (0..params.len()) are exempt: a live struct there means
-    // "mutated in place" — the effects system writes it back to its original owner.
-    let param_count = func.params.len();
-    for (slot, local) in state.locals.iter().enumerate().skip(param_count) {
+    // Unconsumed linear values (Struct) in any local slot — including param slots.
+    // The compiler enforces linearity for all struct values (params and locals alike),
+    // so a live struct in any slot at Return is always a bug.
+    for (slot, local) in state.locals.iter().enumerate() {
         if matches!(local, SlotState::Live(t) if t.is_linear()) {
             errors.push(VerificationError::UnconsumedStruct {
                 function: fn_name.clone(),

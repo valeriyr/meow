@@ -6,7 +6,10 @@ license = "MIT"
 authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "Runnable examples of Meow smart contracts"
 
+# This crate has no library target — it exists solely as a collection of
+# integration tests under tests/. All dependencies are dev-dependencies.
 [dev-dependencies]
+meow-framework.workspace = true
 meow-types.workspace = true
 meow-vm-adapter.workspace = true
 meow-vm-types.workspace = true

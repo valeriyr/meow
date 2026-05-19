@@ -1,6 +1,11 @@
+//! Shared type and value definitions used across the VM, compiler, verifier, and adapter.
+//!
+//! Keeping a single definition avoids translation layers between crates and ensures that
+//! values produced by the compiler can be consumed by the VM without conversion.
+
 use serde::{Deserialize, Serialize};
 
-use crate::address::Address;
+use crate::{address::Address, module_ref};
 
 /// All types supported by the VM.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -57,7 +62,7 @@ impl Type {
 
     /// Returns `true` if this is a struct type declared in a different module.
     pub fn is_cross_module(&self) -> bool {
-        matches!(self, Self::Struct(name) if is_cross_module_type_name(name))
+        matches!(self, Self::Struct(name) if module_ref::is_qualified(name))
     }
 }
 
@@ -143,6 +148,51 @@ impl Value {
         }
     }
 
+    /// Returns a slice of the inner elements if this is a `Tuple`, or `None` otherwise.
+    pub fn as_tuple(&self) -> Option<&[Value]> {
+        match self {
+            Self::Tuple(elements) => Some(elements),
+            _ => None,
+        }
+    }
+
+    /// Returns `true` if this is a `Void` value.
+    pub fn is_void(&self) -> bool {
+        matches!(self, Self::Void)
+    }
+
+    /// Returns a reference to the named field if this is a `Struct`, or `None` otherwise.
+    pub fn field(&self, name: &str) -> Option<&Value> {
+        match self {
+            Self::Struct { fields, .. } => fields.iter().find(|(k, _)| k == name).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
+    /// Returns the `u64` value of the named struct field, or `None` if the field is absent
+    /// or is not a `U64`.
+    pub fn field_u64(&self, name: &str) -> Option<u64> {
+        self.field(name)?.as_u64()
+    }
+
+    /// Returns the string slice of the named struct field, or `None` if the field is absent
+    /// or is not a `Str`.
+    pub fn field_str(&self, name: &str) -> Option<&str> {
+        self.field(name)?.as_str()
+    }
+
+    /// Returns the `bool` of the named struct field, or `None` if the field is absent
+    /// or is not a `Bool`.
+    pub fn field_bool(&self, name: &str) -> Option<bool> {
+        self.field(name)?.as_bool()
+    }
+
+    /// Returns the address of the named struct field, or `None` if the field is absent
+    /// or is not an `Address`.
+    pub fn field_address(&self, name: &str) -> Option<Address> {
+        self.field(name)?.as_address()
+    }
+
     /// Returns true if this value uses move semantics.
     /// Structs always use move semantics. Tuples use move semantics if any element does.
     pub fn uses_move_semantics(&self) -> bool {
@@ -208,10 +258,4 @@ impl StructDef {
     pub fn field_index(&self, field_name: &str) -> Option<usize> {
         self.fields.iter().position(|f| f.name == field_name)
     }
-}
-
-/// Returns `true` if `name` is a qualified struct name of the form `"dep_alias::TypeName"`,
-/// indicating it was declared in a different module.
-pub fn is_cross_module_type_name(name: &str) -> bool {
-    name.contains("::")
 }

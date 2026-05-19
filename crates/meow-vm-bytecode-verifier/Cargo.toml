@@ -3,7 +3,7 @@ name = "meow-vm-bytecode-verifier"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-authors = ["Valerii Reutov <valerii.reutov@iota.org>"]
+authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "Bytecode verifier for MEOW VM modules — abstract interpretation before publish"
 
 [dependencies]

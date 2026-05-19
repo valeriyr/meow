@@ -1,3 +1,8 @@
+//! Identifier type that enforces naming rules at construction time.
+//!
+//! Validating at construction time means invalid names are rejected early and cleanly,
+//! rather than causing confusing failures deep in the compiler or VM.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{config, identifier::error::IdentifierError};

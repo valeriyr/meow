@@ -1,3 +1,5 @@
+//! Per-instruction gas cost table with a sensible default schedule.
+
 use meow_vm_types::bytecode::Instruction;
 
 /// Per-instruction gas costs.

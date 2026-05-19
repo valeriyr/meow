@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use meow_vm_types::{address::Address, module_ref::parse_module_ref};
+use meow_vm_types::{
+    address::Address,
+    module_ref::{is_qualified, parse_module_ref, qualify},
+};
 
 //
 // ─── Happy paths ───
@@ -34,6 +37,46 @@ fn parses_full_address() {
 fn preserves_function_name_exactly() {
     let (_, name) = parse_module_ref("@0x01::some_fn_name").unwrap();
     assert_eq!(name, "some_fn_name");
+}
+
+//
+// ─── qualify ───
+//
+
+#[test]
+fn qualify_produces_expected_format() {
+    assert_eq!(
+        qualify(&Address::ZERO, "Token"),
+        "@0x0000000000000000000000000000000000000000000000000000000000000000::Token"
+    );
+}
+
+#[test]
+fn qualify_roundtrips_with_parse() {
+    let addr = Address::from_str("0xabcd").unwrap();
+    let qualified = qualify(&addr, "Transfer");
+
+    let (parsed_addr, parsed_name) = parse_module_ref(&qualified).unwrap();
+
+    assert_eq!(parsed_addr, addr);
+    assert_eq!(parsed_name, "Transfer");
+}
+
+//
+// ─── is_qualified ───
+//
+
+#[test]
+fn is_qualified_returns_true_for_cross_module_ref() {
+    assert!(is_qualified("dep::Foo"));
+    assert!(is_qualified("my_module::Bar"));
+    assert!(is_qualified("@0x01::Foo"));
+}
+
+#[test]
+fn is_qualified_returns_false_for_plain_name() {
+    assert!(!is_qualified("Foo"));
+    assert!(!is_qualified(""));
 }
 
 //

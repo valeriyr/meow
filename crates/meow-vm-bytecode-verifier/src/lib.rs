@@ -1,13 +1,9 @@
 //! Bytecode verifier for Meow VM modules.
 //!
-//! Validates a compiled [`Module`] before it is stored on-chain, catching
-//! malformed bytecode that the compiler would never emit but that a malicious
-//! publisher could craft by hand.
-//!
-//! Call [`verify`] with the module, its transitive dependency map, the
-//! adapter-supplied native signatures, and the active [`CompilerConfig`].
-//! It returns `Ok(())` when the module is safe to execute, or a non-empty
-//! `Err(Vec<VerificationError>)` listing every problem found.
+//! Validates a compiled module before it is stored on-chain, catching malformed bytecode
+//! that the compiler would never emit but that a malicious publisher could craft by hand.
+//! Verification is split into a structural pass (cheap, no stack simulation) followed by
+//! abstract interpretation (type safety and move-semantics checks).
 
 use std::collections::HashMap;
 

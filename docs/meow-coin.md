@@ -10,7 +10,7 @@ See [Contracts](contracts.md) for the language reference and call argument forma
 
 Source: [`crates/meow-framework/modules/meow_coin.meow`](../crates/meow-framework/modules/meow_coin.meow)
 
-`mint` is called only at genesis and cannot be called by users. All other functions are available via `meow transaction meow-call`.
+`mint` is called only at genesis and cannot be called by users. `balance`, `to_balance`, and `from_balance` return struct types and cannot be used as transaction entry points — call them from within other contract functions. All remaining public functions are available via `meow transaction meow-call`.
 
 ## Find your coins
 
@@ -72,7 +72,7 @@ meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 
 ## Merge two coins
 
-Adds the balance of `from` into `to` and destroys `from`. Both coins must be owned by the sender.
+Adds the balance of `from` into `to`, destroys `from`, and transfers `to` back to the transaction sender. Both coins must be owned by the sender.
 
 ```bash
 meow transaction meow-call \
@@ -85,6 +85,28 @@ meow transaction meow-call \
 meow transaction sign <BASE64_TRANSACTION>
 meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 ```
+
+## Merge and send to another address
+
+Like `merge` but sends the resulting coin to `recipient` instead of the sender.
+
+```bash
+meow transaction meow-call \
+  --module 0x10 \
+  --function merge_and_transfer \
+  --sender <YOUR_ADDRESS> \
+  --gas-coin <GAS_COIN_ADDRESS> \
+  <FROM_COIN_ADDRESS> <TO_COIN_ADDRESS> @<RECIPIENT_ADDRESS>
+
+meow transaction sign <BASE64_TRANSACTION>
+meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
+```
+
+## Coin balance struct
+
+`MeowCoinBalance` is a plain struct (not an on-chain object) that holds a coin amount without an identity. It is useful when you need to embed a balance inside another on-chain object rather than holding a standalone coin.
+
+Use `to_balance` to convert a `MeowCoin` into a `MeowCoinBalance` (the coin is destroyed in the process). Use `from_balance` to convert back (a new coin object is created).
 
 ## Burn a coin
 

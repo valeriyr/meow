@@ -1,4 +1,4 @@
-//! Code generator: walks the AST and emits bytecode [`Instruction`]s.
+//! Code generator: walks the AST and emits bytecode instructions.
 
 use std::collections::HashMap;
 
@@ -7,7 +7,8 @@ use meow_vm_types::{
     bytecode::Instruction,
     config::CompilerConfig,
     module::{Function, Module},
-    types::{self, StructDef, Type},
+    module_ref,
+    types::{StructDef, Type},
 };
 
 use crate::{
@@ -98,6 +99,8 @@ impl<'m> Codegen<'m> {
         for stmt in ast_fn.body {
             cg.compile_stmt(stmt)?;
         }
+
+        cg.check_all_structs_consumed(&ast_fn.name)?;
 
         // Ensure the function always ends with Return.
         if cg.code.last() != Some(&Instruction::Return) {
@@ -204,7 +207,7 @@ impl<'m> Codegen<'m> {
     fn translate_name(&self, name: &str) -> Result<String> {
         if let Some((mod_name, rest)) = name.split_once("::") {
             match self.dep_addresses.get(mod_name) {
-                Some(addr) => Ok(format!("@{addr}::{rest}")),
+                Some(addr) => Ok(module_ref::qualify(addr, rest)),
                 None => Err(CompilerError::Message(format!(
                     "reference to undeclared module '{mod_name}' — add `use {mod_name};` at the top of the file",
                 ))),
@@ -370,12 +373,28 @@ impl<'m> Codegen<'m> {
                     if let Some(ty) = self.local_types.get(&slot) {
                         self.check_field_read(ty, &path[0])?;
                     }
+                    // Reject struct-typed field access — structs have move semantics.
+                    if let Expr::Ident(ref name) = root_expr
+                        && let Some(&(slot, _)) = self.locals.get(name.as_str())
+                        && let Some(root_ty) = self.local_types.get(&slot)
+                        && let Some(final_ty) = self.field_path_type(root_ty, &path)
+                        && matches!(final_ty, Type::Struct(_))
+                    {
+                        return Err(CompilerError::Message(format!(
+                            "field '{}' has struct type and cannot be accessed directly — structs have move semantics; use destructuring `let TypeName {{ {}, .. }} = expr;`",
+                            path.last().unwrap(),
+                            path.last().unwrap(),
+                        )));
+                    }
                     self.emit(Instruction::LoadField(slot, path));
                     return Ok(());
                 }
                 // Fallback: compile base expression, then GetField for each step.
-                if let Some(ty) = self.infer_type(&root_expr) {
-                    self.check_field_read(&ty, &path[0])?;
+                // The struct is consumed from the stack by each GetField — check linearity.
+                let current_ty = self.infer_type(&root_expr);
+                if let Some(ref ty) = current_ty {
+                    self.check_field_read(ty, &path[0])?;
+                    self.check_getfield_on_struct(ty, &path[0])?;
                 }
                 self.compile_expr(root_expr)?;
                 for step in path {
@@ -385,7 +404,7 @@ impl<'m> Codegen<'m> {
 
             Expr::StructLit { name, fields } => {
                 // Cross-module struct construction is always forbidden.
-                if types::is_cross_module_type_name(&name) {
+                if module_ref::is_qualified(&name) {
                     return Err(CompilerError::Message(format!(
                         "cannot construct '{name}' outside its declaring module — \
                          structs can only be created where they are defined",
@@ -635,11 +654,92 @@ impl<'m> Codegen<'m> {
                     self.check_field_write(ty, first_field)?;
                 }
 
+                // Reject assignment to a struct-typed field — old value would be silently dropped.
+                if let Some(obj_ty) = self.local_types.get(&slot)
+                    && let Some(final_ty) = self.field_path_type(obj_ty, &field_path)
+                    && matches!(final_ty, Type::Struct(_))
+                {
+                    return Err(CompilerError::Message(format!(
+                        "cannot assign to struct-typed field '{}' — structs have move semantics",
+                        field_path.last().unwrap()
+                    )));
+                }
+
                 self.compile_expr(expr)?;
                 self.emit(Instruction::StoreField(slot, field_path));
             }
         }
         Ok(())
+    }
+
+    /// Checks that all struct-typed locals are consumed at the end of the function body.
+    ///
+    /// Any slot that still has a non-primitive type in `local_types` was never loaded
+    /// (consumed), meaning the value would be silently dropped. Called once after the
+    /// top-level function body is compiled. This includes parameters — the compiler
+    /// enforces linearity for all struct values, so no exemption is needed.
+    fn check_all_structs_consumed(&self, fn_name: &str) -> Result<()> {
+        for (name, &(slot, _)) in &self.locals {
+            if let Some(ty) = self.local_types.get(&slot)
+                && !ty.is_primitive()
+            {
+                return Err(CompilerError::Message(format!(
+                    "in function '{fn_name}': '{name}' of type '{}' must be consumed before the function returns",
+                    ty.name()
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Check that accessing `field` on `struct_ty` via GetField is linearity-safe.
+    ///
+    /// GetField consumes the entire struct from the stack. If the struct has
+    /// struct-typed fields, they would be silently dropped — a linearity violation.
+    /// Cross-module types are not in `self.structs` and are already blocked by
+    /// `check_field_read`; this method only enforces rules for same-module types.
+    fn check_getfield_on_struct(&self, struct_ty: &Type, field: &str) -> Result<()> {
+        let def = match self.structs.iter().find(|s| s.name == struct_ty.name()) {
+            Some(d) => d,
+            None => return Ok(()),
+        };
+        if let Some(field_def) = def.fields.iter().find(|f| f.name == field)
+            && matches!(field_def.ty, Type::Struct(_))
+        {
+            return Err(CompilerError::Message(format!(
+                "field '{field}' has struct type and cannot be accessed directly — \
+                     structs have move semantics; use destructuring `let {} {{ {field}, .. }} = expr;`",
+                struct_ty.name(),
+            )));
+        }
+
+        if let Some(linear) = def
+            .fields
+            .iter()
+            .find(|f| f.name != field && matches!(f.ty, Type::Struct(_)))
+        {
+            return Err(CompilerError::Message(format!(
+                "cannot access field '{field}' on '{}' — struct-typed field '{}' would be \
+                 silently dropped; use destructuring `let {} {{ {field}, .. }} = expr;`",
+                struct_ty.name(),
+                linear.name,
+                struct_ty.name(),
+            )));
+        }
+        Ok(())
+    }
+
+    /// Walk a field path starting from `root_ty` and return the type of the final field.
+    ///
+    /// Returns `None` if any step in the path is unresolvable (unknown struct or field).
+    fn field_path_type(&self, root_ty: &Type, path: &[String]) -> Option<Type> {
+        let mut current = root_ty.clone();
+        for field_name in path {
+            let def = self.structs.iter().find(|s| s.name == current.name())?;
+            let field_def = def.fields.iter().find(|f| &f.name == field_name)?;
+            current = field_def.ty.clone();
+        }
+        Some(current)
     }
 
     /// Checks that all structs introduced inside a branch body have been consumed.

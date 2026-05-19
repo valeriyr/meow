@@ -1,4 +1,5 @@
-//! Semantic validator: checks struct references, field types, identifier rules, and limits.
+//! Semantic validator: checks well-formedness constraints that require cross-referencing
+//! the full module (struct existence, field type validity, identifier rules, count limits).
 
 use std::collections::{HashMap, HashSet};
 
@@ -7,6 +8,7 @@ use meow_vm_types::{
     config::CompilerConfig,
     identifier::{self, RESERVED_FUNCTION_NAMES},
     module::Module,
+    module_ref,
     types::{FieldDef, StructDef, Type},
 };
 
@@ -111,7 +113,7 @@ fn translate_type(ty: &Type, dep_addresses: &HashMap<String, Address>) -> Type {
             if let Some((mod_name, type_name)) = name.split_once("::")
                 && let Some(addr) = dep_addresses.get(mod_name)
             {
-                return Type::Struct(format!("@{addr}::{type_name}"));
+                return Type::Struct(module_ref::qualify(addr, type_name));
             }
             ty.clone()
         }

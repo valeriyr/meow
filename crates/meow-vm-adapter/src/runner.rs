@@ -1,3 +1,8 @@
+//! Lightweight call harness for unit tests.
+//!
+//! Sets up real native functions and a shared execution context but skips transaction
+//! overhead, making it easy to test module logic in isolation.
+
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use meow_types::{address::Address, config, digest::Digest, identifier::Identifier};
@@ -16,8 +21,6 @@ pub type Result<T> = std::result::Result<T, VmError>;
 pub struct RunResult {
     /// The return value of the call, if any.
     pub return_value: Option<Value>,
-    /// Post-call slot state: `None` means the object was consumed (moved out).
-    pub final_args: Vec<Option<Value>>,
     /// Objects transferred out during the call: `(object, new_owner)`.
     pub transfers: Vec<(Value, Address)>,
     /// IDs of objects destroyed during the call.
@@ -27,8 +30,11 @@ pub struct RunResult {
 }
 
 /// Run a compiled module function with a fixed context, real natives, and unlimited gas.
+///
+/// The first element of the `module` tuple is the on-chain address of the module, used to
+/// qualify struct type names produced by `NewStruct` instructions (e.g. `@0x10::MeowCoin`).
 pub fn run(
-    module: Module,
+    module: (Address, Module),
     fn_name: &Identifier,
     args: Vec<Value>,
     deps: HashMap<Address, Module>,
@@ -51,7 +57,7 @@ pub fn run(
 /// Like [`run`] but uses the privileged VM config, which allows calling private functions.
 /// Use this to test functions that are intentionally private (e.g. `mint`).
 pub fn run_privileged(
-    module: Module,
+    module: (Address, Module),
     fn_name: &Identifier,
     args: Vec<Value>,
     deps: HashMap<Address, Module>,
@@ -73,7 +79,7 @@ pub fn run_privileged(
 
 /// Run a compiled module function with a fixed context, real natives, and the given gas meter.
 fn run_inner(
-    module: Module,
+    module: (Address, Module),
     fn_name: &Identifier,
     args: Vec<Value>,
     deps: HashMap<Address, Module>,
@@ -88,19 +94,21 @@ fn run_inner(
         external_context.timestamp(),
     )));
     let natives = natives::build_natives(ctx.clone());
-    let deps = deps
-        .into_iter()
-        .map(|(addr, module)| (addr.into(), module))
-        .collect();
+    let deps = deps.into_iter().map(|(addr, m)| (addr.into(), m)).collect();
 
-    let vm = Vm::new(module, natives, GasSchedule::default(), deps, vm_config);
+    let vm = Vm::new(
+        (module.0.into(), module.1),
+        natives,
+        GasSchedule::default(),
+        deps,
+        vm_config,
+    );
 
     let call_result = vm.call(fn_name.as_ref(), args, gas)?;
 
     let ctx = ctx.borrow();
     Ok(RunResult {
         return_value: call_result.return_value,
-        final_args: call_result.final_args,
         transfers: ctx.transfers().to_vec(),
         destroyed: ctx.destroyed().to_vec(),
         gas_spent: gas.spent(),

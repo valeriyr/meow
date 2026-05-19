@@ -1,3 +1,9 @@
+//! Transaction format and signing for the Meow chain.
+//!
+//! A transaction describes either a contract call or a module publish, together with the gas
+//! coin and sender address. Structural validation (size limits, argument count) happens here
+//! before the transaction reaches the executor, so the executor can assume well-formed input.
+
 pub mod call;
 pub mod execution_result;
 pub mod input;

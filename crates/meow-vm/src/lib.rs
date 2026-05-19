@@ -16,7 +16,7 @@
 //! use meow_vm::Vm;
 //! use meow_vm::gas_meter::GasMeter;
 //! use meow_vm::gas_schedule::GasSchedule;
-//! use meow_vm_types::{config::{CompilerConfig, VmConfig}, types::Value};
+//! use meow_vm_types::{address::Address, config::{CompilerConfig, VmConfig}, types::Value};
 //!
 //! let source = r#"
 //!     mod math;
@@ -27,7 +27,7 @@
 //! "#;
 //!
 //! let module = Compiler::compile(source, &[], &[], CompilerConfig::default()).unwrap();
-//! let vm = Vm::new(module, vec![], GasSchedule::default(), HashMap::new(), VmConfig::default());
+//! let vm = Vm::new((Address::ZERO, module), vec![], GasSchedule::default(), HashMap::new(), VmConfig::default());
 //! let mut gas = GasMeter::new(1_000);
 //!
 //! let result = vm.call("add", vec![Value::U64(3), Value::U64(4)], &mut gas).unwrap();
@@ -64,11 +64,6 @@ pub type Result<T> = std::result::Result<T, VmError>;
 pub struct VmCallResult {
     /// Value returned by the function, if any.
     pub return_value: Option<Value>,
-    /// Final state of each argument passed to the top-level call.
-    ///
-    /// `None` if the argument was consumed (passed to a native that takes ownership).
-    /// `Some(v)` if the argument was not consumed (may have been mutated via `StoreField`).
-    pub final_args: Vec<Option<Value>>,
 }
 
 //
@@ -124,6 +119,8 @@ impl Frame {
 /// modules as a `HashMap<Address, Module>` via [`Vm::new`].
 pub struct Vm {
     module: Module,
+    /// On-chain address of the main module. Used to qualify local struct type names in bytecode.
+    module_addr: Address,
     /// Dependency modules indexed by **address** — the module's unique on-chain identifier.
     /// Bytecode encodes cross-module calls as `@<hex_address>::fn_name`, so resolution
     /// is unambiguous even when two dep modules share the same human-readable name.
@@ -136,10 +133,14 @@ pub struct Vm {
 impl Vm {
     /// Creates a new VM from a compiled module, native function bindings, a gas schedule, and a config.
     ///
+    /// `module` is a `(address, module)` pair — the address is the on-chain address of the module.
+    /// Struct values created by `NewStruct` instructions will have their type names qualified as
+    /// `@<address>::<name>`, enabling the adapter layer to identify which module each struct belongs to.
+    ///
     /// `deps` maps each dep module's on-chain address to its compiled [`Module`].
     /// The address is the key used to resolve `@<address>::fn_name` bytecode references at runtime.
     pub fn new(
-        module: Module,
+        module: (Address, Module),
         natives: Vec<NativeFnEntry>,
         gas_schedule: GasSchedule,
         deps: HashMap<Address, Module>,
@@ -172,8 +173,10 @@ impl Vm {
                 meow_vm_types::natives::meow_vm_abort_entry(),
             );
         }
+        let (module_addr, module) = module;
         Self {
             module,
+            module_addr,
             deps,
             natives: native_map,
             gas_schedule,
@@ -183,8 +186,7 @@ impl Vm {
 
     /// Call `fn_name` with the given arguments.
     ///
-    /// Returns a [`VmCallResult`] with the optional return value and the final
-    /// state of each argument (for executor-level object tracking).
+    /// Returns a [`VmCallResult`] with the optional return value.
     pub fn call(
         &self,
         fn_name: &str,
@@ -211,17 +213,17 @@ impl Vm {
             return Err(VmError::PrivateFunction(fn_name.to_string()));
         }
 
-        let param_count = func.params.len();
+        for arg in &args {
+            assert!(
+                check_struct_qualified(arg),
+                "struct argument has unqualified type name; all struct values passed to the VM must use @0xHEX::Name format"
+            );
+        }
 
-        let (return_value, final_locals) = self.call_inner(fn_name, &self.module, args, gas, 0)?;
+        let return_value =
+            self.call_inner(fn_name, &self.module, self.module_addr, args, gas, 0)?;
 
-        // Expose the final state of each parameter slot as final_args.
-        let final_args = final_locals.into_iter().take(param_count).collect();
-
-        Ok(VmCallResult {
-            return_value,
-            final_args,
-        })
+        Ok(VmCallResult { return_value })
     }
 
     /// Inner recursive call.
@@ -229,16 +231,15 @@ impl Vm {
     /// `context_module` — the module that owns the function being called. Used to
     /// resolve unqualified function/struct names within that function's bytecode.
     /// Cross-module calls (`module::fn`) look up the target in `self.deps`.
-    ///
-    /// Returns `(return_value, final_locals)`.
     fn call_inner(
         &self,
         fn_name: &str,
         context_module: &Module,
+        context_module_addr: Address,
         args: Vec<Value>,
         gas: &mut GasMeter,
         depth: usize,
-    ) -> Result<(Option<Value>, Vec<Option<Value>>)> {
+    ) -> Result<Option<Value>> {
         let max_call_depth = self.config.max_call_depth();
         if depth >= max_call_depth {
             return Err(VmError::CallStackOverflow(max_call_depth));
@@ -425,17 +426,20 @@ impl Vm {
                     type_name,
                     field_names,
                 } => {
-                    // Validate the struct definition exists.
-                    if let Some((dep_addr, struct_name)) = module_ref::parse_module_ref(&type_name)
+                    // Validate the struct definition exists and qualify the type name.
+                    let qualified_type_name = if let Some((dep_addr, struct_name)) =
+                        module_ref::parse_module_ref(&type_name)
                     {
                         self.deps
                             .get(&dep_addr)
                             .and_then(|m| m.get_struct(struct_name))
                             .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
+                        type_name // already @addr::name — keep as-is
                     } else {
                         context_module
                             .get_struct(&type_name)
                             .ok_or_else(|| VmError::UndefinedStruct(type_name.clone()))?;
+                        module_ref::qualify(&context_module_addr, &type_name)
                     };
                     // Pop values in reverse field order.
                     let mut fields: Vec<(String, Value)> = Vec::with_capacity(field_names.len());
@@ -445,7 +449,10 @@ impl Vm {
                     }
                     fields.reverse();
 
-                    frame.push(Value::Struct { type_name, fields });
+                    frame.push(Value::Struct {
+                        type_name: qualified_type_name,
+                        fields,
+                    });
                 }
 
                 Instruction::GetField(field) => {
@@ -545,8 +552,8 @@ impl Vm {
                             .map(|_| frame.pop())
                             .collect::<Result<Vec<_>>>()?;
                         args.reverse();
-                        let (ret, _) =
-                            self.call_inner(fn_name_in_dep, dep, args, gas, depth + 1)?;
+                        let ret =
+                            self.call_inner(fn_name_in_dep, dep, dep_addr, args, gas, depth + 1)?;
                         frame.push(ret.unwrap_or(Value::Void));
                     } else if let Some(callee) = context_module.get_function(&name) {
                         let arg_count = callee.params.len();
@@ -555,8 +562,14 @@ impl Vm {
                             .collect::<Result<Vec<_>>>()?;
                         args.reverse();
 
-                        let (ret, _) =
-                            self.call_inner(&name, context_module, args, gas, depth + 1)?;
+                        let ret = self.call_inner(
+                            &name,
+                            context_module,
+                            context_module_addr,
+                            args,
+                            gas,
+                            depth + 1,
+                        )?;
                         frame.push(ret.unwrap_or(Value::Void));
                     } else if let Some(native) = self.natives.get(&name) {
                         let param_count = native.params.len();
@@ -569,6 +582,12 @@ impl Vm {
 
                         match (native.func)(args) {
                             NativeResult::Return(v) => {
+                                if let Some(ref val) = v {
+                                    assert!(
+                                        check_struct_qualified(val),
+                                        "native function '{name}' returned a struct with unqualified type name"
+                                    );
+                                }
                                 frame.push(v.unwrap_or(Value::Void));
                             }
                             NativeResult::Abort { code, message } => {
@@ -585,8 +604,7 @@ impl Vm {
 
                 // ── Return ────────────────────────────────────────────────────
                 Instruction::Return => {
-                    let ret = frame.stack.pop();
-                    return Ok((ret, frame.locals));
+                    return Ok(frame.stack.pop());
                 }
 
                 // ── Tuples ────────────────────────────────────────────────────
@@ -624,7 +642,7 @@ impl Vm {
             }
         }
 
-        Ok((frame.stack.pop(), frame.locals))
+        Ok(frame.stack.pop())
     }
 }
 
@@ -721,4 +739,15 @@ fn cmp_values(l: &Value, r: &Value) -> Result<bool> {
         .as_u64()
         .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", r.type_name())))?;
     Ok(a < b)
+}
+
+/// Returns `true` if `val` and all structs nested within it have qualified type names.
+fn check_struct_qualified(val: &Value) -> bool {
+    if let Value::Struct { type_name, fields } = val {
+        if module_ref::parse_module_ref(type_name).is_none() {
+            return false;
+        }
+        return fields.iter().all(|(_, v)| check_struct_qualified(v));
+    }
+    true
 }

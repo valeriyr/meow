@@ -25,7 +25,7 @@ pub fn compile_with_deps(source: &str, deps: &[(Address, &Module)]) -> Module {
 /// Builds a `Vm` with a module and no deps.
 pub fn vm(module: Module) -> Vm {
     Vm::new(
-        module,
+        (Address::ZERO, module),
         vec![],
         GasSchedule::default(),
         HashMap::new(),
@@ -36,7 +36,7 @@ pub fn vm(module: Module) -> Vm {
 /// Builds a `Vm` with a module and dep modules.
 pub fn vm_with_deps(module: Module, deps: HashMap<Address, Module>) -> Vm {
     Vm::new(
-        module,
+        (Address::ZERO, module),
         vec![],
         GasSchedule::default(),
         deps,
@@ -62,11 +62,26 @@ pub fn vm_with_natives(source: &str, natives: Vec<NativeFnEntry>) -> Vm {
     let module = Compiler::compile(source, &[], &native_sigs, CompilerConfig::default())
         .expect("compilation failed");
     Vm::new(
-        module,
+        (Address::ZERO, module),
         natives,
         GasSchedule::default(),
         HashMap::new(),
         VmConfig::default(),
+    )
+}
+
+/// Builds a `Vm` with a module, deps, and a custom `VmConfig`.
+pub fn vm_with_deps_and_config(
+    module: Module,
+    deps: HashMap<Address, Module>,
+    config: VmConfig,
+) -> Vm {
+    Vm::new(
+        (Address::ZERO, module),
+        vec![],
+        GasSchedule::default(),
+        deps,
+        config,
     )
 }
 
@@ -77,7 +92,7 @@ pub fn vm_with_deps_and_natives(
     natives: Vec<NativeFnEntry>,
 ) -> Vm {
     Vm::new(
-        module,
+        (Address::ZERO, module),
         natives,
         GasSchedule::default(),
         deps,

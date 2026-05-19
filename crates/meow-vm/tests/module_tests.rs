@@ -3,7 +3,7 @@ mod utils;
 use std::{collections::HashMap, str::FromStr};
 
 use meow_vm::error::VmError;
-use meow_vm_types::{address::Address, types::Value};
+use meow_vm_types::{address::Address, module_ref, types::Value};
 
 //
 // ─── Basic cross-module function call ───
@@ -61,7 +61,7 @@ fn cross_module_struct_via_constructor_and_field_access() {
             pub struct Point { x: u64, y: u64 }
 
             pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
     );
 
@@ -74,7 +74,7 @@ fn cross_module_struct_via_constructor_and_field_access() {
 
                 pub fn make_and_read() -> u64 {{
                     let p = shapes::make_point(5, 9);
-                    shapes::get_x(p)
+                    shapes::to_x(p)
                 }}
             "#,
             a10
@@ -102,7 +102,7 @@ fn cross_module_field_read_via_getter() {
             pub struct Point { x: u64, y: u64 }
 
             pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
     );
 
@@ -115,7 +115,7 @@ fn cross_module_field_read_via_getter() {
 
                 pub fn read_x_via_getter() -> u64 {{
                     let p = shapes::make_point(7, 3);
-                    shapes::get_x(p)
+                    shapes::to_x(p)
                 }}
             "#,
             a10
@@ -145,7 +145,7 @@ fn same_struct_name_in_different_modules_are_distinct() {
             pub struct Token { amount: u64 }
 
             pub fn make_token(amount: u64) -> Token { Token { amount: amount } }
-            pub fn get_amount(t: Token) -> u64 { t.amount }
+            pub fn to_amount(t: Token) -> u64 { let Token { amount } = t; amount }
         "#,
     );
     let mod_b = utils::compile(
@@ -155,7 +155,7 @@ fn same_struct_name_in_different_modules_are_distinct() {
             pub struct Token { points: u64 }
 
             pub fn make_token(points: u64) -> Token { Token { points: points } }
-            pub fn get_points(t: Token) -> u64 { t.points }
+            pub fn to_points(t: Token) -> u64 { let Token { points } = t; points }
         "#,
     );
 
@@ -170,7 +170,7 @@ fn same_struct_name_in_different_modules_are_distinct() {
                 pub fn run() -> u64 {{
                     let ta = mod_a::make_token(100);
                     let tb = mod_b::make_token(42);
-                    mod_a::get_amount(ta) + mod_b::get_points(tb)
+                    mod_a::to_amount(ta) + mod_b::to_points(tb)
                 }}
             "#,
             aa0, ab0
@@ -290,7 +290,7 @@ fn cross_module_nested_structs() {
 
             pub struct Point { x: u64, y: u64 }
 
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
     );
 
@@ -304,7 +304,8 @@ fn cross_module_nested_structs() {
                 pub struct Line {{ a: geometry::Point, b: geometry::Point }}
 
                 pub fn x_distance(line: Line) -> u64 {{
-                    geometry::get_x(line.b) - geometry::get_x(line.a)
+                    let Line {{ a, b }} = line;
+                    geometry::to_x(b) - geometry::to_x(a)
                 }}
             "#,
             a30
@@ -313,14 +314,14 @@ fn cross_module_nested_structs() {
     );
 
     let point = |x: u64, y: u64| Value::Struct {
-        type_name: "Point".to_string(),
+        type_name: module_ref::qualify(&a30, "Point"),
         fields: vec![
             ("x".to_string(), Value::U64(x)),
             ("y".to_string(), Value::U64(y)),
         ],
     };
     let line = Value::Struct {
-        type_name: "Line".to_string(),
+        type_name: module_ref::qualify(&Address::ZERO, "Line"),
         fields: vec![
             ("a".to_string(), point(2, 0)),
             ("b".to_string(), point(9, 0)),
@@ -348,7 +349,7 @@ fn cross_module_deeply_nested_structs() {
 
             pub struct Point { x: u64, y: u64 }
 
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
     );
 
@@ -361,7 +362,11 @@ fn cross_module_deeply_nested_structs() {
 
                 pub struct Line {{ a: point::Point, b: point::Point }}
 
-                pub fn get_a_x(line: Line) -> u64 {{ point::get_x(line.a) }}
+                pub fn to_a_x(line: Line) -> u64 {{
+                    let Line {{ a, b }} = line;
+                    point::to_x(b);
+                    point::to_x(a)
+                }}
             "#,
             a10
         ),
@@ -378,7 +383,9 @@ fn cross_module_deeply_nested_structs() {
                 pub struct Rect {{ l1: shapes::Line, l2: shapes::Line }}
 
                 pub fn left_top_x(rect: Rect) -> u64 {{
-                    shapes::get_a_x(rect.l1)
+                    let Rect {{ l1, l2 }} = rect;
+                    shapes::to_a_x(l2);
+                    shapes::to_a_x(l1)
                 }}
             "#,
             a20 = a20,
@@ -387,18 +394,18 @@ fn cross_module_deeply_nested_structs() {
     );
 
     let mk_point = |x: u64, y: u64| Value::Struct {
-        type_name: "Point".to_string(),
+        type_name: module_ref::qualify(&a10, "Point"),
         fields: vec![
             ("x".to_string(), Value::U64(x)),
             ("y".to_string(), Value::U64(y)),
         ],
     };
     let mk_line = |a, b| Value::Struct {
-        type_name: "Line".to_string(),
+        type_name: module_ref::qualify(&a20, "Line"),
         fields: vec![("a".to_string(), a), ("b".to_string(), b)],
     };
     let rect = Value::Struct {
-        type_name: "Rect".to_string(),
+        type_name: module_ref::qualify(&Address::ZERO, "Rect"),
         fields: vec![
             ("l1".to_string(), mk_line(mk_point(3, 0), mk_point(9, 0))),
             ("l2".to_string(), mk_line(mk_point(0, 0), mk_point(0, 0))),
@@ -508,7 +515,7 @@ fn alias_used_for_cross_module_struct() {
             pub struct Point { x: u64, y: u64 }
 
             pub fn make_point(x: u64, y: u64) -> Point { Point { x: x, y: y } }
-            pub fn get_x(p: Point) -> u64 { p.x }
+            pub fn to_x(p: Point) -> u64 { let Point { x, .. } = p; x }
         "#,
     );
 
@@ -521,7 +528,7 @@ fn alias_used_for_cross_module_struct() {
 
                 pub fn run() -> u64 {{
                     let p = geo::make_point(5, 9);
-                    geo::get_x(p)
+                    geo::to_x(p)
                 }}
             "#,
             a10

@@ -3,10 +3,18 @@ use meow_types::{
     address::Address,
     object::{object_owner::ObjectOwner, object_type::ObjectType},
     system_framework::{
-        meow_coin::{self, MEOW_COIN_MODULE_ADDRESS},
+        meow_coin::{self, MEOW_COIN_MODULE_ADDRESS, meow_coin_object},
         meow_object::MEOW_OBJECT_MODULE_ADDRESS,
     },
 };
+
+#[test]
+fn empty_allocations_produces_only_framework_modules() {
+    let genesis = Genesis::build(&[]).unwrap();
+
+    // meow_object + meow_coin — no coin objects
+    assert_eq!(genesis.objects().len(), 2);
+}
 
 #[test]
 fn create_genesis() {
@@ -41,7 +49,7 @@ fn create_genesis() {
     assert_eq!(meow_coin2.owner(), &ObjectOwner::Address(ADDRESS2));
     assert_eq!(meow_coin3.owner(), &ObjectOwner::Address(ADDRESS3));
 
-    assert_eq!(meow_coin::gas_meow_coin_balance(meow_coin1), Some(100));
-    assert_eq!(meow_coin::gas_meow_coin_balance(meow_coin2), Some(200));
-    assert_eq!(meow_coin::gas_meow_coin_balance(meow_coin3), Some(300));
+    assert_eq!(meow_coin_object::balance_from_object(meow_coin1), Some(100));
+    assert_eq!(meow_coin_object::balance_from_object(meow_coin2), Some(200));
+    assert_eq!(meow_coin_object::balance_from_object(meow_coin3), Some(300));
 }

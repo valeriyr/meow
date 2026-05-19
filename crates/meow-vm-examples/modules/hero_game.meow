@@ -9,22 +9,22 @@ mod hero;
 
 use meow_object@0x01;
 
-// An on-chain hero owned by a player.
+/// An on-chain hero owned by a player.
 pub struct Hero {
-    // Unique on-chain identity, set at creation and immutable.
+    /// Unique on-chain identity, set at creation and immutable.
     id: meow_object::Id,
-    // Display name chosen at `spawn`; can be changed via `rename`.
+    /// Display name chosen at `spawn`; can be changed via `rename`.
     name: string,
-    // Starts at 1; increases as experience accumulates.
+    /// Starts at 1; increases as experience accumulates.
     level: u64,
-    // XP earned by winning duels; resets on each level-up.
+    /// XP earned by winning duels; resets on each level-up.
     experience: u64,
-    // Total number of duels won; never decreases.
+    /// Total number of duels won; never decreases.
     wins: u64
 }
 
-// Creates a new level-1 Hero with the given name and transfers it to the
-// transaction sender.
+/// Creates a new level-1 Hero with the given name and transfers it to the
+/// transaction sender.
 pub fn spawn(name: string) {
     let owner = meow_vm_sender();
     let hero = Hero {
@@ -37,22 +37,19 @@ pub fn spawn(name: string) {
     meow_vm_transfer(hero, owner);
 }
 
-// Changes the hero's display name. `hero` is written back to its owner
-// with the updated name (no transfer or destroy occurs).
+/// Changes the hero's display name. `hero` is transferred back to the sender
+/// with the updated name.
 pub fn rename(hero: Hero, new_name: string) {
     hero.name = new_name;
+    meow_vm_transfer(hero, meow_vm_sender());
 }
 
-// Resolves a duel between two heroes. Both must be owned by the transaction sender.
-//
-// Each hero draws a random `u64` from the block's RNG sequence. Higher roll wins.
-// The winner gains `loser.level` × 25 XP and levels up when XP reaches `level` × 100
-// (resetting the XP to the remainder). Ties go to the `attacker`.
-//
-// Aborts with code `1` if `attacker` and `defender` are the same hero.
+/// Resolves a duel between two heroes. Both must be owned by the transaction sender.
+///
+/// Each hero draws a random `u64` from the block's RNG sequence. Higher roll wins.
+/// The winner gains `loser.level` × 25 XP and levels up when XP reaches `level` × 100
+/// (resetting the XP to the remainder). Ties go to the `attacker`.
 pub fn duel(attacker: Hero, defender: Hero) {
-    meow_vm_abort(attacker.id != defender.id, 1, "A hero cannot duel itself");
-
     let attacker_roll = meow_vm_rand();
     let defender_roll = meow_vm_rand();
 
@@ -71,14 +68,16 @@ pub fn duel(attacker: Hero, defender: Hero) {
             defender.level = defender.level + 1;
         }
     }
+    meow_vm_transfer(attacker, meow_vm_sender());
+    meow_vm_transfer(defender, meow_vm_sender());
 }
 
-// Transfers `hero` to another player.
+/// Transfers `hero` to another player.
 pub fn transfer(hero: Hero, to: address) {
     meow_vm_transfer(hero, to);
 }
 
-// Permanently destroys `hero` and removes it from chain state.
+/// Permanently destroys `hero` and removes it from chain state.
 pub fn retire(hero: Hero) {
     let Hero { id, .. } = hero;
     meow_vm_destroy(id);

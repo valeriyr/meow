@@ -1,3 +1,5 @@
+//! Wall-clock timestamp in milliseconds.
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Current Unix timestamp in milliseconds.

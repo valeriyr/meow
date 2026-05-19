@@ -1,3 +1,6 @@
+//! Input resolution — validates and extracts the gas coin, call arguments, and
+//! dependency modules from the raw transaction inputs before execution begins.
+
 use std::collections::HashMap;
 
 use meow_types::{
@@ -17,10 +20,10 @@ use meow_vm_types::{
 
 use crate::executor::{Result, error::ExecutorError};
 
-/// `(vm_values, object_args)` where `object_args` is `(arg_index, input_object)` pairs.
-type ResolvedArgs<'a> = (Vec<Value>, Vec<(usize, &'a Object)>);
+/// `(vm_values, object_args)` where `object_args` is the list of input objects.
+type ResolvedArgs<'a> = (Vec<Value>, Vec<&'a Object>);
 
-/// Resolve call arguments to VM values, tracking which ones are object inputs for later analysis.
+/// Resolve call arguments to VM values, tracking which inputs are object references.
 pub fn resolve_args<'a>(
     call: &Call,
     func: &Function,
@@ -37,8 +40,8 @@ pub fn resolve_args<'a>(
     }
 
     let mut vm_args: Vec<Value> = Vec::with_capacity(call_args_inputs.len());
-    // Track which arg indices are object inputs (for final_args analysis).
-    let mut object_args: Vec<(usize, &'a Object)> = Vec::new();
+    // Track which inputs are object references.
+    let mut object_args: Vec<&'a Object> = Vec::new();
 
     for (i, (input, (_param_name, param_type))) in
         call_args_inputs.iter().zip(func.params.iter()).enumerate()
@@ -48,7 +51,7 @@ pub fn resolve_args<'a>(
                 if let Input::Object(object_ref) = input
                     && let Some(obj) = inputs.iter().find(|o| o.address() == object_ref.address())
                 {
-                    object_args.push((i, obj));
+                    object_args.push(obj);
                 }
                 vm_args.push(v);
             }

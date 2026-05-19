@@ -1,7 +1,7 @@
-//! Adapter layer between `meow-vm` and `meow-types`.
+//! Adapter layer that connects the stack-based VM to the blockchain transaction model.
 //!
-//! Bridges the stack-based VM and blockchain transaction types, implementing
-//! transaction execution via `execute()` and module building via `build()`.
+//! Provides transaction execution and module building on top of the raw VM,
+//! wiring together gas accounting, native functions, and object lifecycle management.
 
 mod bytecode_verifier;
 mod context;
@@ -13,7 +13,5 @@ pub mod external_context;
 pub mod inputs_resolver;
 pub mod runner;
 
-// Re-export commonly used types and functions for external use.
-//
-// TODO: These types should be replaced with abstractions to abstract the crates users from VM types.
+// TODO: These types should be replaced with abstractions that hide the internal VM crate boundary.
 pub use meow_vm_types::{module::Module, types::Value};

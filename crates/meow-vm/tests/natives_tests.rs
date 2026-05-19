@@ -2,13 +2,13 @@ mod utils;
 
 use std::collections::HashMap;
 
-use meow_vm::Vm;
 use meow_vm::error::VmError;
 use meow_vm::gas_meter::GasMeter;
-use meow_vm::gas_schedule::GasSchedule;
-use meow_vm_types::config::VmConfig;
+use meow_vm_types::address::Address;
+use meow_vm_types::module_ref;
 use meow_vm_types::natives::{NativeFnEntry, NativeParam, NativeResult};
 use meow_vm_types::types::{Type, Value};
+
 //
 // ─── Native function calls ───
 //
@@ -138,77 +138,6 @@ fn use_after_move_is_an_error() {
 }
 
 //
-// ─── final_args tracking ───
-//
-
-#[test]
-fn final_args_holds_primitives_after_call() {
-    let src = r#"
-        mod test;
-
-        pub fn f(a: u64, b: u64) -> u64 { a + b }
-    "#;
-    let vm = utils::vm_with_source(src);
-    let mut gas = GasMeter::unlimited();
-    let r = vm
-        .call("f", vec![Value::U64(3), Value::U64(4)], &mut gas)
-        .unwrap();
-    assert_eq!(r.final_args, vec![Some(Value::U64(3)), Some(Value::U64(4))]);
-}
-
-#[test]
-fn final_args_is_none_for_consumed_struct() {
-    let src = r#"
-        mod test;
-
-        struct Token { amount: u64 }
-
-        pub fn consume(tok: Token) { consume_native(tok); }
-    "#;
-    let vm = utils::vm_with_natives(src, vec![utils::consume_native("consume_native")]);
-    let mut gas = GasMeter::unlimited();
-    let r = vm.call("consume", vec![test_token(50)], &mut gas).unwrap();
-    assert_eq!(r.final_args, vec![None]);
-}
-
-#[test]
-fn final_args_is_some_for_surviving_struct() {
-    // A struct that is not consumed keeps its slot — final_args holds it.
-    let src = r#"
-        mod test;
-
-        struct Token { amount: u64 }
-
-        pub fn read_amount(tok: Token) -> u64 { tok.amount }
-    "#;
-    let vm = utils::vm_with_source(src);
-    let mut gas = GasMeter::unlimited();
-    let r = vm
-        .call("read_amount", vec![test_token(77)], &mut gas)
-        .unwrap();
-    assert_eq!(r.return_value, Some(Value::U64(77)));
-    assert_eq!(r.final_args, vec![Some(test_token(77))]);
-}
-
-#[test]
-fn final_args_reflects_mutations_on_surviving_struct() {
-    // A mutated-but-not-consumed struct surfaces with its updated field values.
-    let src = r#"
-        mod test;
-
-        struct Token { amount: u64 }
-
-        pub fn double_amount(tok: Token) { tok.amount = tok.amount * 2; }
-    "#;
-    let vm = utils::vm_with_source(src);
-    let mut gas = GasMeter::unlimited();
-    let r = vm
-        .call("double_amount", vec![test_token(30)], &mut gas)
-        .unwrap();
-    assert_eq!(r.final_args, vec![Some(test_token(60))]);
-}
-
-//
 // ─── meow_vm_abort signature enforcement ───
 //
 
@@ -217,8 +146,9 @@ fn final_args_reflects_mutations_on_surviving_struct() {
 fn meow_vm_abort_override_with_wrong_params_panics() {
     let src = r#"mod test; pub fn run() { meow_vm_abort(true, 0, "ok"); }"#;
     let module = utils::compile(src);
-    Vm::new(
+    utils::vm_with_deps_and_natives(
         module,
+        HashMap::new(),
         vec![NativeFnEntry {
             name: "meow_vm_abort".to_string(),
             params: vec![NativeParam::Concrete(Type::U64)], // wrong — should be (bool, u64, str)
@@ -226,9 +156,6 @@ fn meow_vm_abort_override_with_wrong_params_panics() {
             gas_cost: 0,
             func: Box::new(|_| NativeResult::Return(None)),
         }],
-        GasSchedule::default(),
-        HashMap::new(),
-        VmConfig::default(),
     );
 }
 
@@ -237,8 +164,9 @@ fn meow_vm_abort_override_with_wrong_params_panics() {
 fn meow_vm_abort_override_with_wrong_return_type_panics() {
     let src = r#"mod test; pub fn run() { meow_vm_abort(true, 0, "ok"); }"#;
     let module = utils::compile(src);
-    Vm::new(
+    utils::vm_with_deps_and_natives(
         module,
+        HashMap::new(),
         vec![NativeFnEntry {
             name: "meow_vm_abort".to_string(),
             params: vec![
@@ -250,9 +178,6 @@ fn meow_vm_abort_override_with_wrong_return_type_panics() {
             gas_cost: 0,
             func: Box::new(|_| NativeResult::Return(None)),
         }],
-        GasSchedule::default(),
-        HashMap::new(),
-        VmConfig::default(),
     );
 }
 
@@ -262,7 +187,7 @@ fn meow_vm_abort_override_with_wrong_return_type_panics() {
 
 fn test_token(amount: u64) -> Value {
     Value::Struct {
-        type_name: "Token".to_string(),
+        type_name: module_ref::qualify(&Address::ZERO, "Token"),
         fields: vec![("amount".to_string(), Value::U64(amount))],
     }
 }

@@ -142,7 +142,6 @@ fn void_function_returns_none() {
     let mut gas = GasMeter::unlimited();
     let r = vm.call("do_nothing", vec![], &mut gas).unwrap();
     assert_eq!(r.return_value, None);
-    assert!(r.final_args.is_empty());
 }
 
 #[test]

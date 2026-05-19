@@ -1,3 +1,9 @@
+//! Addresses and type descriptors for the system modules pre-deployed at genesis.
+//!
+//! The system modules are deployed at fixed, well-known addresses so the executor
+//! and VM can refer to them without an on-chain lookup. This module is the single source of
+//! truth for those addresses and the type names derived from them.
+
 mod utils;
 
 pub mod meow_coin;

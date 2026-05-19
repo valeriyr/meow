@@ -7,9 +7,9 @@ authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
 description = "Genesis block construction and initial allocation processing"
 
 [dependencies]
-bcs.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 
+meow-framework.workspace = true
 meow-types.workspace = true
 meow-vm-adapter.workspace = true

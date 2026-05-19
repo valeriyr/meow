@@ -1,3 +1,9 @@
+//! Types for describing native functions to the VM, compiler, and verifier.
+//!
+//! Two representations are defined: a full runtime entry with an executable closure, and a
+//! lightweight signature for type-checking at compile and verify time. The abort built-in
+//! is defined here because it is available unconditionally, independent of any adapter.
+
 use crate::types::{Type, Value};
 
 //
@@ -37,7 +43,8 @@ pub struct NativeFnEntry {
     pub return_type: Option<Type>,
     /// Gas charged before the function body executes.
     pub gas_cost: u64,
-    /// The native implementation.
+    /// The native implementation. Arguments arrive in call order (first arg at index 0),
+    /// not in stack-pop order.
     pub func: Box<dyn Fn(Vec<Value>) -> NativeResult>,
 }
 

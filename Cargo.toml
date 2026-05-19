@@ -57,6 +57,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 url = "2.5"
 
+meow-framework = { path = "crates/meow-framework" }
 meow-genesis = { path = "crates/meow-genesis" }
 meow-gossip-network = { path = "crates/meow-gossip-network" }
 meow-gossip-types = { path = "crates/meow-gossip-types" }

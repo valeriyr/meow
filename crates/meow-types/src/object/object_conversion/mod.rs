@@ -2,7 +2,7 @@ pub mod error;
 
 use std::collections::BTreeMap;
 
-use meow_vm_types::types::Value;
+use meow_vm_types::{module_ref, types::Value};
 
 use crate::{
     address::Address,
@@ -22,15 +22,17 @@ pub type Result<T> = std::result::Result<T, ObjectConversionError>;
 ///
 /// The object content is BCS-serialized `Vec<(String, Value)>` without the `id`
 /// field (which lives in `Object::address`). This function re-injects `id` as
-/// the first field so the VM can work with a complete object value.
+/// the first field and qualifies the type name as `@<module>::<name>` so that
+/// the VM can identify which module the struct belongs to.
 pub fn object_to_vm_object_value(obj: &Object) -> Result<Value> {
-    let type_name = match obj.type_() {
-        ObjectType::Object(decl) => Ok(decl.name().as_ref().to_string()),
+    let decl = match obj.type_() {
+        ObjectType::Object(decl) => Ok(decl),
         _ => Err(ObjectConversionError::InvalidObjectType),
     }?;
+    let type_name = module_ref::qualify(&(*decl.module()).into(), decl.name().as_ref());
     let mut fields: Vec<(String, Value)> =
         bcs::from_bytes(obj.content()).expect("object content must be valid BCS");
-    let id = MeowObjectId::from(*obj.address()).to_qualified_vm_value();
+    let id = MeowObjectId::from(*obj.address()).into();
     fields.insert(0, (MEOW_OBJECT_ID_FIELD_NAME.to_string(), id));
     Ok(Value::Struct { type_name, fields })
 }
@@ -39,23 +41,30 @@ pub fn object_to_vm_object_value(obj: &Object) -> Result<Value> {
 ///
 /// The `id` field is extracted from the VM value and stored in `Object::address`;
 /// it is not written into the content to avoid duplication.
+///
+/// The `ObjectType` is derived from the qualified type name in the VM value
+/// (format: `@<hex_address>::<StructName>`). The VM is responsible for producing
+/// qualified type names via the `NewStruct` instruction.
 pub fn vm_object_value_to_object(
     val: &Value,
     owner: ObjectOwner,
     tx_digest: Digest,
     version: ObjectVersion,
-    module_addr: &Address,
 ) -> Result<Object> {
     let (type_name, fields) = match val {
-        Value::Struct { type_name, fields } => Ok((type_name.clone(), fields.clone())),
-        _ => Err(ObjectConversionError::InvalidVMValueType),
-    }?;
+        Value::Struct { type_name, fields } => (type_name.clone(), fields.clone()),
+        _ => return Err(ObjectConversionError::InvalidVMValueType),
+    };
 
-    let id: Address = meow_object::object_id(val).expect("Object must have id field");
-    let identifier =
-        Identifier::new(type_name.clone()).expect("type name must be a valid identifier");
+    let (vm_module_addr, struct_name) =
+        module_ref::parse_module_ref(&type_name).ok_or(ObjectConversionError::InvalidTypeName)?;
+    let object_type = ObjectType::Object(ObjectDeclRef::new(
+        Address::from(vm_module_addr),
+        Identifier::new(struct_name).expect("VM type name must be a valid identifier"),
+    ));
 
-    let object_decl_ref = ObjectDeclRef::new(*module_addr, identifier);
+    let address: Address =
+        meow_object::object_address(val).ok_or(ObjectConversionError::MissingIdField)?;
 
     // Strip `id` — it is stored in Object::address, not in the content.
     let content_fields: Vec<_> = fields
@@ -65,11 +74,11 @@ pub fn vm_object_value_to_object(
     let content = bcs::to_bytes(&content_fields).expect("fields must be serializable");
 
     Ok(Object::new(
-        id,
+        address,
         owner,
         tx_digest,
         version,
-        ObjectType::Object(object_decl_ref),
+        object_type,
         content,
     ))
 }

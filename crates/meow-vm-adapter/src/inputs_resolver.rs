@@ -1,3 +1,9 @@
+//! Collects all objects a transaction touches into a flat slice for the executor.
+//!
+//! The executor resolves each object by address, so order does not affect correctness.
+//! The conventional output order is: gas coin, transitive dependency modules (post-order),
+//! main module, call arguments — mirroring how the executor will consume them.
+
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -10,9 +16,10 @@ use meow_types::{
 };
 use meow_vm_types::module::Module;
 
-/// Collect all input objects a transaction needs, in executor-ready order:
-/// the gas coin, transitive dependency modules (post-order), the main module,
-/// and call arguments.
+/// Collect all input objects a transaction needs into a flat slice.
+///
+/// Conventional order: gas coin, transitive dependency modules (post-order),
+/// the main module, call arguments.
 ///
 /// `get_object` is called for each address as needed. Missing objects (returning
 /// `None`) are silently skipped — the executor will produce an appropriate error

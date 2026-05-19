@@ -76,7 +76,13 @@ pub struct MeowCoin {
     id: meow_object::Id,
     balance: u64
 }
+
+pub struct MeowCoinBalance {
+    amount: u64
+}
 ```
+
+`MeowCoinBalance` is a plain (non-object) struct that wraps a coin amount. It can be embedded as a field inside other on-chain objects. Use `to_balance` / `from_balance` to convert between the two types.
 
 Public functions:
 
@@ -85,7 +91,8 @@ Public functions:
 | `balance(coin)` | `(MeowCoin) → (MeowCoin, u64)` | Returns the coin and its balance without consuming it. |
 | `burn(coin)` | `(MeowCoin) → void` | Destroys the coin; balance is lost. |
 | `transfer(coin, to)` | `(MeowCoin, address) → void` | Transfers the coin to a new owner. |
-| `merge(from, to)` | `(MeowCoin, MeowCoin) → void` | Adds `from.balance` to `to.balance`, then destroys `from`. |
+| `merge(from, to)` | `(MeowCoin, MeowCoin) → void` | Adds `from.balance` to `to.balance`, destroys `from`, then transfers `to` to the transaction sender. |
+| `merge_and_transfer(from, to, recipient)` | `(MeowCoin, MeowCoin, address) → void` | Like `merge` but sends the result to `recipient` instead of the sender. |
 | `split(from, amount)` | `(MeowCoin, u64) → void` | Splits `amount` out of `from` into a new coin sent to the sender. Aborts if balance < amount. |
 | `split_and_transfer(from, amount, to)` | `(MeowCoin, u64, address) → void` | Like `split` but sends the new coin to `to`. |
 | `to_balance(coin)` | `(MeowCoin) → MeowCoinBalance` | Converts the coin to a `MeowCoinBalance` (destroys the coin). |
@@ -120,14 +127,16 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 
 ### Adapter native signatures
 
-The verifier receives the adapter's native signatures at construction time so it can type-check native call sites:
+The verifier is a free function. Pass the adapter's native signatures so it can type-check native call sites:
 
 ```rust
-let verifier = BytecodeVerifier::new(adapter_native_signatures());
-verifier.verify(&module, &deps)?;
+use meow_vm_bytecode_verifier;
+use meow_vm_adapter::natives;
+
+meow_vm_bytecode_verifier::verify(&module, &deps, &natives::adapter_native_sigs(), &compiler_config)?;
 ```
 
-`adapter_native_signatures()` is defined in `meow-vm-adapter/src/natives.rs` and returns signatures for all six adapter natives.
+`adapter_native_sigs()` is defined in `meow-vm-adapter/src/natives.rs` and returns signatures for all six adapter-supplied natives. The verifier also includes the language built-in (`meow_vm_abort`) automatically.
 
 ## Gas metering
 
@@ -146,4 +155,24 @@ Key costs:
 | `meow_vm_timestamp` | 1 |
 | Module publish (per compiled byte) | 10 |
 
-All other VM instructions cost 1 gas each.
+VM instruction costs:
+
+| Instruction(s) | Gas |
+|---|---:|
+| `PushBool`, `PushU64`, `PushAddress` | 1 |
+| `PushStr` | 2 |
+| `Load`, `Store` | 1 |
+| `LoadField` | 2 |
+| `StoreField` | 5 |
+| `Add`, `Sub`, `Mul` | 2 |
+| `Div`, `Mod` | 5 |
+| `Eq`, `Ne`, `Lt`, `Le`, `Gt`, `Ge` | 2 |
+| `Not`, `And`, `Or` | 1 |
+| `NewStruct` | 10 + 2 × field count |
+| `GetField` | 3 |
+| `Pop`, `Dup` | 1 |
+| `Jump`, `JumpIf`, `JumpIfNot` | 2 |
+| `Call` | 20 |
+| `Return` | 2 |
+| `MakeTuple(n)`, `UnpackTuple(n)` | n |
+| `UnpackStruct` | field count |

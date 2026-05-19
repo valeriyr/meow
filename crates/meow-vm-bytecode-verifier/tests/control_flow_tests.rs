@@ -1,5 +1,4 @@
 mod utils;
-use utils::*;
 
 use meow_vm_bytecode_verifier::VerificationError;
 use meow_vm_types::{bytecode::Instruction, types::Type};
@@ -10,7 +9,7 @@ use meow_vm_types::{bytecode::Instruction, types::Type};
 
 #[test]
 fn if_else_both_branches_return_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -19,12 +18,12 @@ fn if_else_both_branches_return_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn if_without_else_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -34,12 +33,12 @@ fn if_without_else_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn both_branches_same_stack_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -52,7 +51,7 @@ fn both_branches_same_stack_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 //
@@ -71,7 +70,7 @@ fn stack_merge_conflict_rejected() {
     //   3: Jump(2)           → target = 3+2 = 5
     //   4: PushBool(false)   ← join from JumpIfNot
     //   5: Return            ← join from Jump — u64 vs bool conflict
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -87,7 +86,7 @@ fn stack_merge_conflict_rejected() {
         Instruction::PushBool(false), // 4
         Instruction::Return,          // 5
     ];
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackMergeConflict { .. }))
@@ -110,7 +109,7 @@ fn liveness_merge_conflict_rejected() {
     //   3: Call(consume_native)   — pop Coin, push Void
     //   4: Pop                    — pop Void; stack []
     //   5: Return                 ← join: slot 0 Dead vs Live(Coin)
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -138,7 +137,7 @@ fn liveness_merge_conflict_rejected() {
         Instruction::Pop,
         Instruction::Return, // ← join point
     ];
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::LivenessMergeConflict { slot: 0, .. })),

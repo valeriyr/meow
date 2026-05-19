@@ -1,3 +1,5 @@
+//! Error type for transaction execution.
+
 use meow_types::{address::Address, digest::Digest, object::object_version::ObjectVersion};
 
 /// An error related to the executor.

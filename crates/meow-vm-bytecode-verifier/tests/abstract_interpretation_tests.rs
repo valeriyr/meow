@@ -1,5 +1,4 @@
 mod utils;
-use utils::*;
 
 use meow_vm_bytecode_verifier::VerificationError;
 use meow_vm_types::bytecode::Instruction;
@@ -10,7 +9,7 @@ use meow_vm_types::bytecode::Instruction;
 
 #[test]
 fn arithmetic_and_return_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -20,12 +19,12 @@ fn arithmetic_and_return_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn native_returning_address_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -34,12 +33,12 @@ fn native_returning_address_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn native_returning_u64_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
@@ -48,7 +47,7 @@ fn native_returning_u64_passes() {
         }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 //
@@ -57,33 +56,33 @@ fn native_returning_u64_passes() {
 
 #[test]
 fn not_on_bool_passes() {
-    let module = compile(
+    let module = utils::compile(
         r#"
         mod m;
 
         fn f(x: bool) -> bool { !x }
     "#,
     );
-    verify_ok(&module, &no_deps());
+    utils::verify_ok(&module, &utils::no_deps());
 }
 
 #[test]
 fn not_on_non_bool_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> bool { true }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushU64(1),
             Instruction::Not,
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::TypeMismatch { expected, .. } if expected == "bool"
@@ -92,17 +91,17 @@ fn not_on_non_bool_rejected() {
 
 #[test]
 fn not_on_empty_stack_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> bool { true }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::Not, Instruction::Return];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -115,14 +114,14 @@ fn not_on_empty_stack_rejected() {
 
 #[test]
 fn add_bool_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushBool(true),
             Instruction::PushBool(true),
@@ -130,7 +129,7 @@ fn add_bool_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::TypeMismatch { expected, .. } if expected == "u64"
@@ -139,14 +138,14 @@ fn add_bool_rejected() {
 
 #[test]
 fn compare_mismatched_types_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> bool { true }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushBool(true),
             Instruction::PushU64(1),
@@ -154,7 +153,7 @@ fn compare_mismatched_types_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::TypeMismatch { .. }))
@@ -167,21 +166,21 @@ fn compare_mismatched_types_rejected() {
 
 #[test]
 fn stack_underflow_on_add() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushU64(1),
             Instruction::Add,
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -190,21 +189,21 @@ fn stack_underflow_on_add() {
 
 #[test]
 fn stack_underflow_on_pop() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::Pop,
             Instruction::PushU64(1),
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -217,17 +216,17 @@ fn stack_underflow_on_pop() {
 
 #[test]
 fn wrong_return_type_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::PushBool(true), Instruction::Return];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::ReturnTypeMismatch { .. }))
@@ -236,17 +235,17 @@ fn wrong_return_type_rejected() {
 
 #[test]
 fn missing_return_detected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::PushU64(1)];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::MissingReturn { .. }))
@@ -259,20 +258,20 @@ fn missing_return_detected() {
 
 #[test]
 fn call_unknown_function_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::Call("no_such_fn".to_string()),
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::UndefinedFunction { callee, .. } if callee == "no_such_fn"
@@ -285,7 +284,7 @@ fn call_unknown_function_rejected() {
 
 #[test]
 fn unpack_wrong_struct_type_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
@@ -295,7 +294,7 @@ fn unpack_wrong_struct_type_rejected() {
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushU64(50),
             Instruction::NewStruct {
@@ -310,7 +309,7 @@ fn unpack_wrong_struct_type_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -327,21 +326,21 @@ fn unpack_wrong_struct_type_rejected() {
 
 #[test]
 fn native_wrong_arg_count_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushU64(1),
             Instruction::Call("meow_vm_abort".to_string()),
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::NativeArgCountMismatch { callee, .. } if callee == "meow_vm_abort"
@@ -350,14 +349,14 @@ fn native_wrong_arg_count_rejected() {
 
 #[test]
 fn native_wrong_arg_type_rejected() {
-    let mut module = compile(
+    let mut module = utils::compile(
         r#"
         mod m;
 
         fn f() -> u64 { 1 }
     "#,
     );
-    tamper(&mut module, "f", |code| {
+    utils::tamper(&mut module, "f", |code| {
         *code = vec![
             Instruction::PushU64(1), // should be bool
             Instruction::PushU64(2),
@@ -366,7 +365,7 @@ fn native_wrong_arg_type_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = verify_errors(&module, &no_deps());
+    let errs = utils::verify_errors(&module, &utils::no_deps());
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::NativeArgTypeMismatch { callee, .. } if callee == "meow_vm_abort"
