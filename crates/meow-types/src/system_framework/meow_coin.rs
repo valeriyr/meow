@@ -7,14 +7,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     address::Address,
     object::{Object, object_decl_ref::ObjectDeclRef, object_type::ObjectType},
-    system_framework::{
-        meow_object::{MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId},
-        utils,
-    },
+    system_framework::meow_object::{MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId},
 };
 
 /// The `meow_coin` module address is a reserved address where the `meow_coin` module is deployed.
-pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x20);
+pub const MEOW_COIN_MODULE_ADDRESS: Address = Address::suffixed(0x20);
 /// The `meow_coin` module name.
 pub const MEOW_COIN_MODULE_NAME: &str = "meow_coin";
 /// The `MeowCoin` object name.

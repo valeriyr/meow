@@ -27,6 +27,10 @@ fn custom_address() {
 #[test]
 fn fill_address() {
     assert_eq!(
+        Address::fill(0).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
         Address::fill(1).to_string(),
         "0x0101010101010101010101010101010101010101010101010101010101010101"
     );
@@ -34,6 +38,32 @@ fn fill_address() {
         Address::fill(0xAA).to_string(),
         "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     );
+}
+
+#[test]
+fn suffixed_address() {
+    assert_eq!(
+        Address::suffixed(0x0000).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
+        Address::suffixed(0x0001).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    assert_eq!(
+        Address::suffixed(0x1234).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000001234"
+    );
+    assert_eq!(
+        Address::suffixed(0xFFFF).to_string(),
+        "0x000000000000000000000000000000000000000000000000000000000000ffff"
+    );
+}
+
+#[test]
+fn suffixed_distinct_suffixes_produce_distinct_addresses() {
+    assert_ne!(Address::suffixed(0x01), Address::suffixed(0x10));
+    assert_ne!(Address::suffixed(0x00), Address::suffixed(0x01));
 }
 
 //

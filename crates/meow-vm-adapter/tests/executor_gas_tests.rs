@@ -69,7 +69,7 @@ fn gas_used_always_equals_gas_coin_deduction() {
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -108,7 +108,7 @@ fn transfer_charges_base_plus_vm_gas() {
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -129,7 +129,7 @@ fn merge_and_transfer_charges_base_plus_vm_gas() {
         vec![
             Input::Object(from_obj.object_ref()),
             Input::Object(to_obj.object_ref()),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -149,7 +149,7 @@ fn split_and_transfer_charges_base_plus_vm_gas() {
         vec![
             Input::Object(coin_obj.object_ref()),
             Input::raw(&30u64).unwrap(),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -221,7 +221,7 @@ fn aborted_transaction_charges_base_plus_gas_up_to_abort() {
         vec![
             Input::Object(coin_obj.object_ref()),
             Input::raw(&20u64).unwrap(),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -306,7 +306,7 @@ fn genesis_transaction_charges_vm_gas_but_not_base_cost() {
         "mint",
         vec![
             Input::raw(&100u64).unwrap(),
-            Input::raw(&Address::fill(0xE1)).unwrap(),
+            Input::raw(&Address::suffixed(0xE1)).unwrap(),
         ],
     );
 
@@ -330,8 +330,8 @@ fn framework_objects() -> [Object; 2] {
     framework_module_objects().try_into().unwrap()
 }
 
-fn coin(id: u8, balance: u64) -> Object {
-    utils::make_coin_object(Address::fill(id), utils::SENDER, balance)
+fn coin(id: u16, balance: u64) -> Object {
+    utils::make_coin_object(Address::suffixed(id), utils::SENDER, balance)
 }
 
 fn gas_coin_final_balance(

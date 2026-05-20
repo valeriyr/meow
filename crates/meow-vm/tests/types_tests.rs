@@ -81,7 +81,7 @@ fn address_literal_passed_as_parameter() {
 
 #[test]
 fn address_round_trip() {
-    let addr = Address::fill(0x42);
+    let addr = Address::suffixed(0x42);
     assert_eq!(
         utils::run(
             r#"
@@ -103,8 +103,8 @@ fn address_equality() {
 
         pub fn same(a: address, b: address) -> bool { a == b }
     "#;
-    let addr = Address::fill(1);
-    let other = Address::fill(2);
+    let addr = Address::suffixed(0xAA);
+    let other = Address::suffixed(0xBB);
     assert_eq!(
         utils::run(
             src,

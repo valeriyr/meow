@@ -4,8 +4,6 @@
 //! and VM can refer to them without an on-chain lookup. This module is the single source of
 //! truth for those addresses and the type names derived from them.
 
-mod utils;
-
 pub mod meow_coin;
 pub mod meow_object;
 

@@ -52,14 +52,14 @@ fn meow_object_module_address_to_string() {
 
 #[test]
 fn meow_object_id_from_address_roundtrip() {
-    let addr = Address::fill(0xF1);
+    let addr = Address::suffixed(0xF1);
     let id = MeowObjectId::from(addr);
     assert_eq!(Address::from(id), addr);
 }
 
 #[test]
 fn meow_object_id_to_qualified_vm_value() {
-    let addr = Address::fill(0xF1);
+    let addr = Address::suffixed(0xF1);
     let val: Value = MeowObjectId::new(addr).into();
     assert_eq!(
         val,
@@ -148,7 +148,7 @@ fn is_object_struct_negative_id_not_first_field() {
 
 #[test]
 fn object_address_extracts_address_from_struct() {
-    let addr = Address::fill(0xF1);
+    let addr = Address::suffixed(0xF1);
     let val: Value = MeowCoin::new(addr, 0).into();
     assert_eq!(object_address(&val), Some(addr));
 }
@@ -224,7 +224,7 @@ fn object_is_not_meow_coin() {
 
 #[test]
 fn meow_coin_into_value_has_qualified_type_name() {
-    let val: Value = MeowCoin::new(Address::fill(0xF1), 100).into();
+    let val: Value = MeowCoin::new(Address::suffixed(0xF1), 100).into();
     assert_eq!(val.type_name(), MEOW_COIN_OBJECT_BYTECODE_TYPE_NAME);
 
     let Value::Struct { fields, .. } = &val else {
@@ -239,7 +239,7 @@ fn meow_coin_into_value_has_qualified_type_name() {
 
 #[test]
 fn round_trip_meow_coin() {
-    let id = Address::fill(0xF1);
+    let id = Address::suffixed(0xF1);
     let balance = 50;
 
     let coin: Value = MeowCoin::new(id, balance).into();
@@ -271,7 +271,7 @@ fn balance_from_object_returns_none_for_non_coin() {
 
 #[test]
 fn balance_from_value_reads_coin_balance() {
-    let coin: Value = MeowCoin::new(Address::fill(0xF1), 77).into();
+    let coin: Value = MeowCoin::new(Address::suffixed(0xF1), 77).into();
     assert_eq!(meow_coin_object::balance_from_value(&coin), Some(77));
 }
 
@@ -349,7 +349,7 @@ fn is_meow_coin_balance_negative() {
 
 #[test]
 fn meow_coin_balance_struct_amount_returns_none_for_wrong_type() {
-    let coin: Value = MeowCoin::new(Address::fill(0xF1), 100).into();
+    let coin: Value = MeowCoin::new(Address::suffixed(0xF1), 100).into();
     assert_eq!(meow_coin_balance_struct::amount(&coin), None);
 }
 
@@ -357,8 +357,8 @@ fn meow_coin_balance_struct_amount_returns_none_for_wrong_type() {
 // ─── Utility functions ───
 //
 
-const TEST_ADDRESS: Address = Address::fill(0xF1);
-const TEST_OWNER: Address = Address::fill(0xE1);
+const TEST_ADDRESS: Address = Address::suffixed(0xF1);
+const TEST_OWNER: Address = Address::suffixed(0xE1);
 
 fn test_content() -> Vec<u8> {
     vec![1, 2, 3]

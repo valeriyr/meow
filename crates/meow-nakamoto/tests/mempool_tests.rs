@@ -19,7 +19,7 @@ use rand::{SeedableRng, rngs::StdRng};
 #[test]
 fn retain_valid_keeps_transaction_with_unchanged_object() {
     let keypair = test_keypair();
-    let coin = make_module_object(Address::fill(0xFD), ObjectVersion::ONE);
+    let coin = make_module_object(Address::suffixed(0xFD), ObjectVersion::ONE);
     let store = Store::with_objects([coin.clone()]);
 
     let mut mempool = Mempool::empty();
@@ -40,7 +40,7 @@ fn retain_valid_keeps_transaction_with_unchanged_object() {
 #[test]
 fn retain_valid_drops_transaction_for_missing_object() {
     let keypair = test_keypair();
-    let coin = make_module_object(Address::fill(0xFD), ObjectVersion::ONE);
+    let coin = make_module_object(Address::suffixed(0xFD), ObjectVersion::ONE);
     let store = Store::with_objects([coin.clone()]);
 
     let mut mempool = Mempool::empty();
@@ -57,7 +57,7 @@ fn retain_valid_drops_transaction_for_missing_object() {
 #[test]
 fn retain_valid_drops_transaction_for_stale_object_version() {
     let keypair = test_keypair();
-    let coin_addr = Address::fill(0xFD);
+    let coin_addr = Address::suffixed(0xFD);
     let coin_v1 = make_module_object(coin_addr, ObjectVersion::ONE);
     let store_v1 = Store::with_objects([coin_v1.clone()]);
 
@@ -78,8 +78,8 @@ fn retain_valid_drops_transaction_for_stale_object_version() {
 #[test]
 fn retain_valid_is_selective() {
     let keypair = test_keypair();
-    let good_addr = Address::fill(0xFA);
-    let stale_addr = Address::fill(0xFB);
+    let good_addr = Address::suffixed(0xFA);
+    let stale_addr = Address::suffixed(0xFB);
 
     let good_coin = make_module_object(good_addr, ObjectVersion::ONE);
     let stale_coin = make_module_object(stale_addr, ObjectVersion::ONE);

@@ -17,11 +17,11 @@ use meow_types::{
 use meow_vm_types::{module_ref, types::Value};
 
 /// Fixed module address used in all tests.
-const MODULE_ADDR: Address = Address::fill(0xFD);
+const MODULE_ADDR: Address = Address::suffixed(0xFD);
 /// Fixed object owner address used in all tests.
-const OWNER: Address = Address::fill(0xE1);
+const OWNER: Address = Address::suffixed(0xE1);
 /// Fixed object id used in all tests.
-const OBJECT_ID: Address = Address::fill(0xF1);
+const OBJECT_ID: Address = Address::suffixed(0xF1);
 
 //
 // ─── object_to_vm_object_value ───

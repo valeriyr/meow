@@ -135,7 +135,7 @@ async fn reusing_same_owned_object_input_ref_is_forbidden() {
     let keypair = test_utils::test_keypair();
     let sender = Address::from(&keypair);
     let genesis = Genesis::build(&[(sender, 10_000), (sender, 500)]).expect("genesis must build");
-    let receiver = Address::fill(0xE1);
+    let receiver = Address::suffixed(0xE1);
 
     let node = TestNode::start_with_genesis(&genesis).await;
     let client = node.client();

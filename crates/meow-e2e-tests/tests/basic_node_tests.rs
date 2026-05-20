@@ -20,7 +20,7 @@ async fn get_unknown_object_returns_none() {
 
     let result = node
         .client()
-        .get_object(&Address::fill(0xF1))
+        .get_object(&Address::suffixed(0xF1))
         .await
         .unwrap();
 
@@ -106,7 +106,7 @@ async fn get_objects_owned_returns_empty_for_unknown_owner() {
 
     let objects = node
         .client()
-        .get_objects_owned(&Address::fill(0xE1))
+        .get_objects_owned(&Address::suffixed(0xE1))
         .await
         .unwrap();
 
@@ -170,7 +170,7 @@ async fn get_objects_returns_found_objects_and_none_for_unknown() {
     let (_, _, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
     let node = TestNode::start_with_genesis(&genesis).await;
 
-    let unknown = Address::fill(0xF1);
+    let unknown = Address::suffixed(0xF1);
     let results = node
         .client()
         .get_objects(&[coin_addr, unknown])
@@ -198,8 +198,8 @@ async fn get_objects_empty_list_returns_empty() {
 async fn get_objects_returns_all_none_for_unknown_addresses() {
     let node = TestNode::start_empty().await;
 
-    let unknown1 = Address::fill(0xF1);
-    let unknown2 = Address::fill(0xF2);
+    let unknown1 = Address::suffixed(0xF1);
+    let unknown2 = Address::suffixed(0xF2);
     let results = node
         .client()
         .get_objects(&[unknown1, unknown2])
@@ -215,7 +215,7 @@ async fn get_objects_returns_all_none_for_unknown_addresses() {
 #[serial]
 async fn get_objects_at_limit_succeeds() {
     let node = TestNode::start_empty().await;
-    let addresses: Vec<Address> = (0u8..100).map(Address::fill).collect(); // exactly 100
+    let addresses: Vec<Address> = (0..100).map(Address::fill).collect(); // exactly 100
 
     let results = node.client().get_objects(&addresses).await.unwrap();
 
@@ -229,7 +229,7 @@ async fn get_objects_too_many_addresses_returns_400() {
     use meow_node_client::error::NodeClientError;
 
     let node = TestNode::start_empty().await;
-    let addresses: Vec<Address> = (0u8..=100).map(Address::fill).collect(); // 101 addresses
+    let addresses: Vec<Address> = (0..=100).map(Address::fill).collect(); // 101 addresses
 
     let result = node.client().get_objects(&addresses).await;
 

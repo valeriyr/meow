@@ -53,8 +53,8 @@ fn known_object_ref() {
 // ─── Utility functions ───
 //
 
-const TEST_ADDRESS: Address = Address::fill(0xF1);
-const TEST_OWNER: Address = Address::fill(0xE1);
+const TEST_ADDRESS: Address = Address::suffixed(0xF1);
+const TEST_OWNER: Address = Address::suffixed(0xE1);
 
 fn test_content() -> Vec<u8> {
     vec![1, 2, 3]

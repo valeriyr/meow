@@ -30,7 +30,7 @@ fn compile_meow_coin() {
 
 #[test]
 fn mint_creates_coin_transferred_to_owner() {
-    let owner = Address::fill(0xE1);
+    let owner = Address::suffixed(0xE1);
     let result = run_privileged("mint", vec![Value::U64(100), Value::Address(owner.into())])
         .expect("mint must succeed");
 
@@ -50,7 +50,10 @@ fn mint_creates_coin_transferred_to_owner() {
 fn mint_with_zero_balance_succeeds() {
     let result = run_privileged(
         "mint",
-        vec![Value::U64(0), Value::Address(Address::fill(0xE1).into())],
+        vec![
+            Value::U64(0),
+            Value::Address(Address::suffixed(0xE1).into()),
+        ],
     )
     .expect("mint with zero balance must succeed");
 
@@ -68,7 +71,10 @@ fn mint_with_zero_balance_succeeds() {
 fn mint_without_privilege_is_rejected() {
     let err = run(
         "mint",
-        vec![Value::U64(100), Value::Address(Address::fill(0xE1).into())],
+        vec![
+            Value::U64(100),
+            Value::Address(Address::suffixed(0xE1).into()),
+        ],
     )
     .expect_err("mint must be rejected without privilege");
 
@@ -86,7 +92,7 @@ fn mint_without_privilege_is_rejected() {
 fn balance_returns_coin_and_balance() {
     let result = run(
         "balance",
-        vec![MeowCoin::new(Address::fill(0xF1), 77).into()],
+        vec![MeowCoin::new(Address::suffixed(0xF1), 77).into()],
     )
     .expect("balance must succeed");
 
@@ -117,7 +123,7 @@ fn burn_destroys_coin() {
     for balance in [0, 50, 1000] {
         let result = run(
             "burn",
-            vec![MeowCoin::new(Address::fill(0xF1), balance).into()],
+            vec![MeowCoin::new(Address::suffixed(0xF1), balance).into()],
         )
         .unwrap_or_else(|_| panic!("burn must succeed for balance={balance}"));
 
@@ -133,11 +139,11 @@ fn burn_destroys_coin() {
 
 #[test]
 fn transfer_changes_owner() {
-    let new_owner = Address::fill(0xE1);
+    let new_owner = Address::suffixed(0xE1);
     let result = run(
         "transfer",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 75).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 75).into(),
             Value::Address(new_owner.into()),
         ],
     )
@@ -159,9 +165,9 @@ fn transfer_changes_owner() {
 
 #[test]
 fn merge_and_transfer_to_recipient() {
-    let recipient = Address::fill(0xE1);
-    let from = MeowCoin::new(Address::fill(0xF1), 60).into();
-    let to = MeowCoin::new(Address::fill(0xF2), 40).into();
+    let recipient = Address::suffixed(0xE1);
+    let from = MeowCoin::new(Address::suffixed(0xF1), 60).into();
+    let to = MeowCoin::new(Address::suffixed(0xF2), 40).into();
     let result = run(
         "merge_and_transfer",
         vec![from, to, Value::Address(recipient.into())],
@@ -190,8 +196,8 @@ fn merge_and_transfer_to_recipient() {
 
 #[test]
 fn merge_combines_balances() {
-    let from = MeowCoin::new(Address::fill(0xF1), 60).into();
-    let to = MeowCoin::new(Address::fill(0xF2), 40).into();
+    let from = MeowCoin::new(Address::suffixed(0xF1), 60).into();
+    let to = MeowCoin::new(Address::suffixed(0xF2), 40).into();
     let result = run("merge", vec![from, to]).expect("merge must succeed");
 
     assert_eq!(result.destroyed.len(), 1, "from must be destroyed");
@@ -213,11 +219,11 @@ fn merge_combines_balances() {
 
 #[test]
 fn split_and_transfer_to_recipient() {
-    let recipient = Address::fill(0xE1);
+    let recipient = Address::suffixed(0xE1);
     let result = run(
         "split_and_transfer",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 100).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 100).into(),
             Value::U64(30),
             Value::Address(recipient.into()),
         ],
@@ -246,11 +252,11 @@ fn split_and_transfer_to_recipient() {
 
 #[test]
 fn split_and_transfer_with_exact_balance_zeroes_from() {
-    let recipient = Address::fill(0xE1);
+    let recipient = Address::suffixed(0xE1);
     let result = run(
         "split_and_transfer",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 50).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 50).into(),
             Value::U64(50),
             Value::Address(recipient.into()),
         ],
@@ -285,9 +291,9 @@ fn split_and_transfer_with_insufficient_balance() {
     let err = run(
         "split_and_transfer",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 10).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 10).into(),
             Value::U64(20),
-            Value::Address(Address::fill(0xE1).into()),
+            Value::Address(Address::suffixed(0xE1).into()),
         ],
     )
     .expect_err("split_and_transfer must fail with insufficient balance");
@@ -307,7 +313,7 @@ fn split_with_sufficient_balance() {
     let result = run(
         "split",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 100).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 100).into(),
             Value::U64(40),
         ],
     )
@@ -340,7 +346,7 @@ fn split_with_exact_balance_zeroes_from() {
     let result = run(
         "split",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 50).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 50).into(),
             Value::U64(50),
         ],
     )
@@ -371,7 +377,7 @@ fn split_with_insufficient_balance() {
     let err = run(
         "split",
         vec![
-            MeowCoin::new(Address::fill(0xF1), 10).into(),
+            MeowCoin::new(Address::suffixed(0xF1), 10).into(),
             Value::U64(20),
         ],
     )
@@ -391,7 +397,7 @@ fn split_with_insufficient_balance() {
 fn to_balance_converts_coin_to_balance() {
     let result = run(
         "to_balance",
-        vec![MeowCoin::new(Address::fill(0xF1), 250).into()],
+        vec![MeowCoin::new(Address::suffixed(0xF1), 250).into()],
     )
     .expect("to_balance must succeed");
 

@@ -46,7 +46,7 @@ fn split_with_insufficient_balance_returns_failure() {
     use meow_framework::framework_module_objects;
     use meow_types::object::Object;
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 10);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 10);
     let gas_obj = utils::make_gas_coin_object();
 
     let tx = utils::make_meow_call_transaction(
@@ -174,7 +174,7 @@ fn calling_function_returning_object_in_tuple_from_transaction_returns_failure()
     // meow_coin::balance returns (MeowCoin, u64) — the object in the tuple makes it
     // ineligible as a transaction entry point.
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let tx =
         utils::make_meow_call_transaction("balance", vec![Input::Object(coin_obj.object_ref())]);
@@ -211,7 +211,7 @@ fn calling_function_returning_bare_object_from_transaction_returns_failure() {
         bcs::to_bytes(&test_module).expect("must serialize"),
     );
     let meow_object_obj = meow_object_module_object();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_call_transaction(
         module_addr,

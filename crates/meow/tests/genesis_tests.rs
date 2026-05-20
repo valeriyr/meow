@@ -11,7 +11,7 @@ use temp_dir::TempDir;
 #[test]
 fn build_creates_output_file() {
     let tmp = TempDir::new().unwrap();
-    let allocations = write_allocations(&tmp, &[(Address::fill(0xE1), 100)]);
+    let allocations = write_allocations(&tmp, &[(Address::suffixed(0xE1), 100)]);
     let output = tmp.path().join("genesis.bin");
 
     GenesisCommand::Build {
@@ -27,7 +27,7 @@ fn build_creates_output_file() {
 #[test]
 fn build_with_single_allocation_creates_module_and_coin() {
     let tmp = TempDir::new().unwrap();
-    let allocations = write_allocations(&tmp, &[(Address::fill(0xE1), 500)]);
+    let allocations = write_allocations(&tmp, &[(Address::suffixed(0xE1), 500)]);
 
     let output = GenesisCommand::Build {
         allocations,
@@ -68,9 +68,9 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     let allocations = write_allocations(
         &tmp,
         &[
-            (Address::fill(0xE1), 100),
-            (Address::fill(0xE2), 200),
-            (Address::fill(0xE3), 300),
+            (Address::suffixed(0xE1), 100),
+            (Address::suffixed(0xE2), 200),
+            (Address::suffixed(0xE3), 300),
         ],
     );
 
@@ -197,7 +197,7 @@ fn build_invalid_address_in_csv_returns_error() {
 #[test]
 fn build_invalid_amount_in_csv_returns_error() {
     let tmp = TempDir::new().unwrap();
-    let addr = Address::fill(0xE1);
+    let addr = Address::suffixed(0xE1);
     let allocations = write_raw_allocations(&tmp, &format!("{addr},not_a_number"));
 
     let err = GenesisCommand::Build {

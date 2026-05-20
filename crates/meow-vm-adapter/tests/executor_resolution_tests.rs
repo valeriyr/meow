@@ -36,7 +36,7 @@ fn execute_with_gas_coin_not_found_returns_error() {
     );
     let tx = Transaction::new(
         utils::SENDER,
-        ObjectRef::new(Address::fill(0xF9), ObjectVersion::ONE, Digest::ZERO),
+        ObjectRef::new(Address::suffixed(0xF9), ObjectVersion::ONE, Digest::ZERO),
         TransactionType::MeowCall(call),
     );
 
@@ -67,7 +67,7 @@ fn execute_with_invalid_gas_coin_owner_returns_error() {
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
-    let gas_obj = utils::make_valid_gas_coin_object(Address::fill(0xE2));
+    let gas_obj = utils::make_valid_gas_coin_object(Address::suffixed(0xE2));
     let tx = utils::make_meow_call_transaction(
         "mint",
         vec![
@@ -167,7 +167,7 @@ fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let unrelated_bytes = utils::compile_to_bytes(
         r#"
             mod unrelated;
@@ -175,7 +175,7 @@ fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
             pub fn noop() {}
         "#,
     );
-    let unrelated_obj = utils::make_module_object(Address::fill(0xF2), unrelated_bytes);
+    let unrelated_obj = utils::make_module_object(Address::suffixed(0xF2), unrelated_bytes);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
@@ -363,7 +363,7 @@ fn execute_with_input_object_at_max_version_returns_failure() {
         .try_into()
         .unwrap();
     let coin_obj = utils::make_coin_object_at_version(
-        Address::fill(0xF1),
+        Address::suffixed(0xF1),
         utils::SENDER,
         50,
         ObjectVersion::MAX,
@@ -392,7 +392,7 @@ fn execute_with_input_object_wrong_version_returns_failure() {
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ZERO, coin_obj.digest());
     let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
@@ -418,7 +418,7 @@ fn execute_with_input_object_wrong_digest_returns_failure() {
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ONE, Digest::ZERO);
     let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);

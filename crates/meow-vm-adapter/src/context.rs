@@ -125,7 +125,7 @@ mod tests {
 
     use super::Context;
 
-    const SENDER: Address = Address::fill(0xAA);
+    const SENDER: Address = Address::suffixed(0xE1);
 
     #[test]
     fn initial_state_is_empty() {
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn transfer_is_recorded() {
         let mut ctx = make_ctx();
-        let owner = Address::fill(2);
+        let owner = Address::suffixed(0xE1);
         ctx.transfer(test_object(), owner);
         assert_eq!(ctx.transfers().len(), 1);
         assert_eq!(ctx.transfers()[0].1, owner);
@@ -177,13 +177,14 @@ mod tests {
     #[test]
     fn destroy_is_recorded() {
         let mut ctx = make_ctx();
-        ctx.destroy(Address::fill(1));
+        ctx.destroy(Address::suffixed(0xF1));
         assert_eq!(ctx.destroyed().len(), 1);
-        assert_eq!(ctx.destroyed()[0], Address::fill(1));
+        assert_eq!(ctx.destroyed()[0], Address::suffixed(0xF1));
     }
 
     fn test_object() -> Value {
-        struct_from_rust(&MeowCoin::new(Address::fill(1), 100)).expect("MeowCoin must serialize")
+        struct_from_rust(&MeowCoin::new(Address::suffixed(0xF1), 100))
+            .expect("MeowCoin must serialize")
     }
 
     #[test]

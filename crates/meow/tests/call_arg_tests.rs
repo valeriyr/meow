@@ -37,7 +37,7 @@ fn from_str_zero_is_u64() {
 
 #[test]
 fn from_str_at_hex_address_is_address_variant() {
-    let address = Address::fill(0xF1);
+    let address = Address::suffixed(0xF1);
 
     let arg: CallArg = format!("@{}", address).parse().unwrap();
 
@@ -46,7 +46,7 @@ fn from_str_at_hex_address_is_address_variant() {
 
 #[test]
 fn from_str_hex_address_is_object_variant() {
-    let address = Address::fill(0xF1);
+    let address = Address::suffixed(0xF1);
 
     let arg: CallArg = address.to_string().parse().unwrap();
 
@@ -113,7 +113,7 @@ async fn into_value_u64() {
 
 #[tokio::test]
 async fn into_value_address_preserves_bytes() {
-    let addr = Address::fill(0xF1);
+    let addr = Address::suffixed(0xF1);
     let v = CallArg::Address(addr)
         .into_value(&fake_client())
         .await

@@ -32,8 +32,8 @@ fn valid_call_with_no_args_passes() {
 #[test]
 fn valid_call_with_mixed_args_passes() {
     let args = vec![
-        obj_input(Address::fill(0xF1)),
-        obj_input(Address::fill(0xF2)),
+        obj_input(Address::suffixed(0xF1)),
+        obj_input(Address::suffixed(0xF2)),
         Input::Raw(vec![1, 2, 3]),
     ];
     let tx = call_tx(SENDER, gas_coin_ref(), args);
@@ -93,7 +93,7 @@ fn gas_coin_as_call_arg_returns_error() {
 
 #[test]
 fn aliased_object_arg_returns_error() {
-    let obj = Address::fill(0xF1);
+    let obj = Address::suffixed(0xF1);
     let tx = call_tx(SENDER, gas_coin_ref(), vec![obj_input(obj), obj_input(obj)]);
 
     assert!(matches!(
@@ -212,16 +212,15 @@ fn signed_transaction_verify_invalid_module_too_large() {
 // ─── Utility functions ───
 //
 
-const SENDER: Address = Address::fill(0xE1);
-const GAS_COIN_BYTE: u8 = 0xF9;
-const CALL_MODULE: Address = Address::fill(0xFD);
+const SENDER: Address = Address::suffixed(0xE1);
+const CALL_MODULE: Address = Address::suffixed(0xFD);
 
 fn gas_coin_ref() -> ObjectRef {
     ObjectRef::new(gas_coin_address(), ObjectVersion::ONE, Digest::ZERO)
 }
 
 fn gas_coin_address() -> Address {
-    Address::fill(GAS_COIN_BYTE)
+    Address::suffixed(0xF9)
 }
 
 fn obj_input(address: Address) -> Input {

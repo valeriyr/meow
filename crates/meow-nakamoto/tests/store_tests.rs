@@ -164,11 +164,11 @@ fn get_objects_works_after_apply_execution_result() {
 // ─── Utility functions ───
 //
 
-const ADDRESS1: Address = Address::fill(0xF1);
-const ADDRESS2: Address = Address::fill(0xF2);
-const ADDRESS3: Address = Address::fill(0xF3);
-const OWNER1: Address = Address::fill(0xE1);
-const OWNER2: Address = Address::fill(0xE2);
+const ADDRESS1: Address = Address::suffixed(0xF1);
+const ADDRESS2: Address = Address::suffixed(0xF2);
+const ADDRESS3: Address = Address::suffixed(0xF3);
+const OWNER1: Address = Address::suffixed(0xE1);
+const OWNER2: Address = Address::suffixed(0xE2);
 
 fn make_object(addr: Address) -> Object {
     Object::fresh_module(addr, Digest::ZERO, vec![])
@@ -179,7 +179,7 @@ fn make_owned_object(addr: Address, owner: Address) -> Object {
         addr,
         owner,
         Digest::ZERO,
-        ObjectDeclRef::new(Address::fill(0xFD), Identifier::new("Object").unwrap()),
+        ObjectDeclRef::new(Address::suffixed(0xFD), Identifier::new("Object").unwrap()),
         vec![],
     )
 }

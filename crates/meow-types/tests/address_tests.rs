@@ -32,6 +32,10 @@ fn custom_address() {
 #[test]
 fn fill_address() {
     assert_eq!(
+        Address::fill(0).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
         Address::fill(1).to_string(),
         "0x0101010101010101010101010101010101010101010101010101010101010101"
     );
@@ -39,6 +43,32 @@ fn fill_address() {
         Address::fill(0xAA).to_string(),
         "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     );
+}
+
+#[test]
+fn suffixed_address() {
+    assert_eq!(
+        Address::suffixed(0x0000).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+    );
+    assert_eq!(
+        Address::suffixed(0x0001).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000000001"
+    );
+    assert_eq!(
+        Address::suffixed(0x1234).to_string(),
+        "0x0000000000000000000000000000000000000000000000000000000000001234"
+    );
+    assert_eq!(
+        Address::suffixed(0xFFFF).to_string(),
+        "0x000000000000000000000000000000000000000000000000000000000000ffff"
+    );
+}
+
+#[test]
+fn suffixed_distinct_suffixes_produce_distinct_addresses() {
+    assert_ne!(Address::suffixed(0x01), Address::suffixed(0x10));
+    assert_ne!(Address::suffixed(0x00), Address::suffixed(0x01));
 }
 
 //
@@ -80,6 +110,16 @@ fn derive_differs_by_digest() {
     let a0 = Address::derive(test_digest(), 0, 0);
     let a1 = Address::derive(other_digest(), 0, 0);
     assert_ne!(a0, a1);
+}
+
+#[test]
+fn derive_known_value() {
+    let digest = test_digest();
+    let address = Address::derive(digest, 0, 0);
+    assert_eq!(
+        address.to_string(),
+        "0xd1e6d801472b1f9d8383da1fea101d4476f15d6641dda0487fc39ae073c66183"
+    );
 }
 
 //
@@ -207,20 +247,6 @@ fn address_from_bytes_invalid_length_returns_error() {
             expected: 32
         }
     ));
-}
-
-//
-// ─── Address derive extended tests ───
-//
-
-#[test]
-fn derive_known_value() {
-    let digest = test_digest();
-    let address = Address::derive(digest, 0, 0);
-    assert_eq!(
-        address.to_string(),
-        "0xd1e6d801472b1f9d8383da1fea101d4476f15d6641dda0487fc39ae073c66183"
-    );
 }
 
 //

@@ -49,7 +49,7 @@ async fn sign_produces_a_valid_signed_transaction() {
 async fn sign_with_missing_sender_key_returns_error() {
     let tmp = TempDir::new().unwrap();
     // No keystore file written — file_based returns an empty keystore for non-existent paths.
-    let err = sign(&tmp, make_call_transaction(Address::fill(0xE1)))
+    let err = sign(&tmp, make_call_transaction(Address::suffixed(0xE1)))
         .await
         .unwrap_err();
 
@@ -185,8 +185,12 @@ fn test_keypair() -> KeyPair {
 }
 
 fn make_call_transaction(sender: Address) -> Transaction {
-    let gas_coin = ObjectRef::new(Address::fill(0xF1), ObjectVersion::ONE, Digest::ZERO);
-    let call = Call::new(Address::fill(0xFD), Identifier::new("run").unwrap(), vec![]);
+    let gas_coin = ObjectRef::new(Address::suffixed(0xF1), ObjectVersion::ONE, Digest::ZERO);
+    let call = Call::new(
+        Address::suffixed(0xFD),
+        Identifier::new("run").unwrap(),
+        vec![],
+    );
     Transaction::new(sender, gas_coin, TransactionType::MeowCall(call))
 }
 

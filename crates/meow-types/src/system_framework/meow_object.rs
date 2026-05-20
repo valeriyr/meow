@@ -4,10 +4,10 @@ use meow_vm_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::{address::Address, system_framework::utils};
+use crate::address::Address;
 
 /// The `meow_object` module address is a reserved address where the `meow_object` module is deployed.
-pub const MEOW_OBJECT_MODULE_ADDRESS: Address = utils::builtin_address(0x10);
+pub const MEOW_OBJECT_MODULE_ADDRESS: Address = Address::suffixed(0x10);
 /// The `meow_object` module name.
 pub const MEOW_OBJECT_MODULE_NAME: &str = "meow_object";
 /// The `meow_object::Id` struct name.
