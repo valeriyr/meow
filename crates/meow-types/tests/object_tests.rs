@@ -16,7 +16,7 @@ use meow_types::{
 fn object_is_module() {
     let object = test_module();
 
-    assert_eq!(object.address(), &test_address());
+    assert_eq!(object.address(), &TEST_ADDRESS);
     assert_eq!(object.owner(), &ObjectOwner::Immutable);
     assert_eq!(object.version(), &ObjectVersion::ONE);
     assert_eq!(object.type_(), &ObjectType::Module);
@@ -27,8 +27,8 @@ fn object_is_module() {
 fn simple_object() {
     let object = test_object();
 
-    assert_eq!(object.address(), &test_address());
-    assert_eq!(object.owner(), &ObjectOwner::Address(test_owner()));
+    assert_eq!(object.address(), &TEST_ADDRESS);
+    assert_eq!(object.owner(), &ObjectOwner::Address(TEST_OWNER));
     assert_eq!(object.version(), &ObjectVersion::ONE);
     assert_eq!(
         object.type_(),
@@ -44,7 +44,7 @@ fn simple_object() {
 #[test]
 fn known_object_ref() {
     let object = test_object();
-    let expected_object_ref = ObjectRef::new(test_address(), ObjectVersion::ONE, object.digest());
+    let expected_object_ref = ObjectRef::new(TEST_ADDRESS, ObjectVersion::ONE, object.digest());
 
     assert_eq!(object.object_ref(), expected_object_ref);
 }
@@ -53,13 +53,8 @@ fn known_object_ref() {
 // ─── Utility functions ───
 //
 
-fn test_address() -> Address {
-    Address::new([1; 32])
-}
-
-fn test_owner() -> Address {
-    Address::new([2; 32])
-}
+const TEST_ADDRESS: Address = Address::fill(0xF1);
+const TEST_OWNER: Address = Address::fill(0xE1);
 
 fn test_content() -> Vec<u8> {
     vec![1, 2, 3]
@@ -70,13 +65,13 @@ fn test_transaction_digest() -> Digest {
 }
 
 fn test_module() -> Object {
-    Object::fresh_module(test_address(), test_transaction_digest(), test_content())
+    Object::fresh_module(TEST_ADDRESS, test_transaction_digest(), test_content())
 }
 
 fn test_object() -> Object {
     Object::fresh_object(
-        test_address(),
-        test_owner(),
+        TEST_ADDRESS,
+        TEST_OWNER,
         test_transaction_digest(),
         test_other_object_decl_ref(),
         test_content(),

@@ -9,6 +9,10 @@ use meow_types::{
 };
 use serial_test::serial;
 
+//
+// ─── get_object ───
+//
+
 #[tokio::test]
 #[serial]
 async fn get_unknown_object_returns_none() {
@@ -16,7 +20,7 @@ async fn get_unknown_object_returns_none() {
 
     let result = node
         .client()
-        .get_object(&Address::fill(0xAB))
+        .get_object(&Address::fill(0xF1))
         .await
         .unwrap();
 
@@ -34,6 +38,10 @@ async fn genesis_coin_object_is_queryable() {
     assert_eq!(fetched.address(), &coin_addr);
     assert_eq!(fetched.owner().address(), Some(&sender));
 }
+
+//
+// ─── Transactions ───
+//
 
 #[tokio::test]
 #[serial]
@@ -87,6 +95,10 @@ async fn meow_call_transaction_is_mined_and_succeeds() {
     assert_eq!(*call_result.status(), ExecutionStatus::Success);
 }
 
+//
+// ─── get_objects_owned ───
+//
+
 #[tokio::test]
 #[serial]
 async fn get_objects_owned_returns_empty_for_unknown_owner() {
@@ -94,7 +106,7 @@ async fn get_objects_owned_returns_empty_for_unknown_owner() {
 
     let objects = node
         .client()
-        .get_objects_owned(&Address::fill(0xCD))
+        .get_objects_owned(&Address::fill(0xE1))
         .await
         .unwrap();
 
@@ -148,13 +160,17 @@ async fn published_module_is_immutable_and_not_owned_by_sender() {
     assert_eq!(objects[0].address(), &coin_addr);
 }
 
+//
+// ─── get_objects ───
+//
+
 #[tokio::test]
 #[serial]
 async fn get_objects_returns_found_objects_and_none_for_unknown() {
     let (_, _, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
     let node = TestNode::start_with_genesis(&genesis).await;
 
-    let unknown = Address::fill(0xAB);
+    let unknown = Address::fill(0xF1);
     let results = node
         .client()
         .get_objects(&[coin_addr, unknown])
@@ -182,8 +198,8 @@ async fn get_objects_empty_list_returns_empty() {
 async fn get_objects_returns_all_none_for_unknown_addresses() {
     let node = TestNode::start_empty().await;
 
-    let unknown1 = Address::fill(0xAB);
-    let unknown2 = Address::fill(0xCD);
+    let unknown1 = Address::fill(0xF1);
+    let unknown2 = Address::fill(0xF2);
     let results = node
         .client()
         .get_objects(&[unknown1, unknown2])
@@ -222,6 +238,10 @@ async fn get_objects_too_many_addresses_returns_400() {
         "expected 400 NodeError, got: {result:?}"
     );
 }
+
+//
+// ─── get_transaction ───
+//
 
 #[tokio::test]
 #[serial]

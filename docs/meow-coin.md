@@ -2,7 +2,7 @@
 
 > The built-in system coin: `transfer`, `split`, `merge`, and `burn`.
 
-Meow Coin is the native coin of MEOW. It is defined in the built-in `meow_coin` module, published at genesis at the fixed address `0x10`. Every address that appears in `allocations.csv` starts with one `MeowCoin` object whose `balance` equals the allocated amount.
+Meow Coin is the native coin of MEOW. It is defined in the built-in `meow_coin` module, published at genesis at the fixed address `0x20`. Every address that appears in `allocations.csv` starts with one `MeowCoin` object whose `balance` equals the allocated amount.
 
 See [Contracts](contracts.md) for the language reference and call argument format.
 
@@ -26,7 +26,7 @@ Moves the entire coin to another address.
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function transfer \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -44,7 +44,7 @@ Splits `amount` out of the coin and sends the new coin to the recipient. The ori
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function split_and_transfer \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -60,7 +60,7 @@ Creates a new coin with `amount` balance and sends it to the transaction sender.
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function split \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -76,7 +76,7 @@ Adds the balance of `from` into `to`, destroys `from`, and transfers `to` back t
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function merge \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -92,7 +92,7 @@ Like `merge` but sends the resulting coin to `recipient` instead of the sender.
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function merge_and_transfer \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \
@@ -114,7 +114,7 @@ Destroys the coin permanently.
 
 ```bash
 meow transaction meow-call \
-  --module 0x10 \
+  --module 0x20 \
   --function burn \
   --sender <YOUR_ADDRESS> \
   --gas-coin <GAS_COIN_ADDRESS> \

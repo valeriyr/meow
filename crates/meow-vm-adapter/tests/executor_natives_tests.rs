@@ -69,7 +69,7 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
     const RAND_MODULE_SRC: &str = r#"
         mod rand_test;
 
-        use meow_object@0x01;
+        use meow_object@0x10;
 
         struct RandBox { id: meow_object::Id, value: u64 }
 
@@ -103,7 +103,7 @@ fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
     const TIMESTAMP_MODULE_SRC: &str = r#"
         mod timestamp_test;
 
-        use meow_object@0x01;
+        use meow_object@0x10;
 
         struct TimestampBox { id: meow_object::Id, value: u64 }
 

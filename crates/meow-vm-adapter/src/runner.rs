@@ -32,7 +32,7 @@ pub struct RunResult {
 /// Run a compiled module function with a fixed context, real natives, and unlimited gas.
 ///
 /// The first element of the `module` tuple is the on-chain address of the module, used to
-/// qualify struct type names produced by `NewStruct` instructions (e.g. `@0x10::MeowCoin`).
+/// qualify struct type names produced by `NewStruct` instructions (e.g. `@0x20::MeowCoin`).
 pub fn run(
     module: (Address, Module),
     fn_name: &Identifier,

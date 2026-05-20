@@ -3,6 +3,10 @@ use std::net::SocketAddr;
 use meow_node_client::NodeClient;
 use url::Url;
 
+//
+// ─── NodeClient construction ───
+//
+
 #[test]
 fn with_url_normalizes_missing_trailing_slash() {
     let url = Url::parse("http://127.0.0.1:9000").unwrap();

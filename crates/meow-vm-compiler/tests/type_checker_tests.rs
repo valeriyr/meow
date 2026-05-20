@@ -118,12 +118,24 @@ fn equality_on_structs_compiles() {
 fn equality_struct_vs_primitive_rejected() {
     let cases = [
         (
-            r#"mod test; struct Point { x: u64 } fn bad(p: Point, n: u64) -> bool { p == n }"#,
+            r#"
+                mod test;
+                
+                struct Point { x: u64 }
+                
+                fn bad(p: Point, n: u64) -> bool { p == n }
+            "#,
             "Point",
             "u64",
         ),
         (
-            r#"mod test; struct Point { x: u64 } fn bad(p: Point, b: bool) -> bool { p == b }"#,
+            r#"
+                mod test;
+                
+                struct Point { x: u64 }
+                
+                fn bad(p: Point, b: bool) -> bool { p == b }
+            "#,
             "Point",
             "bool",
         ),
@@ -318,11 +330,13 @@ fn correct_native_in_struct_field_compiles() {
     with_dep_and_sigs(
         r#"
             mod ext;
+
             pub struct Id { inner: address }
         "#,
         r#"
             mod test;
-            use ext@0x01;
+
+            use ext@0xFD;
 
             struct Good { id: ext::Id, value: u64 }
 
@@ -359,11 +373,13 @@ fn wrong_field_type_native_return_mismatch_rejected() {
     with_dep_and_sigs(
         r#"
             mod ext;
+
             pub struct Id { inner: address }
         "#,
         r#"
             mod test;
-            use ext@0x01;
+
+            use ext@0xFD;
 
             struct Bad { id: address }
 
@@ -403,7 +419,11 @@ fn native_wrong_arg_count_rejected() {
         return_type: None,
     };
     let err = Compiler::compile(
-        r#"mod test; fn bad() { my_fn(1, 2); }"#,
+        r#"
+            mod test;
+        
+            fn bad() { my_fn(1, 2); }
+        "#,
         &[],
         &[sig],
         CompilerConfig::default(),
@@ -424,7 +444,11 @@ fn native_any_struct_param_with_primitive_rejected() {
         return_type: None,
     };
     let err = Compiler::compile(
-        r#"mod test; fn bad() { my_fn(42); }"#,
+        r#"
+            mod test;
+            
+            fn bad() { my_fn(42); }
+        "#,
         &[],
         &[sig],
         CompilerConfig::default(),
@@ -753,7 +777,7 @@ fn cross_module_arg_type_mismatch_rejected() {
         r#"
             mod user;
 
-            use math@0x01;
+            use math@0xFD;
 
             fn bad() -> u64 {
                 math::add(1, true)
@@ -778,6 +802,6 @@ fn with_dep(dep_src: &str, src: &str) -> Result<Module> {
 
 fn with_dep_and_sigs(dep_src: &str, src: &str, native_sigs: &[NativeSig]) -> Result<Module> {
     let dep = utils::compile(dep_src).expect("dep module must compile");
-    let addr = Address::from_str("0x01").unwrap();
+    let addr = Address::from_str("0xFD").unwrap();
     Compiler::compile(src, &[(addr, &dep)], native_sigs, CompilerConfig::default())
 }

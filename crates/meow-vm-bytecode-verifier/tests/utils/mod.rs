@@ -19,12 +19,35 @@ pub fn compile_with_deps(src: &str, deps: &[(Address, &Module)]) -> Module {
         .unwrap_or_else(|e| panic!("compile_with_deps failed: {e}"))
 }
 
-pub fn verify_ok(module: &Module, deps: &HashMap<Address, &Module>) {
+pub fn verify_ok(module: &Module) {
+    meow_vm_bytecode_verifier::verify(
+        module,
+        &HashMap::new(),
+        &test_natives(),
+        &CompilerConfig::default(),
+    )
+    .unwrap_or_else(|errs| panic!("expected verification OK, got errors:\n{errs:#?}"));
+}
+
+pub fn verify_ok_with_deps(module: &Module, deps: &HashMap<Address, &Module>) {
     meow_vm_bytecode_verifier::verify(module, deps, &test_natives(), &CompilerConfig::default())
         .unwrap_or_else(|errs| panic!("expected verification OK, got errors:\n{errs:#?}"));
 }
 
-pub fn verify_errors(module: &Module, deps: &HashMap<Address, &Module>) -> Vec<VerificationError> {
+pub fn verify_errors(module: &Module) -> Vec<VerificationError> {
+    meow_vm_bytecode_verifier::verify(
+        module,
+        &HashMap::new(),
+        &test_natives(),
+        &CompilerConfig::default(),
+    )
+    .expect_err("expected verification errors but verification passed")
+}
+
+pub fn verify_errors_with_deps(
+    module: &Module,
+    deps: &HashMap<Address, &Module>,
+) -> Vec<VerificationError> {
     meow_vm_bytecode_verifier::verify(module, deps, &test_natives(), &CompilerConfig::default())
         .expect_err("expected verification errors but verification passed")
 }
@@ -36,10 +59,6 @@ pub fn tamper(module: &mut Module, fn_name: &str, f: impl FnOnce(&mut Vec<Instru
         .find(|f| f.name == fn_name)
         .unwrap_or_else(|| panic!("function '{fn_name}' not found"));
     f(&mut func.code);
-}
-
-pub fn no_deps() -> HashMap<Address, &'static Module> {
-    HashMap::new()
 }
 
 /// Generic native signatures used across verifier tests.

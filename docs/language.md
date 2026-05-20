@@ -19,8 +19,8 @@ Use `use` declarations to import other published modules. The `@<address>` suffi
 ```meow
 mod my_game;
 
-use meow_object@0x01;
-use meow_coin@0x10;
+use meow_object@0x10;
+use meow_coin@0x20;
 use math@0x1a2b3c... as m;  // reference as m:: instead of math::
 ```
 
@@ -88,10 +88,10 @@ pub struct Coin { id: meow_object::Id, balance: u64 }
 
 ### On-chain objects
 
-A struct whose first field is `id: meow_object::Id` (from `meow_object@0x01`) is an **on-chain object**. The adapter recognises this layout and tracks the struct through the object store.
+A struct whose first field is `id: meow_object::Id` (from `meow_object@0x10`) is an **on-chain object**. The adapter recognises this layout and tracks the struct through the object store.
 
 ```meow
-use meow_object@0x01;
+use meow_object@0x10;
 
 pub struct Hero {
     id: meow_object::Id,   // first field — marks this as an on-chain object
@@ -107,7 +107,7 @@ See [Adapter & Natives — On-chain object lifecycle](adapter.md#on-chain-object
 The `id` field of every on-chain object is set at creation time and cannot be reassigned anywhere — even inside the declaring module:
 
 ```meow
-use meow_object@0x01;
+use meow_object@0x10;
 struct Coin { id: meow_object::Id, balance: u64 }
 fn bad(c: Coin, new_id: meow_object::Id) {
     c.id = new_id; // compile error: 'id' is immutable

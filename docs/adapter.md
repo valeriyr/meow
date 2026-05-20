@@ -32,7 +32,7 @@ Native functions are built into the runtime and cannot be defined by user code. 
 
 ## The `meow_object` system module
 
-`meow_object` is published at the fixed address `0x01`. It exports a single type:
+`meow_object` is published at the fixed address `0x10`. It exports a single type:
 
 ```meow
 pub struct Id {
@@ -45,7 +45,7 @@ pub struct Id {
 Any struct whose first field is `id: meow_object::Id` is recognised by the adapter as an **on-chain object**. This is a layout convention enforced at publish time by the bytecode verifier and at execution time by the adapter.
 
 ```meow
-use meow_object@0x01;
+use meow_object@0x10;
 
 pub struct Hero {
     id: meow_object::Id,   // first field — marks this as an on-chain object
@@ -69,7 +69,7 @@ Objects created and destroyed within the same transaction leave no trace in the 
 
 ## The `meow_coin` system module
 
-`meow_coin` is published at the fixed address `0x10`. It provides `MeowCoin` — the native coin of the MEOW chain.
+`meow_coin` is published at the fixed address `0x20`. It provides `MeowCoin` — the native coin of the MEOW chain.
 
 ```meow
 pub struct MeowCoin {

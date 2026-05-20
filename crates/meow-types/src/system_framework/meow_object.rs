@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{address::Address, system_framework::utils};
 
 /// The `meow_object` module address is a reserved address where the `meow_object` module is deployed.
-pub const MEOW_OBJECT_MODULE_ADDRESS: Address = utils::builtin_address(0x01);
+pub const MEOW_OBJECT_MODULE_ADDRESS: Address = utils::builtin_address(0x10);
 /// The `meow_object` module name.
 pub const MEOW_OBJECT_MODULE_NAME: &str = "meow_object";
 /// The `meow_object::Id` struct name.
@@ -22,7 +22,7 @@ pub const MEOW_OBJECT_ID_FIELD_NAME: &str = "id";
 /// address-qualified form (`@<address>::Id`). This constant is the canonical name
 /// used in native signatures and object conversion.
 pub const MEOW_OBJECT_ID_BYTECODE_TYPE_NAME: &str =
-    "@0x0000000000000000000000000000000000000000000000000000000000000001::Id";
+    "@0x0000000000000000000000000000000000000000000000000000000000000010::Id";
 
 /// The `MeowObjectId` struct represents a unique object id.
 #[derive(Serialize, Deserialize)]

@@ -1,5 +1,9 @@
 use meow_vm_types::natives::{builtin_natives, meow_vm_abort_sig};
 
+//
+// ─── builtin_natives ───
+//
+
 #[test]
 fn builtin_natives_is_exactly_meow_vm_abort() {
     let builtins = builtin_natives();

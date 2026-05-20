@@ -5,6 +5,10 @@ use meow_types::{
 };
 use serial_test::serial;
 
+//
+// ─── Chain sync ───
+//
+
 #[tokio::test]
 #[serial]
 async fn second_node_successfully_connected_and_synchronized() {

@@ -8,6 +8,10 @@ use meow_types::{
     },
 };
 
+//
+// ─── Genesis::build ───
+//
+
 #[test]
 fn empty_allocations_produces_only_framework_modules() {
     let genesis = Genesis::build(&[]).unwrap();
@@ -18,9 +22,9 @@ fn empty_allocations_produces_only_framework_modules() {
 
 #[test]
 fn create_genesis() {
-    const ADDRESS1: Address = Address::fill(0xAA);
-    const ADDRESS2: Address = Address::fill(0xBB);
-    const ADDRESS3: Address = Address::fill(0xCC);
+    const ADDRESS1: Address = Address::fill(0xE1);
+    const ADDRESS2: Address = Address::fill(0xE2);
+    const ADDRESS3: Address = Address::fill(0xE3);
 
     let mint = vec![(ADDRESS1, 100), (ADDRESS2, 200), (ADDRESS3, 300)];
 

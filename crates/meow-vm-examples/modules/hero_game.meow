@@ -7,7 +7,7 @@
 
 mod hero;
 
-use meow_object@0x01;
+use meow_object@0x10;
 
 /// An on-chain hero owned by a player.
 pub struct Hero {

@@ -84,7 +84,7 @@ fn tuple_destructuring_cross_module() {
         r#"
             mod user;
 
-            use math@0x01;
+            use math@0xFD;
 
             pub fn quotient(a: u64, b: u64) -> u64 {
                 let (q, _r) = math::divmod(a, b);
@@ -130,6 +130,6 @@ fn tuple_destructuring_with_wildcard() {
 
 fn with_dep(dep_src: &str, src: &str) -> Result<Module> {
     let dep = utils::compile(dep_src).expect("dep must compile");
-    let addr = Address::from_str("0x01").unwrap();
+    let addr = Address::from_str("0xFD").unwrap();
     utils::compile_with_deps(src, &[(addr, &dep)])
 }

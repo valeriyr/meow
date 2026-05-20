@@ -18,7 +18,7 @@ fn if_else_both_branches_return_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn if_without_else_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -51,7 +51,7 @@ fn both_branches_same_stack_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 //
@@ -86,7 +86,7 @@ fn stack_merge_conflict_rejected() {
         Instruction::PushBool(false), // 4
         Instruction::Return,          // 5
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackMergeConflict { .. }))
@@ -137,7 +137,7 @@ fn liveness_merge_conflict_rejected() {
         Instruction::Pop,
         Instruction::Return, // ← join point
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::LivenessMergeConflict { slot: 0, .. })),

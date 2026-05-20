@@ -4,8 +4,8 @@
 
 mod timelock_coin;
 
-use meow_object@0x01;
-use meow_coin@0x10;
+use meow_object@0x10;
+use meow_coin@0x20;
 
 /// A `MeowCoin` balance sealed on-chain until a future block timestamp.
 pub struct TimelockCoin {

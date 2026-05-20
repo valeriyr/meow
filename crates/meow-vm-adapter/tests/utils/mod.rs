@@ -20,8 +20,8 @@ use meow_vm_adapter::{
     external_context::{DEFAULT_RAND_SEED, ExternalContext, RandSeed},
 };
 
-pub const SENDER: Address = Address::fill(0xAA);
-pub const GAS_ADDR: Address = Address::fill(0xBB);
+pub const SENDER: Address = Address::fill(0xE1);
+pub const GAS_ADDR: Address = Address::fill(0xF9);
 pub const GAS_BALANCE: u64 = 1_000_000;
 
 pub fn make_gas_coin_object() -> Object {

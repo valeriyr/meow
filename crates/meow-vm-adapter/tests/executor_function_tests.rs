@@ -46,7 +46,7 @@ fn split_with_insufficient_balance_returns_failure() {
     use meow_framework::framework_module_objects;
     use meow_types::object::Object;
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xFF), utils::SENDER, 10);
+    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 10);
     let gas_obj = utils::make_gas_coin_object();
 
     let tx = utils::make_meow_call_transaction(
@@ -174,7 +174,7 @@ fn calling_function_returning_object_in_tuple_from_transaction_returns_failure()
     // meow_coin::balance returns (MeowCoin, u64) — the object in the tuple makes it
     // ineligible as a transaction entry point.
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xAA), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let tx =
         utils::make_meow_call_transaction("balance", vec![Input::Object(coin_obj.object_ref())]);
@@ -196,7 +196,7 @@ fn calling_function_returning_bare_object_from_transaction_returns_failure() {
         r#"
             mod test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Coin { id: meow_object::Id, balance: u64 }
 
@@ -211,7 +211,7 @@ fn calling_function_returning_bare_object_from_transaction_returns_failure() {
         bcs::to_bytes(&test_module).expect("must serialize"),
     );
     let meow_object_obj = meow_object_module_object();
-    let coin_obj = utils::make_coin_object(Address::fill(0xAA), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_call_transaction(
         module_addr,
@@ -361,20 +361,13 @@ fn exhausted_gas_coin_goes_to_changed() {
 
     let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
 
-    assert!(
-        result
-            .changed_objects()
-            .iter()
-            .any(|o| o.address() == &utils::GAS_ADDR),
-        "exhausted gas coin must appear in changed_objects"
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "only the exhausted gas coin must be in changed_objects"
     );
-    assert!(
-        !result
-            .destroyed_objects()
-            .iter()
-            .any(|o| o.address() == &utils::GAS_ADDR),
-        "exhausted gas coin must not appear in destroyed_objects"
-    );
+    assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
+    assert!(result.destroyed_objects().is_empty());
     // Balance should be floored at 0, not underflowing.
     assert_eq!(
         meow_coin_object::balance_from_object(utils::find_gas_coin(&result)).unwrap(),

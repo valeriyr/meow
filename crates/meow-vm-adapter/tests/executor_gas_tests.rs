@@ -63,13 +63,13 @@ fn gas_used_always_equals_gas_coin_deduction() {
     // For any successful transaction, the gas coin balance must decrease by
     // exactly gas_used() — the two measurements must be in sync.
     let [dep_obj, module_obj] = framework_objects();
-    let coin_obj = coin(0xC0, 75);
+    let coin_obj = coin(0xF1, 75);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction(
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::raw(&Address::fill(0x02)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 
@@ -89,7 +89,7 @@ fn gas_used_always_equals_gas_coin_deduction() {
 #[test]
 fn burn_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
-    let coin_obj = coin(0x01, 100);
+    let coin_obj = coin(0xF1, 100);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
@@ -102,13 +102,13 @@ fn burn_charges_base_plus_vm_gas() {
 #[test]
 fn transfer_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
-    let coin_obj = coin(0x02, 75);
+    let coin_obj = coin(0xF1, 75);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction(
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
-            Input::raw(&Address::fill(0x99)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 
@@ -121,15 +121,15 @@ fn transfer_charges_base_plus_vm_gas() {
 #[test]
 fn merge_and_transfer_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
-    let from_obj = coin(0x11, 60);
-    let to_obj = coin(0x22, 40);
+    let from_obj = coin(0xF1, 60);
+    let to_obj = coin(0xF2, 40);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction(
         "merge_and_transfer",
         vec![
             Input::Object(from_obj.object_ref()),
             Input::Object(to_obj.object_ref()),
-            Input::raw(&Address::fill(0x55)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 
@@ -142,14 +142,14 @@ fn merge_and_transfer_charges_base_plus_vm_gas() {
 #[test]
 fn split_and_transfer_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
-    let coin_obj = coin(0x33, 100);
+    let coin_obj = coin(0xF1, 100);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction(
         "split_and_transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
             Input::raw(&30u64).unwrap(),
-            Input::raw(&Address::fill(0x44)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 
@@ -172,8 +172,8 @@ fn merge_costs_more_than_merge_and_transfer_due_to_call_overhead() {
     let gas_a = utils::make_gas_coin_object();
     let gas_b = utils::make_gas_coin_object();
 
-    let from_a = coin(0xA1, 60);
-    let to_a = coin(0xA2, 40);
+    let from_a = coin(0xF1, 60);
+    let to_a = coin(0xF2, 40);
     let tx_mat = utils::make_meow_call_transaction(
         "merge_and_transfer",
         vec![
@@ -185,8 +185,8 @@ fn merge_costs_more_than_merge_and_transfer_due_to_call_overhead() {
     let result_mat =
         utils::execute(&tx_mat, vec![dep_obj_a, module_obj_a, from_a, to_a, gas_a]).unwrap();
 
-    let from_b = coin(0xB1, 60);
-    let to_b = coin(0xB2, 40);
+    let from_b = coin(0xF3, 60);
+    let to_b = coin(0xF4, 40);
     let tx_m = utils::make_meow_call_transaction(
         "merge",
         vec![
@@ -214,14 +214,14 @@ fn aborted_transaction_charges_base_plus_gas_up_to_abort() {
     // split_and_transfer aborts early when balance is insufficient.
     // Gas consumed before the abort is still charged on top of the base cost.
     let [dep_obj, module_obj] = framework_objects();
-    let coin_obj = coin(0x77, 10); // balance 10 < amount 20 → abort
+    let coin_obj = coin(0xF1, 10); // balance 10 < amount 20 → abort
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction(
         "split_and_transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
             Input::raw(&20u64).unwrap(),
-            Input::raw(&Address::fill(0x99)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 
@@ -306,7 +306,7 @@ fn genesis_transaction_charges_vm_gas_but_not_base_cost() {
         "mint",
         vec![
             Input::raw(&100u64).unwrap(),
-            Input::raw(&Address::fill(0x01)).unwrap(),
+            Input::raw(&Address::fill(0xE1)).unwrap(),
         ],
     );
 

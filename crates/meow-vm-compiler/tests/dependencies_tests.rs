@@ -14,8 +14,8 @@ fn extract_deps_returns_declared_imports() {
     let src = r#"
         mod main;
 
-        use math@0x01;
-        use util@0x02;
+        use math@0xD1;
+        use util@0xD2;
 
         fn run() -> u64 { 0 }
     "#;
@@ -23,11 +23,11 @@ fn extract_deps_returns_declared_imports() {
     assert_eq!(deps.len(), 2);
     assert_eq!(
         deps[0],
-        ("math".to_string(), None, Address::from_str("0x01").unwrap())
+        ("math".to_string(), None, Address::from_str("0xD1").unwrap())
     );
     assert_eq!(
         deps[1],
-        ("util".to_string(), None, Address::from_str("0x02").unwrap())
+        ("util".to_string(), None, Address::from_str("0xD2").unwrap())
     );
 }
 
@@ -46,8 +46,8 @@ fn extract_deps_duplicate_use_is_rejected() {
     let src = r#"
         mod main;
 
-        use helper@0x42;
-        use helper@0x42;
+        use helper@0xFD;
+        use helper@0xFD;
     "#;
     assert!(matches!(
         Compiler::extract_deps(src).unwrap_err(),
@@ -58,7 +58,7 @@ fn extract_deps_duplicate_use_is_rejected() {
 #[test]
 fn extract_deps_missing_module_decl_is_rejected() {
     assert!(matches!(
-        Compiler::extract_deps("use helper@0x01;").unwrap_err(),
+        Compiler::extract_deps("use helper@0xFD;").unwrap_err(),
         CompilerError::Message(msg) if msg.contains("mod NAME;")
     ));
 }
@@ -81,7 +81,7 @@ fn extract_deps_duplicate_module_decl_is_rejected() {
 
 #[test]
 fn duplicate_dep_address_is_rejected() {
-    let addr = Address::from_str("0x42").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let dep = utils::compile(
         r#"
             mod helper;
@@ -94,18 +94,19 @@ fn duplicate_dep_address_is_rejected() {
     let src = r#"
         mod main;
 
-        use helper@0x42;
+        use helper@0xFD;
 
         fn run() -> u64 { helper::get() }
     "#;
     assert!(matches!(
-        utils::compile_with_deps(src, &[(addr, &dep), (addr, &dep)]).unwrap_err(),
+        utils::compile_with_deps(src, &[(d_addr, &dep), (d_addr, &dep)]).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("duplicate dep address")
     ));
 }
 
 #[test]
 fn duplicate_use_declaration_is_rejected() {
+    let d_addr = Address::from_str("0xFD").unwrap();
     let dep = utils::compile(
         r#"
             mod helper;
@@ -118,13 +119,13 @@ fn duplicate_use_declaration_is_rejected() {
     let src = r#"
         mod main;
 
-        use helper@0x42;
-        use helper@0x42;
+        use helper@0xFD;
+        use helper@0xFD;
 
         fn run() -> u64 { helper::get() }
     "#;
     assert!(matches!(
-        utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
+        utils::compile_with_deps(src, &[(d_addr, &dep)]).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("duplicate use declaration")
     ));
 }
@@ -134,7 +135,7 @@ fn use_unknown_dep_is_compile_error() {
     let src = r#"
         mod bad;
 
-        use nonexistent@0x99;
+        use nonexistent@0xFD;
     "#;
     assert!(matches!(
         utils::compile(src).unwrap_err(),
@@ -161,6 +162,7 @@ fn undeclared_module_reference_is_compile_error() {
 
 #[test]
 fn cross_module_struct_as_field_type_accepted() {
+    let c_addr = Address::from_str("0xFC").unwrap();
     // Cross-module struct types are allowed as field types.
     let coin_mod = utils::compile(
         r#"
@@ -174,13 +176,13 @@ fn cross_module_struct_as_field_type_accepted() {
     let src = r#"
             mod wrapper;
 
-            use coin@0x40;
+            use coin@0xFC;
 
             struct Wrapper { c: coin::Coin }
 
             fn noop() {}
         "#;
-    utils::compile_with_deps(src, &[(Address::from_str("0x40").unwrap(), &coin_mod)])
+    utils::compile_with_deps(src, &[(c_addr, &coin_mod)])
         .expect("cross-module struct as field type must be accepted");
 }
 
@@ -191,8 +193,8 @@ fn cross_module_struct_as_field_type_accepted() {
 #[test]
 fn complete_transitive_closure_is_accepted() {
     // Same chain with both b and c provided — must compile successfully.
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
     let cfg = CompilerConfig::default();
 
     let c_module = Compiler::compile(
@@ -210,7 +212,7 @@ fn complete_transitive_closure_is_accepted() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -225,7 +227,7 @@ fn complete_transitive_closure_is_accepted() {
             r#"
                 mod main;
 
-                use b@0x02;
+                use b@0xFB;
 
                 fn run() -> u64 { b::get() }
             "#,
@@ -242,15 +244,15 @@ fn diamond_dependency_graph_accepted() {
     // main → b, main → c, b → d, c → d (diamond shape).
     // d is a shared transitive dep — the compiler must accept this without
     // treating the shared dep as a cycle or duplicate error.
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
-    let d_addr = Address::from_str("0x04").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let cfg = CompilerConfig::default();
 
     let d_module = Compiler::compile(
         r#"
             mod d;
-        
+
             pub fn val() -> u64 { 1 }
         "#,
         &[],
@@ -263,7 +265,7 @@ fn diamond_dependency_graph_accepted() {
         r#"
             mod b;
 
-            use d@0x04;
+            use d@0xFD;
 
             pub fn get() -> u64 { d::val() }
         "#,
@@ -277,7 +279,7 @@ fn diamond_dependency_graph_accepted() {
         r#"
             mod c;
 
-            use d@0x04;
+            use d@0xFD;
 
             pub fn get() -> u64 { d::val() }
         "#,
@@ -292,8 +294,8 @@ fn diamond_dependency_graph_accepted() {
             r#"
                 mod main;
 
-                use b@0x02;
-                use c@0x03;
+                use b@0xFB;
+                use c@0xFC;
 
                 pub fn run() -> u64 { b::get() + c::get() }
             "#,
@@ -313,8 +315,8 @@ fn diamond_dependency_graph_accepted() {
 #[test]
 fn missing_transitive_dep_is_rejected() {
     // main → b → c. Providing only b (not c) must fail because b's import of c is unresolved.
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
     let cfg = CompilerConfig::default();
 
     let c_module = Compiler::compile(
@@ -332,7 +334,7 @@ fn missing_transitive_dep_is_rejected() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -348,7 +350,7 @@ fn missing_transitive_dep_is_rejected() {
             r#"
                 mod main;
 
-                use b@0x02;
+                use b@0xFB;
 
                 fn run() -> u64 { b::get() }
             "#,
@@ -367,6 +369,7 @@ fn missing_transitive_dep_is_rejected() {
 
 #[test]
 fn two_modules_same_name_different_addresses_with_aliases_accepted() {
+    let d1_addr = Address::from_str("0xD1").unwrap();
     let dep1 = utils::compile(
         r#"
             mod math;
@@ -375,6 +378,7 @@ fn two_modules_same_name_different_addresses_with_aliases_accepted() {
         "#,
     )
     .expect("dep1 must compile");
+    let d2_addr = Address::from_str("0xD2").unwrap();
     let dep2 = utils::compile(
         r#"
             mod math;
@@ -387,19 +391,13 @@ fn two_modules_same_name_different_addresses_with_aliases_accepted() {
     let src = r#"
         mod main;
 
-        use math@0x01 as math1;
-        use math@0x02 as math2;
+        use math@0xD1 as math1;
+        use math@0xD2 as math2;
 
         pub fn run(a: u64, b: u64) -> u64 { math1::add(a, b) }
     "#;
-    utils::compile_with_deps(
-        src,
-        &[
-            (Address::from_str("0x01").unwrap(), &dep1),
-            (Address::from_str("0x02").unwrap(), &dep2),
-        ],
-    )
-    .expect("two modules with same name but different aliases must compile");
+    utils::compile_with_deps(src, &[(d1_addr, &dep1), (d2_addr, &dep2)])
+        .expect("two modules with same name but different aliases must compile");
 }
 
 #[test]
@@ -407,7 +405,7 @@ fn extract_deps_alias_returns_alias_as_key() {
     let src = r#"
         mod main;
 
-        use helper@0x42 as h;
+        use helper@0xFD as h;
 
         fn run() -> u64 { 0 }
     "#;
@@ -418,7 +416,7 @@ fn extract_deps_alias_returns_alias_as_key() {
         (
             "helper".to_string(),
             Some("h".to_string()),
-            Address::from_str("0x42").unwrap()
+            Address::from_str("0xFD").unwrap()
         )
     );
 }
@@ -437,11 +435,11 @@ fn alias_used_for_cross_module_call() {
     let src = r#"
         mod main;
 
-        use helper@0x42 as h;
+        use helper@0xFD as h;
 
         pub fn run() -> u64 { h::get() }
     "#;
-    utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)])
+    utils::compile_with_deps(src, &[(Address::from_str("0xFD").unwrap(), &dep)])
         .expect("alias must work for cross-module call");
 }
 
@@ -460,12 +458,12 @@ fn original_module_name_rejected_when_alias_set() {
     let src = r#"
         mod main;
 
-        use helper@0x42 as h;
+        use helper@0xFD as h;
 
         pub fn run() -> u64 { helper::get() }
     "#;
     assert!(matches!(
-        utils::compile_with_deps(src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
+        utils::compile_with_deps(src, &[(Address::from_str("0xFD").unwrap(), &dep)]).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("undeclared module 'helper'")
     ));
 }
@@ -486,11 +484,11 @@ fn alias_too_long_is_rejected() {
         r#"
             mod main;
 
-            use helper@0x42 as {long_alias};
+            use helper@0xFD as {long_alias};
         "#
     );
     assert!(matches!(
-        utils::compile_with_deps(&src, &[(Address::from_str("0x42").unwrap(), &dep)]).unwrap_err(),
+        utils::compile_with_deps(&src, &[(Address::from_str("0xFD").unwrap(), &dep)]).unwrap_err(),
         CompilerError::Message(msg) if msg.contains("not a valid identifier")
     ));
 }
@@ -500,8 +498,8 @@ fn duplicate_alias_is_rejected() {
     let src = r#"
         mod main;
 
-        use foo@0x01 as shared;
-        use bar@0x02 as shared;
+        use foo@0xD1 as shared;
+        use bar@0xD2 as shared;
     "#;
     assert!(matches!(
         Compiler::extract_deps(src).unwrap_err(),
@@ -515,20 +513,20 @@ fn duplicate_alias_is_rejected() {
 
 #[test]
 fn circular_module_dep_is_compile_error() {
-    let addr1 = Address::from_str("0x01").unwrap();
-    let addr2 = Address::from_str("0x02").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
     // Hand-craft two modules that import each other — the compiler refuses to produce
     // cycles itself, so we construct them directly to test the cycle detector.
     let mut mod_a = Module::new("mod_a");
-    mod_a.imports = vec![addr2]; // A imports B
+    mod_a.imports = vec![b_addr]; // A imports B
 
     let mut mod_b = Module::new("mod_b");
-    mod_b.imports = vec![addr1]; // B imports A
+    mod_b.imports = vec![a_addr]; // B imports A
 
     assert!(matches!(
         Compiler::compile(
             "mod top;",
-            &[(addr1, &mod_a), (addr2, &mod_b)],
+            &[(a_addr, &mod_a), (b_addr, &mod_b)],
             &[],
             CompilerConfig::default(),
         )

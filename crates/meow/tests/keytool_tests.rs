@@ -100,7 +100,7 @@ fn remove_missing_key_returns_none() {
     let mut keystore = Keystore::in_memory();
 
     let output = KeyToolCommand::Remove {
-        address: Address::fill(0xAA),
+        address: Address::fill(0xE1),
     }
     .run(&mut keystore)
     .unwrap();

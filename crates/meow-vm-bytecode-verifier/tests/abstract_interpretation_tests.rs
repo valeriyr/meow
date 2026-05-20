@@ -19,7 +19,7 @@ fn arithmetic_and_return_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn native_returning_address_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -47,7 +47,7 @@ fn native_returning_u64_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 //
@@ -63,7 +63,7 @@ fn not_on_bool_passes() {
         fn f(x: bool) -> bool { !x }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn not_on_non_bool_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::TypeMismatch { expected, .. } if expected == "bool"
@@ -101,7 +101,7 @@ fn not_on_empty_stack_rejected() {
     utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::Not, Instruction::Return];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -129,7 +129,7 @@ fn add_bool_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::TypeMismatch { expected, .. } if expected == "u64"
@@ -153,7 +153,7 @@ fn compare_mismatched_types_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::TypeMismatch { .. }))
@@ -180,7 +180,7 @@ fn stack_underflow_on_add() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -203,7 +203,7 @@ fn stack_underflow_on_pop() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
@@ -226,7 +226,7 @@ fn wrong_return_type_rejected() {
     utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::PushBool(true), Instruction::Return];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::ReturnTypeMismatch { .. }))
@@ -245,7 +245,7 @@ fn missing_return_detected() {
     utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::PushU64(1)];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::MissingReturn { .. }))
@@ -271,7 +271,7 @@ fn call_unknown_function_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::UndefinedFunction { callee, .. } if callee == "no_such_fn"
@@ -309,7 +309,7 @@ fn unpack_wrong_struct_type_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -340,7 +340,7 @@ fn native_wrong_arg_count_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::NativeArgCountMismatch { callee, .. } if callee == "meow_vm_abort"
@@ -365,7 +365,7 @@ fn native_wrong_arg_type_rejected() {
             Instruction::Return,
         ];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::NativeArgTypeMismatch { callee, .. } if callee == "meow_vm_abort"

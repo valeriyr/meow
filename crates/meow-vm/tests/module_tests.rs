@@ -11,7 +11,7 @@ use meow_vm_types::{address::Address, module_ref, types::Value};
 
 #[test]
 fn cross_module_function_call() {
-    let a1 = Address::from_str("0x01").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let math = utils::compile(
         r#"
             mod math;
@@ -31,12 +31,12 @@ fn cross_module_function_call() {
                     math::add(a, b) + math::add(a, b)
                 }}
             "#,
-            a1
+            d_addr
         ),
-        &[(a1, &math)],
+        &[(d_addr, &math)],
     );
 
-    let vm = utils::vm_with_deps(caller, HashMap::from([(a1, math)]));
+    let vm = utils::vm_with_deps(caller, HashMap::from([(d_addr, math)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm
         .call("double_add", vec![Value::U64(3), Value::U64(4)], &mut gas)
@@ -53,7 +53,7 @@ fn cross_module_function_call() {
 
 #[test]
 fn cross_module_struct_via_constructor_and_field_access() {
-    let a10 = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let shapes = utils::compile(
         r#"
             mod shapes;
@@ -77,12 +77,12 @@ fn cross_module_struct_via_constructor_and_field_access() {
                     shapes::to_x(p)
                 }}
             "#,
-            a10
+            d_addr
         ),
-        &[(a10, &shapes)],
+        &[(d_addr, &shapes)],
     );
 
-    let vm = utils::vm_with_deps(user, HashMap::from([(a10, shapes)]));
+    let vm = utils::vm_with_deps(user, HashMap::from([(d_addr, shapes)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("make_and_read", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(5)));
@@ -94,7 +94,7 @@ fn cross_module_struct_via_constructor_and_field_access() {
 
 #[test]
 fn cross_module_field_read_via_getter() {
-    let a10 = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let shapes = utils::compile(
         r#"
             mod shapes;
@@ -118,12 +118,12 @@ fn cross_module_field_read_via_getter() {
                     shapes::to_x(p)
                 }}
             "#,
-            a10
+            d_addr
         ),
-        &[(a10, &shapes)],
+        &[(d_addr, &shapes)],
     );
 
-    let vm = utils::vm_with_deps(user, HashMap::from([(a10, shapes)]));
+    let vm = utils::vm_with_deps(user, HashMap::from([(d_addr, shapes)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("read_x_via_getter", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(7)));
@@ -135,8 +135,8 @@ fn cross_module_field_read_via_getter() {
 
 #[test]
 fn same_struct_name_in_different_modules_are_distinct() {
-    let aa0 = Address::from_str("0xA0").unwrap();
-    let ab0 = Address::from_str("0xB0").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
 
     let mod_a = utils::compile(
         r#"
@@ -164,8 +164,8 @@ fn same_struct_name_in_different_modules_are_distinct() {
             r#"
                 mod main;
 
-                use mod_a@{};
-                use mod_b@{};
+                use mod_a@{a_addr};
+                use mod_b@{b_addr};
 
                 pub fn run() -> u64 {{
                     let ta = mod_a::make_token(100);
@@ -173,12 +173,13 @@ fn same_struct_name_in_different_modules_are_distinct() {
                     mod_a::to_amount(ta) + mod_b::to_points(tb)
                 }}
             "#,
-            aa0, ab0
+            a_addr = a_addr,
+            b_addr = b_addr
         ),
-        &[(aa0, &mod_a), (ab0, &mod_b)],
+        &[(a_addr, &mod_a), (b_addr, &mod_b)],
     );
 
-    let vm = utils::vm_with_deps(main, HashMap::from([(aa0, mod_a), (ab0, mod_b)]));
+    let vm = utils::vm_with_deps(main, HashMap::from([(a_addr, mod_a), (b_addr, mod_b)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("run", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(142)));
@@ -190,8 +191,8 @@ fn same_struct_name_in_different_modules_are_distinct() {
 
 #[test]
 fn same_module_name_different_address_are_distinct() {
-    let a01 = Address::from_str("0x01").unwrap();
-    let a02 = Address::from_str("0x02").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
     let lib_v1 = utils::compile(
         r#"
             mod lib;
@@ -207,7 +208,7 @@ fn same_module_name_different_address_are_distinct() {
         "#,
     );
 
-    // The caller was compiled against lib at address 0x01.
+    // The caller was compiled against lib at address 0xFA.
     let caller_v1 = utils::compile_with_deps(
         &format!(
             r#"
@@ -217,21 +218,21 @@ fn same_module_name_different_address_are_distinct() {
 
                 pub fn get() -> u64 {{ lib::version() }}
             "#,
-            a01
+            a_addr
         ),
-        &[(a01, &lib_v1)],
+        &[(a_addr, &lib_v1)],
     );
 
-    // Supplying lib_v1 (address 0x01) returns 1 …
-    let vm = utils::vm_with_deps(caller_v1.clone(), HashMap::from([(a01, lib_v1)]));
+    // Supplying lib_v1 (address 0xFA) returns 1 …
+    let vm = utils::vm_with_deps(caller_v1.clone(), HashMap::from([(a_addr, lib_v1)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     assert_eq!(
         vm.call("get", vec![], &mut gas).unwrap().return_value,
         Some(Value::U64(1))
     );
 
-    // … but the wrong module (lib_v2, address 0x02) can't be resolved.
-    let vm_wrong = utils::vm_with_deps(caller_v1, HashMap::from([(a02, lib_v2)]));
+    // … but the wrong module (lib_v2, address 0xFB) can't be resolved.
+    let vm_wrong = utils::vm_with_deps(caller_v1, HashMap::from([(b_addr, lib_v2)]));
     let mut gas2 = meow_vm::gas_meter::GasMeter::unlimited();
     assert!(matches!(
         vm_wrong.call("get", vec![], &mut gas2).unwrap_err(),
@@ -245,7 +246,7 @@ fn same_module_name_different_address_are_distinct() {
 
 #[test]
 fn dep_module_internal_calls_stay_in_dep_context() {
-    let a20 = Address::from_str("0x20").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let math = utils::compile(
         r#"
             mod math;
@@ -264,12 +265,12 @@ fn dep_module_internal_calls_stay_in_dep_context() {
 
                 pub fn run(a: u64, b: u64) -> u64 {{ math::sum_of_squares(a, b) }}
             "#,
-            a20
+            d_addr
         ),
-        &[(a20, &math)],
+        &[(d_addr, &math)],
     );
 
-    let vm = utils::vm_with_deps(caller, HashMap::from([(a20, math)]));
+    let vm = utils::vm_with_deps(caller, HashMap::from([(d_addr, math)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm
         .call("run", vec![Value::U64(3), Value::U64(4)], &mut gas)
@@ -283,7 +284,7 @@ fn dep_module_internal_calls_stay_in_dep_context() {
 
 #[test]
 fn cross_module_nested_structs() {
-    let a30 = Address::from_str("0x30").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let geometry = utils::compile(
         r#"
             mod geometry;
@@ -308,13 +309,13 @@ fn cross_module_nested_structs() {
                     geometry::to_x(b) - geometry::to_x(a)
                 }}
             "#,
-            a30
+            d_addr
         ),
-        &[(a30, &geometry)],
+        &[(d_addr, &geometry)],
     );
 
     let point = |x: u64, y: u64| Value::Struct {
-        type_name: module_ref::qualify(&a30, "Point"),
+        type_name: module_ref::qualify(&d_addr, "Point"),
         fields: vec![
             ("x".to_string(), Value::U64(x)),
             ("y".to_string(), Value::U64(y)),
@@ -328,7 +329,7 @@ fn cross_module_nested_structs() {
         ],
     };
 
-    let vm = utils::vm_with_deps(shapes, HashMap::from([(a30, geometry)]));
+    let vm = utils::vm_with_deps(shapes, HashMap::from([(d_addr, geometry)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("x_distance", vec![line], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(7)));
@@ -340,8 +341,8 @@ fn cross_module_nested_structs() {
 
 #[test]
 fn cross_module_deeply_nested_structs() {
-    let a10 = Address::from_str("0x10").unwrap();
-    let a20 = Address::from_str("0x20").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
 
     let point = utils::compile(
         r#"
@@ -368,9 +369,9 @@ fn cross_module_deeply_nested_structs() {
                     point::to_x(a)
                 }}
             "#,
-            a10
+            a_addr
         ),
-        &[(a10, &point)],
+        &[(a_addr, &point)],
     );
 
     let geometry = utils::compile_with_deps(
@@ -378,7 +379,7 @@ fn cross_module_deeply_nested_structs() {
             r#"
                 mod geometry;
 
-                use shapes@{a20};
+                use shapes@{};
 
                 pub struct Rect {{ l1: shapes::Line, l2: shapes::Line }}
 
@@ -388,20 +389,20 @@ fn cross_module_deeply_nested_structs() {
                     shapes::to_a_x(l1)
                 }}
             "#,
-            a20 = a20,
+            b_addr,
         ),
-        &[(a10, &point), (a20, &shapes)],
+        &[(a_addr, &point), (b_addr, &shapes)],
     );
 
     let mk_point = |x: u64, y: u64| Value::Struct {
-        type_name: module_ref::qualify(&a10, "Point"),
+        type_name: module_ref::qualify(&a_addr, "Point"),
         fields: vec![
             ("x".to_string(), Value::U64(x)),
             ("y".to_string(), Value::U64(y)),
         ],
     };
     let mk_line = |a, b| Value::Struct {
-        type_name: module_ref::qualify(&a20, "Line"),
+        type_name: module_ref::qualify(&b_addr, "Line"),
         fields: vec![("a".to_string(), a), ("b".to_string(), b)],
     };
     let rect = Value::Struct {
@@ -412,7 +413,7 @@ fn cross_module_deeply_nested_structs() {
         ],
     };
 
-    let vm = utils::vm_with_deps(geometry, HashMap::from([(a10, point), (a20, shapes)]));
+    let vm = utils::vm_with_deps(geometry, HashMap::from([(a_addr, point), (b_addr, shapes)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("left_top_x", vec![rect], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(3)));
@@ -424,7 +425,7 @@ fn cross_module_deeply_nested_structs() {
 
 #[test]
 fn chained_cross_module_calls() {
-    let a60 = Address::from_str("0x60").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
     let base = utils::compile(
         r#"
             mod base;
@@ -433,7 +434,7 @@ fn chained_cross_module_calls() {
         "#,
     );
 
-    let a61 = Address::from_str("0x61").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
     let mid = utils::compile_with_deps(
         &format!(
             r#"
@@ -443,9 +444,9 @@ fn chained_cross_module_calls() {
 
                 pub fn two() -> u64 {{ base::one() + base::one() }}
             "#,
-            a60
+            a_addr
         ),
-        &[(a60, &base)],
+        &[(a_addr, &base)],
     );
 
     let top = utils::compile_with_deps(
@@ -457,12 +458,12 @@ fn chained_cross_module_calls() {
 
                 pub fn four() -> u64 {{ mid::two() + mid::two() }}
             "#,
-            a61
+            b_addr
         ),
-        &[(a60, &base), (a61, &mid)],
+        &[(a_addr, &base), (b_addr, &mid)],
     );
 
-    let vm = utils::vm_with_deps(top, HashMap::from([(a61, mid), (a60, base)]));
+    let vm = utils::vm_with_deps(top, HashMap::from([(b_addr, mid), (a_addr, base)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("four", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(4)));
@@ -474,7 +475,7 @@ fn chained_cross_module_calls() {
 
 #[test]
 fn alias_used_for_cross_module_function_call() {
-    let a1 = Address::from_str("0x01").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let math = utils::compile(
         r#"
             mod math;
@@ -492,12 +493,12 @@ fn alias_used_for_cross_module_function_call() {
 
                 pub fn run(a: u64, b: u64) -> u64 {{ m::add(a, b) }}
             "#,
-            a1
+            d_addr
         ),
-        &[(a1, &math)],
+        &[(d_addr, &math)],
     );
 
-    let vm = utils::vm_with_deps(caller, HashMap::from([(a1, math)]));
+    let vm = utils::vm_with_deps(caller, HashMap::from([(d_addr, math)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm
         .call("run", vec![Value::U64(10), Value::U64(3)], &mut gas)
@@ -507,7 +508,7 @@ fn alias_used_for_cross_module_function_call() {
 
 #[test]
 fn alias_used_for_cross_module_struct() {
-    let a10 = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let shapes = utils::compile(
         r#"
             mod shapes;
@@ -531,12 +532,12 @@ fn alias_used_for_cross_module_struct() {
                     geo::to_x(p)
                 }}
             "#,
-            a10
+            d_addr
         ),
-        &[(a10, &shapes)],
+        &[(d_addr, &shapes)],
     );
 
-    let vm = utils::vm_with_deps(user, HashMap::from([(a10, shapes)]));
+    let vm = utils::vm_with_deps(user, HashMap::from([(d_addr, shapes)]));
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("run", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(5)));
@@ -544,8 +545,8 @@ fn alias_used_for_cross_module_struct() {
 
 #[test]
 fn two_modules_same_name_distinguished_by_alias() {
-    let a01 = Address::from_str("0x01").unwrap();
-    let a02 = Address::from_str("0x02").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
 
     let math_v1 = utils::compile(
         r#"
@@ -567,18 +568,21 @@ fn two_modules_same_name_distinguished_by_alias() {
             r#"
                 mod caller;
 
-                use math@{a01} as math1;
-                use math@{a02} as math2;
+                use math@{a_addr} as math1;
+                use math@{b_addr} as math2;
 
                 pub fn run() -> u64 {{ math1::value() + math2::value() }}
             "#,
-            a01 = a01,
-            a02 = a02,
+            a_addr = a_addr,
+            b_addr = b_addr,
         ),
-        &[(a01, &math_v1), (a02, &math_v2)],
+        &[(a_addr, &math_v1), (b_addr, &math_v2)],
     );
 
-    let vm = utils::vm_with_deps(caller, HashMap::from([(a01, math_v1), (a02, math_v2)]));
+    let vm = utils::vm_with_deps(
+        caller,
+        HashMap::from([(a_addr, math_v1), (b_addr, math_v2)]),
+    );
     let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
     let result = vm.call("run", vec![], &mut gas).unwrap();
     assert_eq!(result.return_value, Some(Value::U64(300)));

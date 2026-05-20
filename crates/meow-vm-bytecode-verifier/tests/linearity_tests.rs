@@ -21,7 +21,7 @@ fn struct_consumed_by_call_passes() {
         pub fn give(p: Point) { sink(p); }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 //
@@ -40,7 +40,7 @@ fn param_struct_alive_at_return_passes() {
         pub fn consume(p: Point) { let Point { .. } = p; }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -62,7 +62,7 @@ fn param_struct_moved_to_local_slot_at_return_rejected() {
         Instruction::Store(1), // into non-param local slot 1
         Instruction::Return,   // slot 1 still live — unconsumed struct
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
@@ -93,7 +93,7 @@ fn compiled_lose_function_rejected() {
         Instruction::Store(1), // store in local slot 1 — still live
         Instruction::Return,   // slot 1 still holds Point — unconsumed
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
@@ -120,7 +120,7 @@ fn struct_from_unpacked_tuple_unconsumed_at_return_rejected() {
         }
     "#,
     );
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
@@ -154,7 +154,7 @@ fn struct_load_consumes_slot() {
         Instruction::Load(0), // moves Point — slot 0 dead
         Instruction::Return,  // returns the Point on the stack
     ];
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn struct_use_after_move_rejected() {
         Instruction::Load(0), // second load — UseAfterMove
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UseAfterMove { slot: 0, .. }))
@@ -204,7 +204,7 @@ fn pop_on_struct_rejected() {
         Instruction::Pop, // rejected — structs are linear
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::PopOnStruct { .. }))
@@ -231,7 +231,7 @@ fn dup_on_struct_rejected() {
         Instruction::Dup, // rejected — structs are linear
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::DupOnStruct { .. }))
@@ -264,7 +264,7 @@ fn struct_slot_overwrite_rejected() {
         Instruction::Store(0), // rejected — slot 0 still holds a live struct
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::SlotOverwrite { slot: 0, .. }))
@@ -290,7 +290,7 @@ fn struct_unconsumed_in_local_slot_rejected() {
         Instruction::Store(0),
         Instruction::Return, // slot 0 still holds a live Point — resource leak
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UnconsumedStruct { slot: 0, .. }))
@@ -316,7 +316,7 @@ fn struct_unpack_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -349,7 +349,7 @@ fn struct_unpack_consumes_slot() {
         Instruction::Pop,
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::UseAfterMove { slot: 0, .. })),
@@ -385,7 +385,7 @@ fn load_field_struct_typed_rejected() {
         Instruction::Pop,
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StructTypedFieldLoaded { field, .. } if field == "inner")),
@@ -411,7 +411,7 @@ fn load_field_primitive_field_passes() {
     ];
     // But `o` is still live at Return — add UnpackStruct to consume it first.
     // This test only verifies that LoadField itself doesn't fire StructTypedFieldLoaded.
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         !errs
             .iter()
@@ -437,7 +437,7 @@ fn store_field_struct_typed_rejected() {
         Instruction::StoreField(0, vec!["inner".to_string()]), // writes to struct-typed field — forbidden
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StructTypedFieldWritten { field, .. } if field == "inner")),
@@ -463,7 +463,7 @@ fn get_field_drops_linear_field_rejected() {
         Instruction::GetField("amount".to_string()), // u64 result, but inner: Inner dropped
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -493,7 +493,7 @@ fn get_field_struct_typed_rejected() {
         Instruction::Pop,
         Instruction::Return,
     ];
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::StructTypedFieldLoaded { field, .. } if field == "inner")),

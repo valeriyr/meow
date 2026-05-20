@@ -24,7 +24,7 @@ use rand::{SeedableRng, rngs::StdRng};
 
 #[test]
 fn valid_call_with_no_args_passes() {
-    let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), vec![]);
+    let tx = call_tx(SENDER, gas_coin_ref(), vec![]);
 
     assert!(validator::validate_transaction(&tx).is_ok());
 }
@@ -32,11 +32,11 @@ fn valid_call_with_no_args_passes() {
 #[test]
 fn valid_call_with_mixed_args_passes() {
     let args = vec![
-        obj_input(Address::fill(0x10)),
-        obj_input(Address::fill(0x11)),
+        obj_input(Address::fill(0xF1)),
+        obj_input(Address::fill(0xF2)),
         Input::Raw(vec![1, 2, 3]),
     ];
-    let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
+    let tx = call_tx(SENDER, gas_coin_ref(), args);
 
     assert!(validator::validate_transaction(&tx).is_ok());
 }
@@ -44,7 +44,7 @@ fn valid_call_with_mixed_args_passes() {
 #[test]
 fn raw_args_with_same_content_do_not_alias() {
     let args = vec![Input::Raw(vec![1, 2, 3]), Input::Raw(vec![1, 2, 3])];
-    let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
+    let tx = call_tx(SENDER, gas_coin_ref(), args);
 
     assert!(validator::validate_transaction(&tx).is_ok());
 }
@@ -52,7 +52,7 @@ fn raw_args_with_same_content_do_not_alias() {
 #[test]
 fn call_too_large_returns_error() {
     let large_arg = Input::Raw(vec![0u8; MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE]);
-    let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), vec![large_arg]);
+    let tx = call_tx(SENDER, gas_coin_ref(), vec![large_arg]);
 
     assert!(matches!(
         validator::validate_transaction(&tx),
@@ -70,7 +70,7 @@ fn too_many_args_returns_error() {
     let args: Vec<_> = (0..=max_params)
         .map(|i| obj_input(Address::fill(i)))
         .collect();
-    let tx = call_tx(Address::fill(0xAA), gas_coin_ref(0xBB), args);
+    let tx = call_tx(SENDER, gas_coin_ref(), args);
     let expected_limit = max_params as usize;
 
     assert!(matches!(
@@ -82,13 +82,8 @@ fn too_many_args_returns_error() {
 
 #[test]
 fn gas_coin_as_call_arg_returns_error() {
-    let byte = 0xCC;
-    let gas_coin = Address::fill(byte);
-    let tx = call_tx(
-        Address::fill(0xAA),
-        gas_coin_ref(byte),
-        vec![obj_input(gas_coin)],
-    );
+    let gas_coin = gas_coin_address();
+    let tx = call_tx(SENDER, gas_coin_ref(), vec![obj_input(gas_coin)]);
 
     assert!(matches!(
         validator::validate_transaction(&tx),
@@ -98,12 +93,8 @@ fn gas_coin_as_call_arg_returns_error() {
 
 #[test]
 fn aliased_object_arg_returns_error() {
-    let obj = Address::fill(0x10);
-    let tx = call_tx(
-        Address::fill(0xAA),
-        gas_coin_ref(0xBB),
-        vec![obj_input(obj), obj_input(obj)],
-    );
+    let obj = Address::fill(0xF1);
+    let tx = call_tx(SENDER, gas_coin_ref(), vec![obj_input(obj), obj_input(obj)]);
 
     assert!(matches!(
         validator::validate_transaction(&tx),
@@ -221,8 +212,16 @@ fn signed_transaction_verify_invalid_module_too_large() {
 // ─── Utility functions ───
 //
 
-fn gas_coin_ref(byte: u8) -> ObjectRef {
-    ObjectRef::new(Address::fill(byte), ObjectVersion::ONE, Digest::ZERO)
+const SENDER: Address = Address::fill(0xE1);
+const GAS_COIN_BYTE: u8 = 0xF9;
+const CALL_MODULE: Address = Address::fill(0xFD);
+
+fn gas_coin_ref() -> ObjectRef {
+    ObjectRef::new(gas_coin_address(), ObjectVersion::ONE, Digest::ZERO)
+}
+
+fn gas_coin_address() -> Address {
+    Address::fill(GAS_COIN_BYTE)
 }
 
 fn obj_input(address: Address) -> Input {
@@ -234,7 +233,7 @@ fn call_tx(sender: Address, gas_coin: ObjectRef, args: Vec<Input>) -> Transactio
         sender,
         gas_coin,
         TransactionType::MeowCall(Call::new(
-            Address::fill(0x01),
+            CALL_MODULE,
             Identifier::new("run").unwrap(),
             args,
         )),
@@ -242,13 +241,13 @@ fn call_tx(sender: Address, gas_coin: ObjectRef, args: Vec<Input>) -> Transactio
 }
 
 fn publish_tx(module_bytes: Vec<u8>) -> Transaction {
-    publish_tx_with_sender(Address::fill(0xAA), module_bytes)
+    publish_tx_with_sender(SENDER, module_bytes)
 }
 
 fn publish_tx_with_sender(sender: Address, module_bytes: Vec<u8>) -> Transaction {
     Transaction::new(
         sender,
-        gas_coin_ref(0xBB),
+        gas_coin_ref(),
         TransactionType::MeowModulePublish(module_bytes),
     )
 }

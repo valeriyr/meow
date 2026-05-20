@@ -31,7 +31,7 @@ fn object_with_correct_id_field_passes() {
         r#"
             mod token_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -64,7 +64,7 @@ fn struct_with_address_id_field_is_plain_struct() {
         r#"
             mod layout_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
         "#,
@@ -127,7 +127,7 @@ fn object_created_with_stored_fresh_id_passes() {
         r#"
             mod stored_id_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -163,7 +163,7 @@ fn object_created_from_parameter_id_fails() {
         r#"
             mod param_id_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -196,7 +196,7 @@ fn object_created_from_unpacked_id_fails() {
         r#"
             mod reuse_id_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -230,7 +230,7 @@ fn object_created_from_tuple_unpacked_id_fails() {
         r#"
             mod tuple_id_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -283,7 +283,7 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
         r#"
             mod branch_merge_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, amount: u64 }
 
@@ -363,7 +363,7 @@ fn object_type_as_local_struct_field_fails() {
         r#"
             mod nested_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Inner { id: meow_object::Id, value: u64 }
             pub struct Outer { inner: Inner, amount: u64 }
@@ -384,15 +384,15 @@ fn object_type_as_local_struct_field_fails() {
 
 #[test]
 fn cross_module_object_type_as_struct_field_fails() {
-    // `Token` (from dep at 0x02) is object-shaped; `Wrapper` nests it as a field — must be rejected.
+    // `Token` (from dep at 0xFD) is object-shaped; `Wrapper` nests it as a field — must be rejected.
     let meow_object_module = meow_object_module();
-    let dep_addr = Address::from_str("0x02").unwrap();
+    let dep_addr = Address::from_str("0xFD").unwrap();
 
     let dep_module = builder::build(
         r#"
             mod dep_with_object;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Token { id: meow_object::Id, balance: u64 }
         "#,
@@ -404,7 +404,7 @@ fn cross_module_object_type_as_struct_field_fails() {
         r#"
             mod wrapper_test;
 
-            use dep_with_object@0x02;
+            use dep_with_object@0xFD;
 
             pub struct Wrapper { token: dep_with_object::Token, extra: u64 }
         "#,

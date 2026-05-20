@@ -54,8 +54,8 @@ pub fn value_to_rust<T: DeserializeOwned>(value: &Value) -> Result<T> {
 /// Provides address-qualified type-name translations for cross-module struct fields.
 ///
 /// Implement this for types whose fields include structs from other modules, so that
-/// [`struct_from_rust`] can translate local names (e.g. `"Id"`) to the bytecode-qualified
-/// names the VM expects (e.g. `"@0x0001::Id"`).
+/// [`struct_from_rust`] can translate local names (e.g. `"Point"`) to the bytecode-qualified
+/// names the VM expects (e.g. `"@0xABCD::Point"`).
 ///
 /// Types that need no translation can use the default implementation:
 /// ```rust

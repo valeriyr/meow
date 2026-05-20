@@ -16,13 +16,17 @@ use meow_vm_adapter::{
 use meow_vm_types::{module::Module, module_ref, types::Value};
 
 //
-// ─── Tests ───
+// ─── compile ───
 //
 
 #[test]
 fn compile_hero_game() {
     let _ = hero_module();
 }
+
+//
+// ─── spawn ───
+//
 
 #[test]
 fn spawn_creates_hero_and_transfers_to_sender() {
@@ -39,9 +43,13 @@ fn spawn_creates_hero_and_transfers_to_sender() {
     assert_eq!(hero.field_u64("wins").unwrap(), 0);
 }
 
+//
+// ─── rename ───
+//
+
 #[test]
 fn rename_updates_display_name() {
-    let hero = make_hero(Address::fill(0x01), "Thorin", 1, 0, 0);
+    let hero = make_hero(Address::fill(0xF1), "Thorin", 1, 0, 0);
     let result = run(
         "rename",
         vec![hero, Value::Str("Thorin Oakenshield".to_string())],
@@ -49,6 +57,11 @@ fn rename_updates_display_name() {
     .unwrap();
 
     assert_eq!(result.transfers.len(), 1);
+    assert_eq!(
+        result.transfers[0].1,
+        Address::ZERO,
+        "hero must return to sender"
+    );
     assert!(result.destroyed.is_empty());
 
     let renamed_hero = &result.transfers[0].0;
@@ -58,13 +71,27 @@ fn rename_updates_display_name() {
     );
 }
 
+//
+// ─── duel ───
+//
+
 #[test]
 fn duel_one_hero_wins_and_gains_xp() {
-    let attacker = make_hero(Address::fill(0x01), "Attacker", 1, 0, 0);
-    let defender = make_hero(Address::fill(0x02), "Defender", 1, 0, 0);
+    let attacker = make_hero(Address::fill(0xF1), "Attacker", 1, 0, 0);
+    let defender = make_hero(Address::fill(0xF2), "Defender", 1, 0, 0);
     let result = run("duel", vec![attacker, defender]).unwrap();
 
     assert_eq!(result.transfers.len(), 2);
+    assert_eq!(
+        result.transfers[0].1,
+        Address::ZERO,
+        "attacker must return to sender"
+    );
+    assert_eq!(
+        result.transfers[1].1,
+        Address::ZERO,
+        "defender must return to sender"
+    );
     assert!(result.destroyed.is_empty());
 
     let a = &result.transfers[0].0;
@@ -94,11 +121,21 @@ fn duel_one_hero_wins_and_gains_xp() {
 #[test]
 fn duel_winner_levels_up_when_xp_threshold_reached() {
     // Attacker at 75 XP: winning gains 25 (loser level 1) → 100 = 1×100 → level up, XP resets.
-    let attacker = make_hero(Address::fill(0x01), "Veteran", 1, 75, 0);
-    let defender = make_hero(Address::fill(0x02), "Rookie", 1, 0, 0);
+    let attacker = make_hero(Address::fill(0xF1), "Veteran", 1, 75, 0);
+    let defender = make_hero(Address::fill(0xF2), "Rookie", 1, 0, 0);
     let result = run("duel", vec![attacker, defender]).unwrap();
 
     assert_eq!(result.transfers.len(), 2);
+    assert_eq!(
+        result.transfers[0].1,
+        Address::ZERO,
+        "attacker must return to sender"
+    );
+    assert_eq!(
+        result.transfers[1].1,
+        Address::ZERO,
+        "defender must return to sender"
+    );
 
     let a = &result.transfers[0].0;
     let d = &result.transfers[1].0;
@@ -120,10 +157,14 @@ fn duel_winner_levels_up_when_xp_threshold_reached() {
     }
 }
 
+//
+// ─── transfer ───
+//
+
 #[test]
 fn transfer_sends_hero_to_recipient() {
-    let recipient = Address::fill(0x42);
-    let hero = make_hero(Address::fill(0x01), "Thorin", 1, 0, 0);
+    let recipient = Address::fill(0xE1);
+    let hero = make_hero(Address::fill(0xF1), "Thorin", 1, 0, 0);
     let result = run("transfer", vec![hero, Value::Address(recipient.into())]).unwrap();
 
     assert_eq!(result.transfers.len(), 1);
@@ -131,9 +172,13 @@ fn transfer_sends_hero_to_recipient() {
     assert!(result.destroyed.is_empty());
 }
 
+//
+// ─── retire ───
+//
+
 #[test]
 fn retire_destroys_hero() {
-    let hero_id = Address::fill(0x01);
+    let hero_id = Address::fill(0xF1);
     let hero = make_hero(hero_id, "Thorin", 5, 50, 3);
     let result = run("retire", vec![hero]).unwrap();
 

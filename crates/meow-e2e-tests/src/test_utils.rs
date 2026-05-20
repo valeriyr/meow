@@ -138,6 +138,7 @@ pub fn module_math() -> Vec<u8> {
     let module = builder::build(
         r#"
             mod math;
+
             pub fn add(a: u64, b: u64) -> u64 { a + b }
         "#,
         &[],
@@ -151,6 +152,7 @@ pub fn module_noop() -> Vec<u8> {
     let module = builder::build(
         r#"
             mod noop;
+
             pub fn noop() {}
         "#,
         &[],

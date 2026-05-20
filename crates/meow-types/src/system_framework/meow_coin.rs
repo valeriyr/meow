@@ -14,7 +14,7 @@ use crate::{
 };
 
 /// The `meow_coin` module address is a reserved address where the `meow_coin` module is deployed.
-pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x10);
+pub const MEOW_COIN_MODULE_ADDRESS: Address = utils::builtin_address(0x20);
 /// The `meow_coin` module name.
 pub const MEOW_COIN_MODULE_NAME: &str = "meow_coin";
 /// The `MeowCoin` object name.
@@ -26,10 +26,10 @@ pub const MEOW_COIN_MINT_FUNCTION_NAME: &str = "mint";
 
 /// Address-qualified type name for `MeowCoin` as it appears in VM values at runtime.
 pub const MEOW_COIN_OBJECT_BYTECODE_TYPE_NAME: &str =
-    "@0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin";
+    "@0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoin";
 /// Address-qualified type name for `MeowCoinBalance` as it appears in VM values at runtime.
 pub const MEOW_COIN_BALANCE_BYTECODE_TYPE_NAME: &str =
-    "@0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoinBalance";
+    "@0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoinBalance";
 
 /// The `MeowCoin` struct represents a coin in the Meow system, with an id and a balance.
 #[derive(Serialize, Deserialize)]

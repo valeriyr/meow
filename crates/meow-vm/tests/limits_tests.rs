@@ -18,8 +18,8 @@ use meow_vm_types::{
 fn dep_count_at_limit_succeeds() {
     // Same two-dep chain, limit = 2 — must succeed.
     let cfg = CompilerConfig::default();
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
 
     let c_module = Compiler::compile(
         r#"
@@ -36,7 +36,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -49,7 +49,7 @@ fn dep_count_at_limit_succeeds() {
         r#"
             mod main;
 
-            use b@0x02;
+            use b@0xFB;
 
             pub fn run() -> u64 { b::get() }
         "#,
@@ -76,8 +76,8 @@ fn dep_count_at_limit_succeeds() {
 fn dep_count_exceeding_limit_returns_error() {
     // main → B → C: two transitive deps, limit = 1 → call must fail.
     let cfg = CompilerConfig::default();
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
 
     let c_module = Compiler::compile(
         r#"
@@ -94,7 +94,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -107,7 +107,7 @@ fn dep_count_exceeding_limit_returns_error() {
         r#"
             mod main;
 
-            use b@0x02;
+            use b@0xFB;
 
             pub fn run() -> u64 { b::get() }
         "#,

@@ -34,14 +34,13 @@ fn execute_module_publish_succeeds() {
         matches!(result.created_objects()[0].type_(), ObjectType::Module),
         "created object must have type Module"
     );
-    assert_eq!(result.destroyed_objects().len(), 0);
-    assert!(
-        result
-            .changed_objects()
-            .iter()
-            .any(|o| o.address() == &utils::GAS_ADDR),
-        "gas coin must appear in changed_objects"
+    assert!(result.destroyed_objects().is_empty());
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "only the gas coin must be in changed_objects"
     );
+    assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
 }
 
 #[test]

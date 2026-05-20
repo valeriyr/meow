@@ -189,14 +189,17 @@ async fn run_privileged_can_call_private_function() {
 
 const ADD_SRC: &str = r#"
         mod math;
+
         pub fn add(a: u64, b: u64) -> u64 { a + b }
     "#;
 const NOOP_SRC: &str = r#"
         mod utils;
+
         pub fn noop() {}
     "#;
 const PRIVATE_SRC: &str = r#"
         mod secrets;
+
         fn secret() -> u64 { 42 }
     "#;
 

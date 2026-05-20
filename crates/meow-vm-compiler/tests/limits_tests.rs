@@ -53,8 +53,8 @@ fn too_many_structs_rejected() {
 fn dep_modules_at_limit_succeeds() {
     // Same chain, limit = 2 — [b, c] fits within the limit.
     let cfg = CompilerConfig::default();
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
 
     let c_module = Compiler::compile(
         r#"
@@ -71,7 +71,7 @@ fn dep_modules_at_limit_succeeds() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -87,7 +87,7 @@ fn dep_modules_at_limit_succeeds() {
             r#"
                 mod main;
 
-                use b@0x02;
+                use b@0xFB;
 
                 fn run() -> u64 { b::get() }
             "#,
@@ -147,8 +147,8 @@ fn too_many_imports_rejected() {
 fn too_many_dep_modules_rejected() {
     // main → b → c: full transitive closure has 2 deps. Limit = 1 → compile must fail.
     let cfg = CompilerConfig::default();
-    let b_addr = Address::from_str("0x02").unwrap();
-    let c_addr = Address::from_str("0x03").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
 
     let c_module = Compiler::compile(
         r#"
@@ -165,7 +165,7 @@ fn too_many_dep_modules_rejected() {
         r#"
             mod b;
 
-            use c@0x03;
+            use c@0xFC;
 
             pub fn get() -> u64 { c::get() }
         "#,
@@ -182,7 +182,7 @@ fn too_many_dep_modules_rejected() {
             r#"
                 mod main;
 
-                use b@0x02;
+                use b@0xFB;
 
                 fn run() -> u64 { b::get() }
             "#,

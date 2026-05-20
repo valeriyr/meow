@@ -33,12 +33,12 @@ fn collect_inputs_publish_tx_returns_only_gas_coin() {
 
 #[test]
 fn collect_inputs_publish_tx_includes_dep_module() {
-    let dep_addr = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
 
     let dep_module = utils::build_module(DEP_SRC, &[]);
-    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let main_module = utils::build_module(&main_src(d_addr), &[(d_addr, &dep_module)]);
 
-    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let dep_obj = utils::make_module_object_from_compiled(d_addr, &dep_module);
     let gas_obj = utils::make_gas_coin_object();
 
     let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
@@ -48,7 +48,7 @@ fn collect_inputs_publish_tx_includes_dep_module() {
         if addr == gas_obj.address() {
             return Some(gas_obj.clone());
         }
-        if addr == &dep_addr {
+        if addr == &d_addr {
             return Some(dep_obj.clone());
         }
         None
@@ -57,14 +57,14 @@ fn collect_inputs_publish_tx_includes_dep_module() {
     // Gas coin first, then dep module in post-order
     assert_eq!(inputs.len(), 2);
     assert_eq!(inputs[0].address(), gas_obj.address());
-    assert_eq!(inputs[1].address(), &dep_addr);
+    assert_eq!(inputs[1].address(), &d_addr);
 }
 
 #[test]
 fn collect_inputs_publish_tx_transitive_dep() {
     // point ← shapes (imports point) ← outer (imports shapes, being published)
-    let point_addr = Address::from_str("0x10").unwrap();
-    let shapes_addr = Address::from_str("0x20").unwrap();
+    let point_addr = Address::from_str("0xD1").unwrap();
+    let shapes_addr = Address::from_str("0xD2").unwrap();
 
     let point_module = utils::build_module(DEP_SRC, &[]);
     let shapes_module = utils::build_module(&main_src(point_addr), &[(point_addr, &point_module)]);
@@ -117,7 +117,7 @@ fn collect_inputs_publish_tx_transitive_dep() {
 
 #[test]
 fn collect_inputs_meow_call_returns_gas_then_module() {
-    let module_addr = Address::from_str("0x01").unwrap();
+    let module_addr = Address::from_str("0xFD").unwrap();
     let module_obj =
         utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
     let gas_obj = utils::make_gas_coin_object();
@@ -140,13 +140,13 @@ fn collect_inputs_meow_call_returns_gas_then_module() {
 
 #[test]
 fn collect_inputs_dep_module_comes_before_main_module() {
-    let dep_addr = Address::from_str("0x10").unwrap();
-    let main_addr = Address::from_str("0x20").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
+    let main_addr = Address::from_str("0xD1").unwrap();
 
     let dep_module = utils::build_module(DEP_SRC, &[]);
-    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let main_module = utils::build_module(&main_src(d_addr), &[(d_addr, &dep_module)]);
 
-    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let dep_obj = utils::make_module_object_from_compiled(d_addr, &dep_module);
     let main_obj = utils::make_module_object_from_compiled(main_addr, &main_module);
     let gas_obj = utils::make_gas_coin_object();
 
@@ -159,7 +159,7 @@ fn collect_inputs_dep_module_comes_before_main_module() {
         if addr == &main_addr {
             return Some(main_obj.clone());
         }
-        if addr == &dep_addr {
+        if addr == &d_addr {
             return Some(dep_obj.clone());
         }
         None
@@ -168,13 +168,13 @@ fn collect_inputs_dep_module_comes_before_main_module() {
     // Expected order: gas, dep, main
     assert_eq!(inputs.len(), 3);
     assert_eq!(inputs[0].address(), gas_obj.address());
-    assert_eq!(inputs[1].address(), &dep_addr, "dep must come before main");
+    assert_eq!(inputs[1].address(), &d_addr, "dep must come before main");
     assert_eq!(inputs[2].address(), &main_addr);
 }
 
 #[test]
 fn collect_inputs_missing_gas_coin_is_skipped() {
-    let module_addr = Address::from_str("0x01").unwrap();
+    let module_addr = Address::from_str("0xFD").unwrap();
     let module_obj =
         utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
     let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
@@ -188,13 +188,13 @@ fn collect_inputs_missing_gas_coin_is_skipped() {
     });
 
     // Gas coin missing — only module present
-    assert!(!inputs.iter().any(|o| o.address() == &utils::GAS_ADDR));
-    assert!(inputs.iter().any(|o| o.address() == &module_addr));
+    assert_eq!(inputs.len(), 1);
+    assert_eq!(inputs[0].address(), &module_addr);
 }
 
 #[test]
 fn collect_inputs_missing_module_is_skipped() {
-    let module_addr = Address::from_str("0x01").unwrap();
+    let module_addr = Address::from_str("0xFD").unwrap();
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_call_transaction(module_addr, "noop", vec![]);
 
@@ -213,8 +213,8 @@ fn collect_inputs_missing_module_is_skipped() {
 
 #[test]
 fn collect_inputs_includes_object_call_args() {
-    let module_addr = Address::from_str("0x01").unwrap();
-    let arg_addr = Address::from_str("0xCC").unwrap();
+    let module_addr = Address::from_str("0xFD").unwrap();
+    let arg_addr = Address::from_str("0xF1").unwrap();
     let module_obj =
         utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
     let arg_obj = utils::make_coin_object(arg_addr, utils::SENDER, utils::GAS_BALANCE);
@@ -246,7 +246,7 @@ fn collect_inputs_includes_object_call_args() {
 
 #[tokio::test]
 async fn collect_inputs_async_returns_gas_and_module() {
-    let module_addr = Address::from_str("0x01").unwrap();
+    let module_addr = Address::from_str("0xFD").unwrap();
     let module_obj =
         utils::make_module_object_from_compiled(module_addr, &utils::build_module(SIMPLE_SRC, &[]));
     let gas_obj = utils::make_gas_coin_object();
@@ -274,13 +274,13 @@ async fn collect_inputs_async_returns_gas_and_module() {
 
 #[tokio::test]
 async fn collect_inputs_async_fetches_transitive_dep() {
-    let dep_addr = Address::from_str("0x10").unwrap();
-    let main_addr = Address::from_str("0x20").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
+    let main_addr = Address::from_str("0xD1").unwrap();
 
     let dep_module = utils::build_module(DEP_SRC, &[]);
-    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let main_module = utils::build_module(&main_src(d_addr), &[(d_addr, &dep_module)]);
 
-    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let dep_obj = utils::make_module_object_from_compiled(d_addr, &dep_module);
     let main_obj = utils::make_module_object_from_compiled(main_addr, &main_module);
     let gas_obj = utils::make_gas_coin_object();
 
@@ -293,7 +293,7 @@ async fn collect_inputs_async_fetches_transitive_dep() {
         async move {
             if addr == *gas.address() {
                 Some(gas)
-            } else if addr == dep_addr {
+            } else if addr == d_addr {
                 Some(dep)
             } else if addr == main_addr {
                 Some(main)
@@ -307,18 +307,18 @@ async fn collect_inputs_async_fetches_transitive_dep() {
     // Expected order: gas, dep, main
     assert_eq!(inputs.len(), 3);
     assert_eq!(inputs[0].address(), gas_obj.address());
-    assert_eq!(inputs[1].address(), &dep_addr, "dep must come before main");
+    assert_eq!(inputs[1].address(), &d_addr, "dep must come before main");
     assert_eq!(inputs[2].address(), &main_addr);
 }
 
 #[tokio::test]
 async fn collect_inputs_async_publish_tx_includes_dep_module() {
-    let dep_addr = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
 
     let dep_module = utils::build_module(DEP_SRC, &[]);
-    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let main_module = utils::build_module(&main_src(d_addr), &[(d_addr, &dep_module)]);
 
-    let dep_obj = utils::make_module_object_from_compiled(dep_addr, &dep_module);
+    let dep_obj = utils::make_module_object_from_compiled(d_addr, &dep_module);
     let gas_obj = utils::make_gas_coin_object();
 
     let module_bytes = bcs::to_bytes(&main_module).expect("must serialize");
@@ -330,7 +330,7 @@ async fn collect_inputs_async_publish_tx_includes_dep_module() {
         async move {
             if addr == *gas.address() {
                 Some(gas)
-            } else if addr == dep_addr {
+            } else if addr == d_addr {
                 Some(dep)
             } else {
                 None
@@ -341,7 +341,7 @@ async fn collect_inputs_async_publish_tx_includes_dep_module() {
 
     assert_eq!(inputs.len(), 2);
     assert_eq!(inputs[0].address(), gas_obj.address());
-    assert_eq!(inputs[1].address(), &dep_addr);
+    assert_eq!(inputs[1].address(), &d_addr);
 }
 
 //
@@ -356,27 +356,27 @@ async fn load_deps_async_returns_empty_for_no_deps() {
 
 #[tokio::test]
 async fn load_deps_async_fetches_direct_dep() {
-    let dep_addr = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let dep_module = utils::build_module(DEP_SRC, &[]);
 
-    let dep_addresses = vec![dep_addr];
+    let dep_addresses = vec![d_addr];
     let loaded = inputs_resolver::load_deps_async(&dep_addresses, |addr| {
         let m = dep_module.clone();
-        async move { if addr == dep_addr { Some(m) } else { None } }
+        async move { if addr == d_addr { Some(m) } else { None } }
     })
     .await;
 
     assert_eq!(loaded.len(), 1);
-    assert!(loaded.contains_key(&dep_addr));
+    assert!(loaded.contains_key(&d_addr));
 }
 
 #[tokio::test]
 async fn load_deps_async_follows_transitive_imports() {
-    let dep_addr = Address::from_str("0x10").unwrap();
-    let main_addr = Address::from_str("0x20").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
+    let main_addr = Address::from_str("0xD1").unwrap();
 
     let dep_module = utils::build_module(DEP_SRC, &[]);
-    let main_module = utils::build_module(&main_src(dep_addr), &[(dep_addr, &dep_module)]);
+    let main_module = utils::build_module(&main_src(d_addr), &[(d_addr, &dep_module)]);
 
     // Caller only declares main as a direct dep; dep should be discovered transitively.
     let dep_addresses = vec![main_addr];
@@ -386,7 +386,7 @@ async fn load_deps_async_follows_transitive_imports() {
         async move {
             if addr == main_addr {
                 Some(main)
-            } else if addr == dep_addr {
+            } else if addr == d_addr {
                 Some(dep)
             } else {
                 None
@@ -401,15 +401,15 @@ async fn load_deps_async_follows_transitive_imports() {
         "both direct and transitive dep must be loaded"
     );
     assert!(loaded.contains_key(&main_addr));
-    assert!(loaded.contains_key(&dep_addr));
+    assert!(loaded.contains_key(&d_addr));
 }
 
 #[tokio::test]
 async fn load_deps_async_deduplicates_diamond_deps() {
     // A and B both depend on C. C should be fetched once.
-    let c_addr = Address::from_str("0x10").unwrap();
-    let a_addr = Address::from_str("0x20").unwrap();
-    let b_addr = Address::from_str("0x30").unwrap();
+    let c_addr = Address::from_str("0xFC").unwrap();
+    let a_addr = Address::from_str("0xFA").unwrap();
+    let b_addr = Address::from_str("0xFB").unwrap();
 
     let c_module = utils::build_module(DEP_SRC, &[]);
     let a_module = utils::build_module(&main_src(c_addr), &[(c_addr, &c_module)]);

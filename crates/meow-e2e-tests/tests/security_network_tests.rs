@@ -13,6 +13,10 @@ use meow_types::{
 };
 use serial_test::serial;
 
+//
+// ─── Signature validation ───
+//
+
 #[tokio::test]
 #[serial]
 async fn invalid_signature_transaction_is_rejected_and_not_propagated_three_nodes() {
@@ -88,6 +92,10 @@ async fn forged_sender_transaction_is_rejected() {
     );
 }
 
+//
+// ─── Object reference validation ───
+//
+
 #[tokio::test]
 #[serial]
 async fn reusing_same_gas_coin_ref_is_forbidden() {
@@ -127,7 +135,7 @@ async fn reusing_same_owned_object_input_ref_is_forbidden() {
     let keypair = test_utils::test_keypair();
     let sender = Address::from(&keypair);
     let genesis = Genesis::build(&[(sender, 10_000), (sender, 500)]).expect("genesis must build");
-    let receiver = Address::fill(0xAB);
+    let receiver = Address::fill(0xE1);
 
     let node = TestNode::start_with_genesis(&genesis).await;
     let client = node.client();

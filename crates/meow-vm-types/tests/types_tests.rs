@@ -141,7 +141,7 @@ fn value_as_u64() {
 
 #[test]
 fn value_as_address() {
-    let addr = Address::fill(0xAB);
+    let addr = Address::fill(0x42);
     assert_eq!(Value::Address(addr).as_address(), Some(addr));
     assert_eq!(Value::U64(0).as_address(), None);
     assert_eq!(Value::Bool(true).as_address(), None);
@@ -256,7 +256,7 @@ fn value_field_str() {
 
 #[test]
 fn value_field_address() {
-    let addr = Address::fill(0xAB);
+    let addr = Address::fill(0x42);
     let val = Value::Struct {
         type_name: "Foo".to_string(),
         fields: vec![("owner".to_string(), Value::Address(addr))],

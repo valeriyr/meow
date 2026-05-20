@@ -28,7 +28,7 @@ fn fresh_object_appears_in_created_objects() {
         r#"
             mod effects_test;
 
-            use meow_object@0x01;
+            use meow_object@0x10;
 
             pub struct Widget { id: meow_object::Id, value: u64 }
 
@@ -58,13 +58,12 @@ fn fresh_object_appears_in_created_objects() {
         Some(&utils::SENDER)
     );
     assert!(result.destroyed_objects().is_empty());
-    assert!(
-        result
-            .changed_objects()
-            .iter()
-            .any(|o| o.address() == &utils::GAS_ADDR),
-        "gas coin must be in changed_objects"
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "only the gas coin must be in changed_objects"
     );
+    assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
 }
 
 #[test]
@@ -95,7 +94,7 @@ fn transferred_input_object_appears_in_changed_objects() {
     let module_obj = utils::make_module_object(module_addr, bcs::to_bytes(&module).unwrap());
     let [fw_object_obj, fw_coin_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
 
-    let coin_addr = Address::fill(0x11);
+    let coin_addr = Address::fill(0xF1);
     let coin_obj = utils::make_coin_object(coin_addr, utils::SENDER, 42);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_call_transaction(
@@ -135,7 +134,7 @@ fn destroyed_input_object_appears_in_destroyed_objects() {
     // An input object whose ID is destroyed via meow_vm_destroy must appear in
     // destroyed_objects and not in changed_objects (except for the gas coin).
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::fill(0xCC), utils::SENDER, 50);
+    let coin_obj = utils::make_coin_object(Address::fill(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 

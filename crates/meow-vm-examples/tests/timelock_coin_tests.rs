@@ -20,7 +20,7 @@ use meow_vm_adapter::{
 use meow_vm_types::{module::Module, module_ref, types::Value};
 
 //
-// ─── Tests ───
+// ─── compile ───
 //
 
 #[test]
@@ -28,15 +28,19 @@ fn compile_timelock_coin() {
     let _ = timelock_module();
 }
 
+//
+// ─── lock ───
+//
+
 #[test]
 fn lock_creates_timelock_transferred_to_sender() {
-    let coin = MeowCoin::new(Address::fill(0x01), 500).into();
+    let coin = MeowCoin::new(Address::fill(0xF1), 500).into();
     let result = run("lock", vec![coin, Value::U64(1000)]).unwrap();
 
     assert_eq!(result.transfers.len(), 1);
     assert_eq!(result.transfers[0].1, Address::ZERO); // sender is zero in default context
     // to_balance destroys the input coin
-    assert_eq!(result.destroyed, vec![Address::fill(0x01)]);
+    assert_eq!(result.destroyed, vec![Address::fill(0xF1)]);
 
     let lock = &result.transfers[0].0;
     assert_eq!(lock.type_name(), timelock_module_name_qualified());
@@ -48,16 +52,20 @@ fn lock_creates_timelock_transferred_to_sender() {
     assert_eq!(lock.field_u64("unlock_time").unwrap(), 1000);
 }
 
+//
+// ─── claim ───
+//
+
 #[test]
 fn claim_at_unlock_time_returns_coin_to_sender() {
     // unlock_time=1000, timestamp=1000 → 1000 >= 1000 → claim succeeds
-    let lock = make_timelock(Address::fill(0x01), 500, 1000);
+    let lock = make_timelock(Address::fill(0xF1), 500, 1000);
     let result = run_with_timestamp("claim", vec![lock], 1000).unwrap();
 
     assert_eq!(result.transfers.len(), 1);
     assert_eq!(result.transfers[0].1, Address::ZERO); // sender is zero in default context
     assert_eq!(result.destroyed.len(), 1);
-    assert_eq!(result.destroyed[0], Address::fill(0x01));
+    assert_eq!(result.destroyed[0], Address::fill(0xF1));
 
     let coin = &result.transfers[0].0;
     assert_eq!(coin.type_name(), MEOW_COIN_OBJECT_BYTECODE_TYPE_NAME);
@@ -67,12 +75,12 @@ fn claim_at_unlock_time_returns_coin_to_sender() {
 #[test]
 fn claim_after_unlock_time_returns_coin_to_sender() {
     // unlock_time=1000, timestamp=9999 → 9999 >= 1000 → claim succeeds
-    let lock = make_timelock(Address::fill(0x02), 250, 1000);
+    let lock = make_timelock(Address::fill(0xF2), 250, 1000);
     let result = run_with_timestamp("claim", vec![lock], 9999).unwrap();
 
     assert_eq!(result.transfers.len(), 1);
     assert_eq!(result.transfers[0].1, Address::ZERO);
-    assert_eq!(result.destroyed, vec![Address::fill(0x02)]);
+    assert_eq!(result.destroyed, vec![Address::fill(0xF2)]);
 
     let coin = &result.transfers[0].0;
     assert_eq!(coin.type_name(), MEOW_COIN_OBJECT_BYTECODE_TYPE_NAME);
@@ -82,18 +90,22 @@ fn claim_after_unlock_time_returns_coin_to_sender() {
 #[test]
 fn claim_before_unlock_aborts() {
     // unlock_time=1000, timestamp=0 → 0 < 1000 → abort
-    let lock = make_timelock(Address::fill(0x01), 500, 1000);
+    let lock = make_timelock(Address::fill(0xF1), 500, 1000);
     let err = run("claim", vec![lock]).unwrap_err();
     assert!(
-        matches!(&err, VmError::Aborted { code: 1, .. }),
-        "expected abort code 1, got {err:?}"
+        matches!(&err, VmError::Aborted { code: 1, message, .. } if message.contains("Coin is still locked")),
+        "expected abort code 1 with locked message, got {err:?}"
     );
 }
 
+//
+// ─── transfer ───
+//
+
 #[test]
 fn transfer_sends_timelock_to_recipient() {
-    let recipient = Address::fill(0x42);
-    let lock = make_timelock(Address::fill(0x01), 500, 1000);
+    let recipient = Address::fill(0xE1);
+    let lock = make_timelock(Address::fill(0xF1), 500, 1000);
     let result = run("transfer", vec![lock, Value::Address(recipient.into())]).unwrap();
 
     assert_eq!(result.transfers.len(), 1);

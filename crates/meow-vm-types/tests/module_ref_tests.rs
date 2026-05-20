@@ -11,16 +11,16 @@ use meow_vm_types::{
 
 #[test]
 fn parses_valid_ref() {
-    let addr = Address::from_str("0x01").unwrap();
+    let addr = Address::from_str("0xFD").unwrap();
     assert_eq!(
-        parse_module_ref("@0x01::transfer"),
+        parse_module_ref("@0xFD::transfer"),
         Some((addr, "transfer"))
     );
 }
 
 #[test]
 fn parses_full_address() {
-    let hex = "0x02";
+    let hex = "0xFD";
     let addr = Address::from_str(hex).unwrap();
     assert_eq!(
         parse_module_ref(&format!("{hex}::mint")),
@@ -35,7 +35,7 @@ fn parses_full_address() {
 
 #[test]
 fn preserves_function_name_exactly() {
-    let (_, name) = parse_module_ref("@0x01::some_fn_name").unwrap();
+    let (_, name) = parse_module_ref("@0xFD::some_fn_name").unwrap();
     assert_eq!(name, "some_fn_name");
 }
 
@@ -70,7 +70,7 @@ fn qualify_roundtrips_with_parse() {
 fn is_qualified_returns_true_for_cross_module_ref() {
     assert!(is_qualified("dep::Foo"));
     assert!(is_qualified("my_module::Bar"));
-    assert!(is_qualified("@0x01::Foo"));
+    assert!(is_qualified("@0xFD::Foo"));
 }
 
 #[test]
@@ -90,12 +90,12 @@ fn returns_none_for_plain_name() {
 
 #[test]
 fn returns_none_for_missing_at() {
-    assert_eq!(parse_module_ref("0x01::transfer"), None);
+    assert_eq!(parse_module_ref("0xFD::transfer"), None);
 }
 
 #[test]
 fn returns_none_for_missing_separator() {
-    assert_eq!(parse_module_ref("@0x01"), None);
+    assert_eq!(parse_module_ref("@0xFD"), None);
 }
 
 #[test]

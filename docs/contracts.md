@@ -141,8 +141,8 @@ Every module is verified automatically as part of `MeowModulePublish` — a modu
 
 | Module | Address | What it covers |
 |--------|---------|----------------|
-| `meow_object` | `0x01` | Object identity — the `Id` type used as the first field of every on-chain object |
-| [Meow Coin](meow-coin.md) | `0x10` | The built-in coin — transfer, split, merge, burn |
+| `meow_object` | `0x10` | Object identity — the `Id` type used as the first field of every on-chain object |
+| [Meow Coin](meow-coin.md) | `0x20` | The built-in coin — transfer, split, merge, burn |
 
 ## Examples
 

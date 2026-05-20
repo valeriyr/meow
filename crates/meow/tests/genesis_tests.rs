@@ -11,7 +11,7 @@ use temp_dir::TempDir;
 #[test]
 fn build_creates_output_file() {
     let tmp = TempDir::new().unwrap();
-    let allocations = write_allocations(&tmp, &[(Address::fill(0xAA), 100)]);
+    let allocations = write_allocations(&tmp, &[(Address::fill(0xE1), 100)]);
     let output = tmp.path().join("genesis.bin");
 
     GenesisCommand::Build {
@@ -27,7 +27,7 @@ fn build_creates_output_file() {
 #[test]
 fn build_with_single_allocation_creates_module_and_coin() {
     let tmp = TempDir::new().unwrap();
-    let allocations = write_allocations(&tmp, &[(Address::fill(0xAA), 500)]);
+    let allocations = write_allocations(&tmp, &[(Address::fill(0xE1), 500)]);
 
     let output = GenesisCommand::Build {
         allocations,
@@ -41,16 +41,16 @@ fn build_with_single_allocation_creates_module_and_coin() {
     assert_eq!(output.objects[0].type_, "module");
     assert_eq!(
         output.objects[0].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
     );
     assert_eq!(output.objects[1].type_, "module");
     assert_eq!(
         output.objects[1].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000010"
+        "0x0000000000000000000000000000000000000000000000000000000000000020"
     );
     assert_eq!(
         output.objects[2].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoin"
     );
     assert_eq!(
         output.objects[2]
@@ -68,9 +68,9 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     let allocations = write_allocations(
         &tmp,
         &[
-            (Address::fill(0xAA), 100),
-            (Address::fill(0xBB), 200),
-            (Address::fill(0xCC), 300),
+            (Address::fill(0xE1), 100),
+            (Address::fill(0xE2), 200),
+            (Address::fill(0xE3), 300),
         ],
     );
 
@@ -86,16 +86,16 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     assert_eq!(output.objects[0].type_, "module");
     assert_eq!(
         output.objects[0].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
     );
     assert_eq!(output.objects[1].type_, "module");
     assert_eq!(
         output.objects[1].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000010"
+        "0x0000000000000000000000000000000000000000000000000000000000000020"
     );
     assert_eq!(
         output.objects[2].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoin"
     );
     assert_eq!(
         output.objects[2]
@@ -107,7 +107,7 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     );
     assert_eq!(
         output.objects[3].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoin"
     );
     assert_eq!(
         output.objects[3]
@@ -119,7 +119,7 @@ fn build_with_multiple_allocations_creates_one_coin_per_allocation() {
     );
     assert_eq!(
         output.objects[4].type_,
-        "0x0000000000000000000000000000000000000000000000000000000000000010::MeowCoin"
+        "0x0000000000000000000000000000000000000000000000000000000000000020::MeowCoin"
     );
     assert_eq!(
         output.objects[4]
@@ -148,12 +148,12 @@ fn build_with_empty_allocations_creates_only_modules() {
     assert_eq!(output.objects[0].type_, "module");
     assert_eq!(
         output.objects[0].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000001"
+        "0x0000000000000000000000000000000000000000000000000000000000000010"
     );
     assert_eq!(output.objects[1].type_, "module");
     assert_eq!(
         output.objects[1].address,
-        "0x0000000000000000000000000000000000000000000000000000000000000010"
+        "0x0000000000000000000000000000000000000000000000000000000000000020"
     );
 }
 
@@ -197,7 +197,7 @@ fn build_invalid_address_in_csv_returns_error() {
 #[test]
 fn build_invalid_amount_in_csv_returns_error() {
     let tmp = TempDir::new().unwrap();
-    let addr = Address::fill(0xAA);
+    let addr = Address::fill(0xE1);
     let allocations = write_raw_allocations(&tmp, &format!("{addr},not_a_number"));
 
     let err = GenesisCommand::Build {

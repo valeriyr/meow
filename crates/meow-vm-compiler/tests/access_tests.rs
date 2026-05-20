@@ -20,7 +20,7 @@ fn pub_fn_call_from_other_module_accepted() {
         r#"
             mod caller;
 
-            use lib@0x01;
+            use lib@0xFD;
 
             fn run() -> u64 { lib::exposed() }
         "#,
@@ -39,7 +39,7 @@ fn private_fn_call_from_other_module_rejected() {
         r#"
             mod caller;
 
-            use lib@0x01;
+            use lib@0xFD;
 
             fn run() -> u64 { lib::secret() }
         "#,
@@ -81,7 +81,7 @@ fn cross_module_struct_construction_rejected() {
         r#"
             mod user;
 
-            use shapes@0x01;
+            use shapes@0xFD;
 
             fn bad() -> shapes::Point { shapes::Point { x: 1, y: 2 } }
         "#,
@@ -109,7 +109,7 @@ fn private_struct_not_usable_as_field_type_cross_module() {
         r#"
             mod user;
 
-            use lib@0x01;
+            use lib@0xFD;
 
             struct Wrapper { inner: lib::Hidden }
 
@@ -148,7 +148,7 @@ fn getter_function_exposes_field_cross_module() {
         r#"
             mod user;
 
-            use shapes@0x01;
+            use shapes@0xFD;
 
             fn read_x(p: shapes::Point) -> u64 {
                 let (p, val) = shapes::get_x(p);
@@ -172,7 +172,7 @@ fn field_read_from_other_module_rejected() {
         r#"
             mod user;
 
-            use shapes@0x01;
+            use shapes@0xFD;
 
             fn read_x() -> u64 {
                 let p = shapes::make(1, 2);
@@ -222,7 +222,7 @@ fn field_write_from_other_module_rejected() {
         r#"
             mod user;
 
-            use shapes@0x01;
+            use shapes@0xFD;
 
             fn mutate() {
                 let p = shapes::make(1, 2);
@@ -244,7 +244,7 @@ fn field_write_from_other_module_rejected() {
 
 fn with_dep(dep_src: &str, src: &str) -> Result<Module> {
     let dep = utils::compile(dep_src).expect("dep must compile");
-    let addr = Address::from_str("0x01").unwrap();
+    let addr = Address::from_str("0xFD").unwrap();
 
     utils::compile_with_deps(src, &[(addr, &dep)])
 }

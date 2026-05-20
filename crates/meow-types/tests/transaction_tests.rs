@@ -25,7 +25,7 @@ fn transaction_digest_is_not_zero() {
 fn known_transaction_digest() {
     assert_eq!(
         test_tx().digest().to_string(),
-        "Efw9yuB4Z8JGXwLmBGYwrvtZBsW7wruQrNqdnCVNKEpP"
+        "4rYRUYG5uYc92vZxm3KHR3enpvXLyuyVnCXUkNGnZWE9"
     );
 }
 
@@ -33,26 +33,14 @@ fn known_transaction_digest() {
 // ─── Utility functions ───
 //
 
-fn sender() -> Address {
-    Address::fill(1)
-}
-
-fn gas() -> ObjectRef {
-    ObjectRef::new(Address::fill(2), ObjectVersion::ONE, Digest::ZERO)
-}
-
-fn module() -> Address {
-    Address::fill(3)
-}
-
-fn function() -> Identifier {
-    Identifier::new("transfer").unwrap()
-}
-
-fn test_tx_type() -> TransactionType {
-    TransactionType::MeowCall(Call::new(module(), function(), vec![]))
-}
-
 fn test_tx() -> Transaction {
-    Transaction::new(sender(), gas(), test_tx_type())
+    Transaction::new(
+        Address::fill(0xE1),
+        ObjectRef::new(Address::fill(0xF1), ObjectVersion::ONE, Digest::ZERO),
+        TransactionType::MeowCall(Call::new(
+            Address::fill(0xFD),
+            Identifier::new("transfer").unwrap(),
+            vec![],
+        )),
+    )
 }

@@ -1,6 +1,6 @@
 //! meow_object — The built-in object identity module.
 //!
-//! Published at the fixed address 0x01.
+//! Published at the fixed address 0x10.
 //!
 //! Every on-chain object must have an `id: meow_object::Id` field as its
 //! first field. The adapter uses this layout to identify structs that are

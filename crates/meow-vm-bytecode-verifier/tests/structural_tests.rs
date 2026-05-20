@@ -1,5 +1,7 @@
 mod utils;
 
+use std::collections::HashMap;
+
 use meow_vm_bytecode_verifier::VerificationError;
 use meow_vm_types::{
     address::Address,
@@ -24,7 +26,7 @@ fn valid_module_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 #[test]
@@ -38,7 +40,7 @@ fn if_else_passes() {
         }
     "#,
     );
-    utils::verify_ok(&module, &utils::no_deps());
+    utils::verify_ok(&module);
 }
 
 //
@@ -55,7 +57,7 @@ fn invalid_module_name_rejected() {
     "#,
     );
     module.name = "1invalid".to_string();
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::InvalidIdentifier { name, .. } if name == "1invalid"
@@ -74,7 +76,7 @@ fn invalid_struct_name_rejected() {
     "#,
     );
     module.structs[0].name = "bad-name".to_string();
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::InvalidIdentifier { .. }))
@@ -93,7 +95,7 @@ fn invalid_field_name_rejected() {
     "#,
     );
     module.structs[0].fields[0].name = "bad name".to_string();
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::InvalidIdentifier { .. }))
@@ -117,7 +119,7 @@ fn duplicate_struct_name_rejected() {
     );
     let dup = module.structs[0].clone();
     module.structs.push(dup);
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::DuplicateStructName { name } if name == "S"
@@ -135,7 +137,7 @@ fn duplicate_function_name_rejected() {
     );
     let dup = module.functions[0].clone();
     module.functions.push(dup);
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(errs.iter().any(|e| matches!(
         e,
         VerificationError::DuplicateFunctionName { name } if name == "f"
@@ -164,7 +166,7 @@ fn unknown_struct_type_in_new_struct_rejected() {
             }
         }
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -192,7 +194,7 @@ fn new_struct_field_mismatch_rejected() {
             }
         }
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter().any(|e| matches!(
             e,
@@ -216,7 +218,7 @@ fn local_count_too_small_rejected() {
     "#,
     );
     module.functions[0].local_count = 0;
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::LocalCountTooSmall { .. }))
@@ -235,7 +237,7 @@ fn slot_out_of_range_rejected() {
     utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Load(5));
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::SlotOutOfRange { slot: 5, .. }))
@@ -258,7 +260,7 @@ fn backward_jump_rejected() {
     utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Jump(-1));
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::BackwardJump { .. }))
@@ -277,7 +279,7 @@ fn jump_out_of_bounds_rejected() {
     utils::tamper(&mut module, "f", |code| {
         code.insert(0, Instruction::Jump(10000));
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::JumpOutOfBounds { .. }))
@@ -301,7 +303,7 @@ fn jump_to_past_end_rejected() {
         // No Return follows — the MissingReturn must be detected.
         *code = vec![Instruction::Jump(1)];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::MissingReturn { .. })),
@@ -327,7 +329,7 @@ fn tuple_too_large_in_return_type_rejected() {
     utils::tamper(&mut module, "f", |code| {
         *code = vec![Instruction::MakeTuple(limit + 1), Instruction::Return];
     });
-    let errs = utils::verify_errors(&module, &utils::no_deps());
+    let errs = utils::verify_errors(&module);
     assert!(
         errs.iter()
             .any(|e| matches!(e, VerificationError::TupleTooLarge { .. })),
@@ -497,6 +499,6 @@ fn verify_errors_cfg(
     module: &meow_vm_types::module::Module,
     cfg: CompilerConfig,
 ) -> Vec<VerificationError> {
-    meow_vm_bytecode_verifier::verify(module, &utils::no_deps(), &[], &cfg)
+    meow_vm_bytecode_verifier::verify(module, &HashMap::new(), &[], &cfg)
         .expect_err("expected verification errors but verification passed")
 }

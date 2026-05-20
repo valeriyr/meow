@@ -5,6 +5,10 @@ use meow_nakamoto::{
 use meow_nakamoto_types::{block::Block, block_header::BlockHeader};
 use meow_types::{digest::Digest, transaction::execution_result::ExecutionResult};
 
+//
+// ─── apply_block ───
+//
+
 #[test]
 fn block_with_forged_results_is_rejected() {
     let store = Store::default();

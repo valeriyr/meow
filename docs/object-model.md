@@ -75,10 +75,10 @@ Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroy
 
 ## Object IDs
 
-In the Meow Language, every on-chain object is a `struct` whose first field is `id: meow_object::Id` (from the built-in `meow_object` system module at address `0x01`):
+In the Meow Language, every on-chain object is a `struct` whose first field is `id: meow_object::Id` (from the built-in `meow_object` system module at address `0x10`):
 
 ```meow
-use meow_object@0x01;
+use meow_object@0x10;
 struct Hero { id: meow_object::Id, level: u64, experience: u64 }
 ```
 

@@ -74,7 +74,7 @@ impl VmTypeNames for Coin {}
 
 #[test]
 fn struct_from_rust_with_address_newtype() {
-    let id = [0x42u8; 32];
+    let id = [0xF1u8; 32];
     let coin = Coin {
         id: AddressWrapper(id),
         balance: 100,
@@ -93,7 +93,7 @@ fn struct_from_rust_with_address_newtype() {
 
 #[test]
 fn round_trip_with_address_newtype() {
-    let id = [0x42u8; 32];
+    let id = [0xF1u8; 32];
     let original = Coin {
         id: AddressWrapper(id),
         balance: 77,
@@ -124,14 +124,14 @@ impl VmTypeNames for Token {
     fn type_names() -> &'static [(&'static str, &'static str)] {
         &[(
             "ObjectId",
-            "@0x0000000000000000000000000000000000000000000000000000000000000001::ObjectId",
+            "@0x00000000000000000000000000000000000000000000000000000000000000FD::ObjectId",
         )]
     }
 }
 
 #[test]
 fn struct_from_rust_translates_nested_type_name() {
-    let addr = [0xAAu8; 32];
+    let addr = [0xF1u8; 32];
     let token = Token {
         id: ObjectId { inner: addr },
         amount: 42,
@@ -146,7 +146,7 @@ fn struct_from_rust_translates_nested_type_name() {
                 (
                     "id".to_string(),
                     Value::Struct {
-                        type_name: "@0x0000000000000000000000000000000000000000000000000000000000000001::ObjectId".to_string(),
+                        type_name: "@0x00000000000000000000000000000000000000000000000000000000000000FD::ObjectId".to_string(),
                         fields: vec![("inner".to_string(), Value::Address(addr.into()))],
                     },
                 ),
@@ -166,7 +166,7 @@ fn struct_from_rust_without_mapping_keeps_local_name() {
         amount: u64,
     }
     impl VmTypeNames for PlainToken {}
-    let addr = [0xBBu8; 32];
+    let addr = [0xF1u8; 32];
     let token = PlainToken {
         id: ObjectId { inner: addr },
         amount: 7,

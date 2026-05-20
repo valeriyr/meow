@@ -26,7 +26,7 @@ When `claim` executes, `meow_vm_timestamp()` is the block time of the block that
 
 ## Build the module
 
-This module depends on `meow_coin@0x10`, so building requires a running node:
+This module depends on `meow_coin@0x20`, so building requires a running node:
 
 ```bash
 meow contract build timelock_coin.meow

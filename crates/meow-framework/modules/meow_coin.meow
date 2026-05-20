@@ -1,7 +1,7 @@
 //! meow_coin — The built-in Meow Coin module.
 //!
 //! Meow Coin is the native coin of MEOW. It is defined here and published at genesis
-//! at the fixed address 0x10. Every genesis allocation creates one MeowCoin object
+//! at the fixed address 0x20. Every genesis allocation creates one MeowCoin object
 //! whose balance equals the allocated amount.
 //!
 //! All functions except mint are public and callable from transactions.
@@ -9,7 +9,7 @@
 
 mod meow_coin;
 
-use meow_object@0x01;
+use meow_object@0x10;
 
 /// A single Meow Coin.
 pub struct MeowCoin {

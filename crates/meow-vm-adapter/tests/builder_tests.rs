@@ -67,7 +67,7 @@ fn build_module_from_file_successful() {
 #[test]
 fn build_from_file_with_dep_successful() {
     // Write the main module source to a temp file and build it with a pre-compiled dep.
-    let dep_addr = Address::from_str("0x42").unwrap();
+    let dep_addr = Address::from_str("0xFD").unwrap();
     let dep = builder::build(
         r#"
             mod math;
@@ -84,7 +84,7 @@ fn build_from_file_with_dep_successful() {
         r#"
             mod main;
 
-            use math@0x42;
+            use math@0xFD;
 
             fn run() -> u64 { math::add(1, 2) }
         "#,
@@ -148,8 +148,8 @@ fn extract_module_deps_returns_declared_imports_in_order() {
     let src = r#"
         mod main;
 
-        use math@0x01;
-        use util@0x02;
+        use math@0xD1;
+        use util@0xD2;
 
         fn noop() {}
     "#;
@@ -157,11 +157,11 @@ fn extract_module_deps_returns_declared_imports_in_order() {
     assert_eq!(deps.len(), 2);
     assert_eq!(
         deps[0],
-        ("math".to_string(), None, Address::from_str("0x01").unwrap())
+        ("math".to_string(), None, Address::from_str("0xD1").unwrap())
     );
     assert_eq!(
         deps[1],
-        ("util".to_string(), None, Address::from_str("0x02").unwrap())
+        ("util".to_string(), None, Address::from_str("0xD2").unwrap())
     );
 }
 
@@ -170,7 +170,7 @@ fn extract_module_deps_with_alias_returns_some_alias() {
     let src = r#"
         mod main;
 
-        use math@0x01 as m;
+        use math@0xFD as m;
 
         fn noop() {}
     "#;
@@ -181,7 +181,7 @@ fn extract_module_deps_with_alias_returns_some_alias() {
         (
             "math".to_string(),
             Some("m".to_string()),
-            Address::from_str("0x01").unwrap()
+            Address::from_str("0xFD").unwrap()
         )
     );
 }
@@ -198,7 +198,7 @@ fn extract_module_deps_source_too_large_returns_error() {
 #[test]
 fn extract_module_deps_missing_module_decl_returns_error() {
     assert!(matches!(
-        builder::extract_module_deps("use helper@0x01;").unwrap_err(),
+        builder::extract_module_deps("use helper@0xFD;").unwrap_err(),
         BuilderError::CompileError(_)
     ));
 }
@@ -208,8 +208,8 @@ fn extract_module_deps_duplicate_use_returns_error() {
     let src = r#"
         mod main;
 
-        use helper@0x42;
-        use helper@0x42;
+        use helper@0xFD;
+        use helper@0xFD;
     "#;
     assert!(matches!(
         builder::extract_module_deps(src).unwrap_err(),
@@ -242,7 +242,7 @@ fn read_source_file_nonexistent_returns_io_error() {
 
 #[test]
 fn build_with_dep_cross_module_function_call() {
-    let dep_addr = Address::from_str("0x01").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let math = builder::build(
         r#"
             mod math;
@@ -257,23 +257,23 @@ fn build_with_dep_cross_module_function_call() {
         r#"
             mod caller;
 
-            use math@0x01;
+            use math@0xFD;
 
             fn double_add(a: u64, b: u64) -> u64 {
                 math::add(a, b) + math::add(a, b)
             }
         "#,
-        &[(dep_addr, &math)],
+        &[(d_addr, &math)],
     )
     .unwrap();
 
     assert!(caller.get_function("double_add").is_some());
-    assert_eq!(caller.imports, vec![dep_addr.into()]);
+    assert_eq!(caller.imports, vec![d_addr.into()]);
 }
 
 #[test]
 fn build_with_dep_cross_module_struct() {
-    let dep_addr = Address::from_str("0x10").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let shapes = builder::build(
         r#"
             mod shapes;
@@ -291,14 +291,14 @@ fn build_with_dep_cross_module_struct() {
         r#"
             mod user;
 
-            use shapes@0x10;
+            use shapes@0xFD;
 
             fn make_and_read() -> u64 {
                 let p = shapes::make_point(5, 9);
                 shapes::to_x(p)
             }
         "#,
-        &[(dep_addr, &shapes)],
+        &[(d_addr, &shapes)],
     )
     .unwrap();
 
@@ -307,11 +307,11 @@ fn build_with_dep_cross_module_struct() {
 
 #[test]
 fn build_with_declared_dep_not_provided_returns_error() {
-    // Source declares `use math@0x01` but no dep module is provided.
+    // Source declares `use math@0xFD` but no dep module is provided.
     let src = r#"
         mod main;
 
-        use math@0x01;
+        use math@0xFD;
 
         fn run() -> u64 { math::add(1, 2) }
     "#;
@@ -324,7 +324,7 @@ fn build_with_declared_dep_not_provided_returns_error() {
 #[test]
 fn build_with_extra_undeclared_dep_is_accepted() {
     // Providing a dep that is not declared via `use` in source is fine — it is silently ignored.
-    let dep_addr = Address::from_str("0x99").unwrap();
+    let d_addr = Address::from_str("0xFD").unwrap();
     let extra = builder::build(
         r#"
             mod extra;
@@ -341,7 +341,7 @@ fn build_with_extra_undeclared_dep_is_accepted() {
 
             fn run() -> u64 { 1 }
         "#,
-        &[(dep_addr, &extra)],
+        &[(d_addr, &extra)],
     )
     .unwrap();
 

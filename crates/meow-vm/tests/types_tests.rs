@@ -15,13 +15,13 @@ use meow_vm_types::{
 
 #[test]
 fn address_literal_in_source() {
-    let addr = Address::from_str("0x01").unwrap();
+    let addr = Address::from_str("0x42").unwrap();
     assert_eq!(
         utils::run(
             r#"
                 mod test;
 
-                pub fn get_addr() -> address { @0x01 }
+                pub fn get_addr() -> address { @0x42 }
             "#,
             "get_addr",
             vec![],
@@ -37,7 +37,7 @@ fn address_literal_equality() {
             r#"
                 mod test;
 
-                pub fn same() -> bool { let a = @0x01; let b = @0x01; a == b }
+                pub fn same() -> bool { let a = @0x42; let b = @0x42; a == b }
             "#,
             "same",
             vec![],
@@ -53,7 +53,7 @@ fn address_literal_inequality() {
             r#"
                 mod test;
 
-                pub fn different() -> bool { let a = @0x01; let b = @0x02; a == b }
+                pub fn different() -> bool { let a = @0x42; let b = @0x43; a == b }
             "#,
             "different",
             vec![],
@@ -81,7 +81,7 @@ fn address_literal_passed_as_parameter() {
 
 #[test]
 fn address_round_trip() {
-    let addr = Address::fill(0xAB);
+    let addr = Address::fill(0x42);
     assert_eq!(
         utils::run(
             r#"
