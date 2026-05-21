@@ -4,7 +4,7 @@
 
 Meow Coin is the native coin of MEOW. It is defined in the built-in `meow_coin` module, published at genesis at the fixed address `0x20`. Every address that appears in `allocations.csv` starts with one `MeowCoin` object whose `balance` equals the allocated amount.
 
-See [Contracts](contracts.md) for the language reference and call argument format.
+See [Contracts](contracts.md) for the CLI commands and call argument format.
 
 ## The module
 
@@ -40,7 +40,7 @@ meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 
 ## Send an amount to another address
 
-Splits `amount` out of the coin and sends the new coin to the recipient. The original coin stays with you, reduced by `amount`.
+Splits `amount` out of the coin and sends the new coin to the recipient. The original coin stays with you, reduced by `amount`. Aborts with `"The balance is insufficient"` if `balance < amount`.
 
 ```bash
 meow transaction meow-call \
@@ -56,7 +56,7 @@ meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 
 ## Split off an amount for yourself
 
-Creates a new coin with `amount` balance and sends it to the transaction sender. Useful for creating a separate gas coin.
+Creates a new coin with `amount` balance and sends it to the transaction sender. The original coin is also returned to you, reduced by `amount`. Aborts with `"The balance is insufficient"` if `balance < amount`. Useful for creating a separate gas coin.
 
 ```bash
 meow transaction meow-call \

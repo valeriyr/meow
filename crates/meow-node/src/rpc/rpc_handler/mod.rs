@@ -1,3 +1,5 @@
+//! HTTP request handlers for each RPC endpoint.
+
 pub mod error;
 
 use std::sync::Arc;

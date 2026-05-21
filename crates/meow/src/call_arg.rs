@@ -1,3 +1,5 @@
+//! Command-line call argument type parsed from user-supplied strings.
+
 use std::str::FromStr;
 
 use meow_node_client::NodeClient;

@@ -1,3 +1,5 @@
+//! Configuration for starting a MEOW node.
+
 use std::net::SocketAddr;
 
 use meow_gossip_types::config::GossipNetworkConfig;

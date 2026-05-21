@@ -1,3 +1,5 @@
+//! Output formatter that renders command results as JSON or a human-readable table.
+
 use json_to_table::Orientation;
 use json_to_table::json_to_table;
 use serde::Serialize;

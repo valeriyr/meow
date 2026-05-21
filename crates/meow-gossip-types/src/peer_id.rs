@@ -1,3 +1,5 @@
+//! Opaque identifier for a peer in the gossip network.
+
 /// Opaque identifier for a peer in the network.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct PeerId(libp2p::PeerId);

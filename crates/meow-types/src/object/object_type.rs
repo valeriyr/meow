@@ -1,3 +1,5 @@
+//! Object type discriminant distinguishing modules from user-defined object instances.
+
 use serde::{Deserialize, Serialize};
 
 use crate::object::object_decl_ref::ObjectDeclRef;

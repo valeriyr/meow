@@ -155,6 +155,59 @@ fn destroyed_input_object_appears_in_destroyed_objects() {
     assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
 }
 
+#[test]
+fn aborted_transaction_input_objects_not_in_effects() {
+    // When a transaction aborts, input objects must not appear in any effects:
+    // no created, no destroyed, and only the gas coin in changed_objects.
+    let meow_object_mod = meow_object_module();
+    let meow_coin_mod = meow_coin_module();
+    let module = builder::build(
+        &format!(
+            r#"
+                mod abort_test;
+
+                use meow_coin@{MEOW_COIN_MODULE_ADDRESS};
+
+                pub fn transfer_then_abort(coin: meow_coin::MeowCoin) {{
+                    meow_vm_transfer(coin, meow_vm_sender());
+                    meow_vm_abort(false, 1, "abort");
+                }}
+            "#
+        ),
+        &[
+            (MEOW_OBJECT_MODULE_ADDRESS, &meow_object_mod),
+            (MEOW_COIN_MODULE_ADDRESS, &meow_coin_mod),
+        ],
+    )
+    .expect("must compile");
+    let module_addr = Address::ZERO;
+    let module_obj = utils::make_module_object(module_addr, bcs::to_bytes(&module).unwrap());
+    let [fw_object_obj, fw_coin_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_call_transaction(
+        module_addr,
+        "transfer_then_abort",
+        vec![Input::Object(coin_obj.object_ref())],
+    );
+
+    let result = utils::execute(
+        &tx,
+        vec![fw_object_obj, fw_coin_obj, module_obj, coin_obj, gas_obj],
+    )
+    .unwrap();
+
+    assert!(matches!(result.status(), ExecutionStatus::Failure(_)));
+    assert!(result.created_objects().is_empty());
+    assert!(result.destroyed_objects().is_empty());
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned on abort"
+    );
+    assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
+}
+
 //
 // ─── Gas deduction (gas.rs) ───
 //

@@ -1,3 +1,5 @@
+//! File-backed keystore that persists key pairs to disk.
+
 use std::{fs, path::Path};
 
 use crate::{address::Address, keypair::KeyPair};

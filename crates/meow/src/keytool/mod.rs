@@ -1,3 +1,5 @@
+//! `meow keytool` commands: generate, derive, and inspect key pairs and addresses.
+
 pub mod output;
 
 use bip32::DerivationPath;

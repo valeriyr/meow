@@ -1,3 +1,5 @@
+//! `meow transaction` commands: build, sign, and submit transactions.
+
 pub mod output;
 pub mod signer;
 

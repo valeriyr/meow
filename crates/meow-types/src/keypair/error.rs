@@ -1,3 +1,5 @@
+//! Error type for keypair operations.
+
 use bip32::DerivationPath;
 
 /// An error related to keypairs.

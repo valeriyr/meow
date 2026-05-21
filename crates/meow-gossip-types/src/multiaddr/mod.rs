@@ -1,3 +1,5 @@
+//! Opaque wrapper around a libp2p multiaddr used to identify gossip peers.
+
 pub mod error;
 
 use std::str::FromStr;

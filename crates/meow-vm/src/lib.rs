@@ -687,7 +687,9 @@ fn read_field_path(mut current: &Value, path: &[String]) -> Result<Value> {
 
 /// Traverse `path` through nested struct fields and overwrite the terminal field with `val`.
 fn write_field_path(mut current: &mut Value, path: &[String], val: Value) -> Result<()> {
-    let (last, prefix) = path.split_last().expect("path must not be empty");
+    let (last, prefix) = path
+        .split_last()
+        .ok_or_else(|| VmError::TypeError("StoreField: path must not be empty".to_string()))?;
     for (i, field) in prefix.iter().enumerate() {
         let type_name = current.type_name().to_string();
         let fields = match current {

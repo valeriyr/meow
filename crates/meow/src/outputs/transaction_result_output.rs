@@ -1,3 +1,5 @@
+//! Serialisable representation of a transaction execution result for CLI output.
+
 use meow_types::transaction::execution_result::{ExecutionResult, ExecutionStatus};
 use serde::Serialize;
 

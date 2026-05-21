@@ -1,3 +1,5 @@
+//! Configuration for the proof-of-work miner.
+
 /// Configuration for the miner.
 #[derive(Clone)]
 pub struct MinerConfig {

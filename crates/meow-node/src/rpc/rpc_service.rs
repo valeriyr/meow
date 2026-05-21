@@ -1,3 +1,5 @@
+//! Axum-based HTTP RPC service that exposes node functionality to clients.
+
 use axum::{
     Json, Router,
     extract::{Path, Query, State},
@@ -283,15 +285,15 @@ fn mempool_error_response(err: MempoolError) -> axum::response::Response {
             "invalid_transaction",
             format!("invalid transaction: {err}"),
         ),
-        MempoolError::DuplicateTransaction(digest) => error_response(
+        MempoolError::DuplicateTransaction { digest } => error_response(
             StatusCode::CONFLICT,
             "duplicate_transaction",
             format!("duplicate transaction: {digest}"),
         ),
-        MempoolError::ObjectNotFound(addr) => error_response(
+        MempoolError::ObjectNotFound { address } => error_response(
             StatusCode::BAD_REQUEST,
             "invalid_object_reference",
-            format!("invalid object reference: object not found: {addr}"),
+            format!("invalid object reference: object not found: {address}"),
         ),
         MempoolError::InvalidObjectVersion {
             address,

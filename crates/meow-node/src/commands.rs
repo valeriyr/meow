@@ -1,3 +1,5 @@
+//! CLI command definitions and dispatch logic for the MEOW node binary.
+
 use std::{net::SocketAddr, path::PathBuf, time::Duration};
 
 use clap::Parser;

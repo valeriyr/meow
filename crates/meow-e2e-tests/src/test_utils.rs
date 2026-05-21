@@ -1,3 +1,5 @@
+//! Shared helpers and polling utilities for end-to-end tests.
+
 use std::time::Duration;
 
 use crate::test_node::TestNode;

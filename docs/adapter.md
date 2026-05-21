@@ -4,10 +4,116 @@
 
 The **adapter** (`meow-vm-adapter`) is the glue layer between the stack-based Meow VM and the MEOW chain's object store. It:
 
-- Deserialises input objects from BCS into VM values.
+- Deserializes input objects from BCS into VM values.
 - Supplies native function implementations (`meow_vm_fresh_id`, `meow_vm_transfer`, etc.).
 - Runs the bytecode verifier before storing any new module.
 - Translates VM execution results back into chain effects (created / changed / destroyed objects).
+- Provides an `executor` API that drives full transaction execution — see [Executor](#executor) below.
+- Provides a `builder` API for compiling `.meow` source into a deployable bytecode module — see [Builder](#builder) below.
+- Provides a `runner` API for calling compiled module functions in tests without transaction overhead — see [Runner](#runner) below.
+
+## Executor
+
+The executor bridges chain-level transactions to the VM. Its two entry points are:
+
+| Function | Use |
+|----------|-----|
+| `execute(transaction, inputs, external_context)` | Normal transaction execution — gas is charged and the gas coin is always returned. |
+| `execute_genesis_transaction(transaction, inputs)` | Genesis-only path — runs with unlimited gas and the privileged VM config; no gas coin required. |
+
+### Inputs
+
+`inputs` must contain every object the transaction references: the module being called, the gas coin, and any object arguments. The executor looks up each object by address from this slice rather than touching the store directly.
+
+### Transaction types
+
+**`MeowCall`** — calls a named `pub fn` in a published module:
+
+1. Resolves the module and its declared dependency modules from `inputs`.
+2. Resolves call arguments — object args are matched by `ObjectRef`, raw args are BCS-decoded to their declared types.
+3. Rejects the call if the function's return type contains a struct (structs must be consumed within the call).
+4. Builds the execution context and native functions, then runs the VM.
+5. Collects object effects (created / changed / destroyed) into an `ExecutionResult`.
+
+| Limit | Value |
+|-------|------:|
+| Maximum call arguments | 16 |
+| Maximum call stack depth | 256 |
+| Maximum dependency modules loaded | 64 |
+
+Only `pub fn` functions are callable.
+
+**`MeowModulePublish`** — stores a new bytecode module on-chain:
+
+1. Checks the serialized module size (≤ 512 KiB).
+2. Deserializes the module and runs both the language and adapter bytecode verifiers.
+3. Charges gas at **10 gas per serialized byte**.
+4. Stores the module as a new object at an address derived from the transaction digest.
+
+The following limits apply when publishing a module:
+
+| Limit | Value |
+|-------|------:|
+| Maximum serialized module size | 512 KiB |
+| Maximum identifier length | 128 chars |
+| Maximum structs per module | 128 |
+| Minimum fields per struct | 1 |
+| Maximum fields per struct | 32 |
+| Maximum functions per module | 256 |
+| Maximum parameters per function | 16 |
+| Maximum local variables per function | 255 |
+| Maximum instructions per function | 65 536 |
+| Maximum tuple elements | 16 |
+| Maximum `use` declarations | 64 |
+| Maximum transitive dependency modules | 64 |
+
+### Gas and failure
+
+The gas coin's entire balance is used as the gas budget. A base cost of **1 000 gas** is charged upfront before any VM work. Gas is always deducted and the gas coin is always returned in `changed_objects`, even when execution fails — a failed `ExecutionResult` still carries `gas_used` and the updated coin.
+
+## Builder
+
+The builder compiles `.meow` source into a bytecode `Module` ready for on-chain publishing or local use with the runner.
+
+### Entry points
+
+| Function | Input | Use |
+|----------|-------|-----|
+| `build(source, deps)` | Source string + pre-loaded dep modules | Compile from an in-memory string |
+| `build_from_file(file_path, deps)` | File path + pre-loaded dep modules | Compile from a `.meow` file |
+| `extract_module_deps(source)` | Source string | Extract `(name, alias, address)` triples without full compilation — use this to know which dep modules to fetch before calling `build` |
+
+Source input is limited to **64 KiB**. The serialized output must not exceed **512 KiB** — the same limit enforced by the executor at publish time; the builder surfaces this earlier.
+
+### Dependencies
+
+Every `use` declaration in the source must be satisfied by an entry in `deps`. Pass the pre-loaded `Module` values keyed by their on-chain address. `extract_module_deps` is provided specifically to discover which addresses to load before calling `build`.
+
+## Runner
+
+The runner executes a compiled module function directly — with real native functions and a live execution context, but without the gas-coin validation and object-store machinery of the full executor. It is intended for unit-testing contract logic in isolation.
+
+### Entry points
+
+| Function | Use |
+|----------|-----|
+| `run(module, fn_name, args, deps, external_context)` | Call a `pub fn` with unlimited gas |
+| `run_privileged(module, fn_name, args, deps, external_context)` | Call any function, including private ones — useful for testing functions like `mint` that are intentionally private |
+
+The `module` argument is `(Address, Module)` — the address is required to qualify struct type names produced by the VM (e.g. `@0x20::MeowCoin`).
+
+### RunResult
+
+```rust
+RunResult {
+    return_value: Option<Value>,         // return value of the call, if any
+    transfers:    Vec<(Value, Address)>, // objects transferred out: (object, new_owner)
+    destroyed:    Vec<Address>,          // IDs of objects destroyed during the call
+    gas_spent:    u64,                   // gas units consumed
+}
+```
+
+Gas is unlimited by default — `gas_spent` reflects what the call actually consumed, not what was budgeted.
 
 ## Native functions
 
@@ -42,7 +148,7 @@ pub struct Id {
 
 `Id` is an opaque wrapper around a 32-byte address. The inner field is private — user code cannot read or manipulate it directly. The only way to obtain an `Id` is via `meow_vm_fresh_id()`.
 
-Any struct whose first field is `id: meow_object::Id` is recognised by the adapter as an **on-chain object**. This is a layout convention enforced at publish time by the bytecode verifier and at execution time by the adapter.
+Any struct whose first field is `id: meow_object::Id` is recognized by the adapter as an **on-chain object**. This is a layout convention enforced at publish time by the bytecode verifier and at execution time by the adapter.
 
 ```meow
 use meow_object@0x10;
@@ -54,6 +160,15 @@ pub struct Hero {
 }
 ```
 
+The `id` field cannot be reassigned — not even within the declaring module. The compiler rejects any write to `id` as a compile error. To destroy an object, destructure it to extract the `id`, then call `meow_vm_destroy`:
+
+```meow
+fn burn(c: Coin) {
+    let Coin { id, .. } = c;
+    meow_vm_destroy(id);
+}
+```
+
 ## On-chain object lifecycle
 
 Every object ID allocated by `meow_vm_fresh_id()` must be either transferred (as part of the struct that holds it) or destroyed before the transaction ends. An ID that is neither transferred nor destroyed causes the transaction to fail.
@@ -61,9 +176,8 @@ Every object ID allocated by `meow_vm_fresh_id()` must be either transferred (as
 | State | How reached | Store effect |
 |-------|-------------|--------------|
 | **Created** | `meow_vm_fresh_id()` then `meow_vm_transfer(obj, owner)` | Inserted |
-| **Mutated in place** | Fields modified; no transfer or destroy | Overwritten with new content |
 | **Transferred** | `meow_vm_transfer(obj, new_owner)` | Overwritten with new owner |
-| **Destroyed** | `meow_vm_destroy(obj.id)` | Removed |
+| **Destroyed** | destructure to extract `id`, then `meow_vm_destroy(id)` | Removed |
 
 Objects created and destroyed within the same transaction leave no trace in the store.
 
@@ -76,13 +190,15 @@ pub struct MeowCoin {
     id: meow_object::Id,
     balance: u64
 }
+```
 
+`MeowCoinBalance` is a plain (non-object) struct that wraps a coin amount. It can be embedded as a field inside other on-chain objects. Use `to_balance` / `from_balance` to convert between the two types.
+
+```meow
 pub struct MeowCoinBalance {
     amount: u64
 }
 ```
-
-`MeowCoinBalance` is a plain (non-object) struct that wraps a coin amount. It can be embedded as a field inside other on-chain objects. Use `to_balance` / `from_balance` to convert between the two types.
 
 Public functions:
 
@@ -112,9 +228,10 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 - No duplicate function or struct names.
 - Local variable slot indices stay within `local_count`.
 - Jump offsets are forward-only and land on a valid instruction index.
-- `NewStruct` field lists exactly match the struct definition.
+- Structs must have at least one field — empty structs are rejected.
+- `NewStruct` and `UnpackStruct` field lists exactly match the struct definition.
 - Cross-module `Call` targets are public functions.
-- Cross-module `NewStruct` is forbidden.
+- Cross-module `NewStruct` and `UnpackStruct` are forbidden.
 
 ### Phase 2 — abstract interpretation
 
@@ -122,21 +239,18 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 - Return type matches the declared return type.
 - Functions without a reachable `Return` are rejected.
 - **Struct linearity**: every struct follows move semantics — use-after-move, pop/dup/overwrite on struct slots, and unconsumed structs at `Return` are all errors.
+- `GetField` on a struct that contains other struct-typed fields is rejected — consuming the struct to extract one primitive field would silently drop any remaining linear fields.
+- `LoadField` and `StoreField` on struct-typed fields are rejected — loading would produce an untracked linear value; storing would implicitly drop the old one.
 - Native call sites are type-checked against the adapter-supplied signatures.
 - Cross-module field reads and writes are rejected.
 
-### Adapter native signatures
+### Adapter-level checks
 
-The verifier is a free function. Pass the adapter's native signatures so it can type-check native call sites:
+After the language-level verifier passes, the adapter runs a second verification pass that enforces chain-specific object conventions:
 
-```rust
-use meow_vm_bytecode_verifier;
-use meow_vm_adapter::natives;
+**Object layout** — every struct whose first field is `id: meow_object::Id` is an on-chain object. The adapter verifier rejects modules where any struct field has an object type — objects cannot be embedded inside other structs.
 
-meow_vm_bytecode_verifier::verify(&module, &deps, &natives::adapter_native_sigs(), &compiler_config)?;
-```
-
-`adapter_native_sigs()` is defined in `meow-vm-adapter/src/natives.rs` and returns signatures for all six adapter-supplied natives. The verifier also includes the language built-in (`meow_vm_abort`) automatically.
+**ID freshness** — every `NewStruct` that constructs an on-chain object must supply an `id` value that originates directly from a `meow_vm_fresh_id()` call within the same function. IDs from parameters, local variables seeded elsewhere, or cross-module calls are rejected.
 
 ## Gas metering
 

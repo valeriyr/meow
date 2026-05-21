@@ -1,3 +1,5 @@
+//! Ed25519 keypair, signing, and verification support.
+
 use base64::{Engine, engine::general_purpose};
 use bip32::{ChildNumber, DerivationPath};
 use rand::{CryptoRng, RngCore};

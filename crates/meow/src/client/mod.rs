@@ -1,3 +1,5 @@
+//! `meow client` commands: query objects and blocks, and submit signed transactions via the node RPC.
+
 pub mod output;
 
 use base64::{Engine, engine::general_purpose};

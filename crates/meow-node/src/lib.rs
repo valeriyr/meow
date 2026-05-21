@@ -1,3 +1,5 @@
+//! Meow full node: wires together the miner, gossip network, and HTTP RPC server.
+
 pub mod commands;
 pub mod node;
 

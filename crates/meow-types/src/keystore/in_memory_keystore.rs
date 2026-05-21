@@ -1,3 +1,5 @@
+//! In-memory keystore for ephemeral key pair storage.
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};

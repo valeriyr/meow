@@ -75,8 +75,13 @@ pub(crate) fn check_module(
                 name: s.name.clone(),
             });
         }
-        // Field count limit
+        // Field count limits
         let field_count = s.fields.len();
+        if field_count == 0 {
+            errors.push(VerificationError::EmptyStruct {
+                struct_name: s.name.clone(),
+            });
+        }
         let field_limit = cfg.max_fields();
         if field_count > field_limit {
             errors.push(VerificationError::TooManyFields {

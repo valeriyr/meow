@@ -1,7 +1,4 @@
-//! Compiler for the Meow language: source text → bytecode module.
-//!
-//! Runs parsing, semantic validation, type checking, and code generation as sequential
-//! passes, producing a module ready for on-chain publishing.
+//! Compiler for the Meow language: transforms source text into a bytecode module ready for on-chain publishing.
 
 mod ast;
 mod codegen;

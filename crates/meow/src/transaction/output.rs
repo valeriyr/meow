@@ -1,3 +1,5 @@
+//! Output types for the transaction subcommand.
+
 use meow_types::transaction::execution_result::ExecutionResult;
 use serde::Serialize;
 

@@ -1,3 +1,5 @@
+//! Chain state tracking blocks, object-store snapshots, and fork resolution.
+
 use std::collections::BTreeMap;
 
 use meow_nakamoto_types::block::Block;
@@ -135,14 +137,17 @@ impl ChainState {
 
     /// Process a block received from a peer.
     ///
-    /// Validates:
-    /// - parent block is known (we have it)
-    /// - PoW hash meets difficulty
-    /// - height is exactly parent height + 1
-    /// - transactions root matches block transactions
-    /// - all transaction signatures are valid
-    /// - local deterministic execution results match block results
-    /// - resulting state root matches block header
+    /// Validates in order:
+    /// 1. Block is not already known
+    /// 2. Parent block is known
+    /// 3. PoW hash meets difficulty (skipped for genesis)
+    /// 4. Height is exactly parent height + 1
+    /// 5. Timestamp is strictly greater than parent timestamp
+    /// 6. Timestamp is not too far in the future
+    /// 7. Transactions root matches the block's transaction list
+    /// 8. All transaction signatures are valid
+    /// 9. Local deterministic re-execution matches the included results
+    /// 10. State root matches the store produced by re-execution
     ///
     /// If the block extends a chain longer than the current head, the head
     /// is updated (chain reorganization). Returns `true` when the head changed.
@@ -224,7 +229,7 @@ impl ChainState {
 
         // Build the store snapshot for this block by deterministically re-executing all transactions.
         let mut new_store = self.snapshots[&parent_hash].clone();
-        let mut expected_results = Vec::with_capacity(block.transactions.len());
+        let mut recomputed_results = Vec::with_capacity(block.transactions.len());
 
         // Use the mining hash as the randomness seed — it commits height,
         // parent_hash, transactions_root, timestamp, and nonce, all of which
@@ -246,21 +251,21 @@ impl ChainState {
             };
 
             new_store.apply_execution_result(&result);
-            expected_results.push(result);
+            recomputed_results.push(result);
         }
 
-        if expected_results != block.results {
+        if recomputed_results != block.results {
             tracing::warn!(height, "block results mismatch local execution — ignoring");
             return false;
         }
 
-        let expected_state_root = compute_state_root(&new_store);
-        if expected_state_root != block.header.state_root {
+        let recomputed_state_root = compute_state_root(&new_store);
+        if recomputed_state_root != block.header.state_root {
             tracing::warn!(height, "block has invalid state root — ignoring");
             return false;
         }
 
-        for result in &expected_results {
+        for result in &recomputed_results {
             self.results
                 .insert(*result.transaction_digest(), result.clone());
         }

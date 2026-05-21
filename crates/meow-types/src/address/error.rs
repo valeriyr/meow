@@ -1,3 +1,5 @@
+//! Error type for address parsing and conversion.
+
 /// An error related to addresses.
 #[derive(Debug, thiserror::Error)]
 pub enum AddressError {

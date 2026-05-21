@@ -1,3 +1,5 @@
+//! Top-level CLI command definitions and dispatch for the meow binary.
+
 use std::path::PathBuf;
 
 use clap::Parser;

@@ -1,3 +1,5 @@
+//! Signature type abstracting over supported signature schemes.
+
 use serde::{Deserialize, Serialize};
 
 use super::Result;

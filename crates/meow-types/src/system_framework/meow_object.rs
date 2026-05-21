@@ -1,3 +1,5 @@
+//! Types and constants for the built-in `meow_object` system module.
+
 use meow_vm_types::{
     convert::{self, VmTypeNames, struct_from_rust},
     types::{StructDef, Type, Value},

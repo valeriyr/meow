@@ -4,7 +4,7 @@
 
 A `Hero` is a named, uniquely-owned object that earns experience, levels up, and can duel other heroes. This example covers the full lifecycle: writing the module, testing locally, publishing on-chain, and calling each function.
 
-See [Contracts](contracts.md) for the language reference and call argument format.
+See [Contracts](contracts.md) for the CLI commands and call argument format.
 
 ## The module
 
@@ -12,18 +12,18 @@ Source: [`crates/meow-vm-examples/modules/hero_game.meow`](../crates/meow-vm-exa
 
 ## Test locally
 
-`meow contract run` compiles and runs a function in a local VM without submitting a transaction. It still connects to the node to resolve any `0x<hex>` object arguments, so:
+`meow contract run` compiles and runs a function in a local VM without submitting a transaction. A running node is always required — dependency modules (`meow_object@0x10`) are fetched from it. The distinction is in the function arguments:
 
-- **Primitive arguments** (`bool`, `u64`, `address`, `string`) — work without a running node.
-- **Object arguments** (`0x<hex>`) — require a running node and the object to already exist on-chain.
+- **Primitive arguments** (`bool`, `u64`, `address`, `string`) — no user-created objects needed beyond the module dependencies.
+- **Object arguments** (`0x<hex>`) — the referenced objects must already exist on-chain.
 
-`spawn` only takes a `string`, so it can be run offline:
+`spawn` only takes a `string`, so no on-chain objects need to exist before running it:
 
 ```bash
 # Check that the module compiles cleanly
 meow contract build hero_game.meow
 
-# Run spawn locally — no node needed
+# Run spawn — requires a node, but no pre-existing object arguments
 meow contract run hero_game.meow spawn Thorin
 ```
 
@@ -90,7 +90,7 @@ meow transaction meow-call \
 
 Both heroes must be owned by the transaction sender. Spawn a second hero first, then pass both addresses as object arguments.
 
-Each hero draws a random number from `meow_vm_rand()`. Higher roll wins — the outcome is never guaranteed regardless of level. The winner gains `loser.level × 25` XP and **levels up automatically** when their XP reaches `level × 100` (level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The randomness is seeded from the block's mining hash (which commits to the transaction set and nonce), so it is deterministic across all nodes but cannot be predicted by a transaction sender before the block is mined. See [Contracts → Randomness](contracts.md#randomness) for the full security model.
+Each hero draws a random number from `meow_vm_rand()`. Higher roll wins; ties go to the attacker — the outcome is never guaranteed regardless of level. The winner gains `loser.level × 25` XP and **levels up automatically** when their XP reaches `level × 100` (level 1 → 2 at 100 XP, level 2 → 3 at 200 XP, and so on). The randomness is seeded from the block's mining hash (which commits to the transaction set and nonce), so it is deterministic across all nodes but cannot be predicted by a transaction sender before the block is mined. See [Contracts → Randomness](contracts.md#randomness) for the full security model.
 
 ```bash
 # Spawn a second hero to be the defender

@@ -1,3 +1,5 @@
+//! Serialisable representation of a signed transaction for CLI output.
+
 use base64::{Engine, engine::general_purpose};
 use meow_types::{
     object::object_ref::ObjectRef,

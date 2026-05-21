@@ -1,3 +1,5 @@
+//! Error type for object-to-VM-value conversion.
+
 /// An error that can occur when converting between chain objects and VM values.
 #[derive(Debug, thiserror::Error)]
 pub enum ObjectConversionError {

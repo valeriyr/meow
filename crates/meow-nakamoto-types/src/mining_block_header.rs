@@ -1,3 +1,5 @@
+//! Partial block header used for proof-of-work grinding before the state root is known.
+
 use meow_types::digest::Digest;
 use serde::Serialize;
 

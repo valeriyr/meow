@@ -1,3 +1,5 @@
+//! `meow genesis` command: generate a genesis file from an allocations CSV.
+
 pub mod output;
 
 use std::path::PathBuf;

@@ -1,3 +1,5 @@
+//! Error type for the gossip service.
+
 /// Errors related to the gossip service.
 #[derive(Debug, thiserror::Error)]
 pub enum GossipServiceError {

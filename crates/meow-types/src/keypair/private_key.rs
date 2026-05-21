@@ -1,3 +1,5 @@
+//! Private key type abstracting over supported signature schemes.
+
 use super::ed25519::Ed25519PrivateKey;
 
 /// The private key type.

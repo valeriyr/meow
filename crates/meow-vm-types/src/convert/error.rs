@@ -1,3 +1,5 @@
+//! Error type for BCS-based VM value conversion.
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConversionError {
     #[error("bcs error: {0}")]

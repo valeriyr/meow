@@ -1,3 +1,5 @@
+//! Transaction type discriminant for VM calls and module publish operations.
+
 use serde::{Deserialize, Serialize};
 
 use crate::transaction::call::Call;

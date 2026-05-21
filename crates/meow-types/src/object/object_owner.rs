@@ -1,3 +1,5 @@
+//! Ownership descriptor for on-chain objects: either owned by an address or declared immutable.
+
 use serde::{Deserialize, Serialize};
 
 use crate::address::Address;

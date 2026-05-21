@@ -48,6 +48,13 @@ pub fn validate_function_name(name: &str, config: &CompilerConfig) -> Result<()>
 pub fn validate_struct_def(def: &AstStruct, config: &CompilerConfig) -> Result<()> {
     validate_identifier(&def.name, "struct name", config)?;
 
+    if def.fields.is_empty() {
+        return Err(CompilerError::Message(format!(
+            "struct '{}': must have at least one field",
+            def.name,
+        )));
+    }
+
     let max_fields = config.max_fields();
     if def.fields.len() > max_fields {
         return Err(CompilerError::Message(format!(

@@ -39,12 +39,13 @@ The PoW target is expressed as a **minimum number of leading zero bits** in the 
 Mining proceeds as follows:
 
 1. Assemble the transaction batch (up to 100 transactions from the mempool).
-2. Compute `transactions_root` from the batch — it is fixed before grinding starts.
+2. Compute `transactions_root` from the batch.
 3. Set `timestamp` and `nonce = 0`.
 4. Increment `nonce` until `mining_hash` has at least `difficulty` leading zero bits.
-5. Re-execute all transactions using the solved `mining_hash` as the randomness seed.
-6. Compute `state_root` from the resulting object store.
-7. Broadcast the completed block.
+5. Execute all transactions using the solved `mining_hash` as the randomness seed. Transactions that fail (e.g. conflicting object versions within the batch) are silently dropped.
+6. If any transactions were dropped, `transactions_root` is now stale — recompute it from the surviving set and go back to step 4. Because `transactions_root` is part of the mining hash, the previously found nonce no longer commits to the actual transaction set and cannot be reused.
+7. Compute `state_root` from the resulting object store.
+8. Broadcast the completed block — see [Networking](networking.md).
 
 If the chain advances while grinding (another block arrives), the work-in-progress block is **discarded as stale** and a new round starts from the new head.
 
@@ -101,6 +102,8 @@ Because the miner has discretion within these bounds, contracts that depend on `
 When a new block arrives that extends a side chain to a height greater than the current head, the node switches to that chain. Re-execution is not needed during the reorg — every block keeps a pre-computed snapshot of the object store, so a fork switch is a pointer update.
 
 **Snapshot pruning:** store snapshots for blocks more than **64 heights** behind the current head are discarded. Block headers and transaction data are kept indefinitely. The practical maximum safe reorg depth is 64 blocks.
+
+When a block arrives with a height more than one ahead of the local tip, the node detects a gap and initiates a catch-up sync — see [Networking — Catch-up sync](networking.md#catch-up-sync).
 
 ---
 

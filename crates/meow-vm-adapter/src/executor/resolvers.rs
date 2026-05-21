@@ -1,5 +1,4 @@
-//! Input resolution — validates and extracts the gas coin, call arguments, and
-//! dependency modules from the raw transaction inputs before execution begins.
+//! Pre-execution validation and extraction of transaction inputs for the executor.
 
 use std::collections::HashMap;
 

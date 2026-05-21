@@ -1,3 +1,5 @@
+//! Conversions between on-chain `Object` and its VM-level field representation.
+
 pub mod error;
 
 use std::collections::BTreeMap;

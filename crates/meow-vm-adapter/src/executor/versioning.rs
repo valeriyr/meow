@@ -1,4 +1,4 @@
-//! Object version utilities used during result assembly.
+//! Increments object version numbers during transaction result assembly to maintain the monotone invariant.
 
 use meow_types::object::{Object, object_version::ObjectVersion};
 

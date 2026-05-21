@@ -1,3 +1,5 @@
+//! Block header that links blocks in the chain and carries the proof-of-work nonce.
+
 use meow_types::digest::Digest;
 use serde::{Deserialize, Serialize};
 

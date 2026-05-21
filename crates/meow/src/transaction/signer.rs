@@ -1,3 +1,5 @@
+//! Transaction signing helper that looks up the sender's keypair from a keystore.
+
 use meow_types::{
     keystore::Keystore,
     transaction::{SignedTransaction, Transaction},

@@ -1,3 +1,8 @@
+//! Versioned, content-addressed reference that uniquely identifies an object at a specific state.
+//!
+//! The executor rejects any reference whose version or digest does not match the current store,
+//! so a transaction built against a stale object is safely refused rather than silently misapplied.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{address::Address, digest::Digest, object::object_version::ObjectVersion};

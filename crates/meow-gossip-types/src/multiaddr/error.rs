@@ -1,3 +1,5 @@
+//! Error type for multiaddr parsing and conversion.
+
 /// An error related to multiaddr.
 #[derive(Debug, thiserror::Error)]
 pub enum MultiaddrError {

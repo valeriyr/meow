@@ -1,3 +1,5 @@
+//! Output types for the contract subcommand.
+
 use meow_vm_adapter::{Module, runner::RunResult};
 use serde::Serialize;
 

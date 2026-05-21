@@ -1,8 +1,7 @@
 //! Per-transaction side-effect accumulator shared with native functions during VM execution.
 //!
-//! Native functions cannot return side-effects directly — instead they write into this context
-//! (transfers, destroys, freshly created IDs), which is inspected after execution to build
-//! the final result.
+//! Native functions write object lifecycle changes into this context; it is inspected after
+//! the VM returns to assemble the final `ExecutionResult`.
 
 use meow_types::{address::Address, digest::Digest, system_framework::meow_object};
 use meow_vm_types::types::Value;

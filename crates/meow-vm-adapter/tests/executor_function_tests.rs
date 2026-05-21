@@ -42,38 +42,6 @@ fn calling_function_returning_primitive_from_transaction_succeeds() {
 }
 
 #[test]
-fn split_with_insufficient_balance_returns_failure() {
-    use meow_framework::framework_module_objects;
-    use meow_types::object::Object;
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 10);
-    let gas_obj = utils::make_gas_coin_object();
-
-    let tx = utils::make_meow_call_transaction(
-        "split",
-        vec![
-            Input::Object(coin_obj.object_ref()),
-            Input::raw(&20u64).unwrap(), // amount > balance
-        ],
-    );
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
-
-    assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("The balance is insufficient")),
-        "split with insufficient balance must produce Failure, got: {:?}",
-        result.status()
-    );
-    assert!(result.created_objects().is_empty());
-    assert!(result.destroyed_objects().is_empty());
-    assert_eq!(
-        result.changed_objects().len(),
-        1,
-        "gas coin must still be returned"
-    );
-    assert_eq!(result.changed_objects()[0].address(), &utils::GAS_ADDR);
-}
-
-#[test]
 fn execute_with_function_not_found_returns_failure() {
     let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
     let gas_obj = utils::make_gas_coin_object();

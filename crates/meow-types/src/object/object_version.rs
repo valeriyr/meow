@@ -1,3 +1,7 @@
+//! Monotonically increasing version counter for on-chain objects.
+//!
+//! Incremented on every write; together with the content digest it forms the `ObjectRef`
+//! used to pin objects in transactions and detect concurrent modifications.
 use serde::{Deserialize, Serialize};
 
 /// The version of an object.

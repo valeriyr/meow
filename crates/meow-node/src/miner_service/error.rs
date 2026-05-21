@@ -1,3 +1,5 @@
+//! Error type for the miner service.
+
 /// Errors related to the miner service.
 #[derive(Debug, thiserror::Error)]
 pub enum MinerServiceError {

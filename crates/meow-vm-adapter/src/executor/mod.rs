@@ -1,9 +1,6 @@
-//! Transaction executor: bridges chain-level transactions to the VM.
+//! Transaction executor: runs a validated transaction against the VM and produces an `ExecutionResult`.
 //!
-//! Takes a signed transaction and pre-resolved input objects, validates gas, sets up native
-//! functions with a shared execution context, runs the VM, and assembles the resulting created,
-//! changed, and destroyed objects into an `ExecutionResult`. Gas is always charged and the gas
-//! coin always appears in the output, even when execution fails.
+//! Gas is always charged and the gas coin always appears in the output, even when execution fails.
 
 mod effects;
 mod gas;

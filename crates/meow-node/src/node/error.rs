@@ -1,3 +1,5 @@
+//! Error type for the MEOW node.
+
 use std::net::SocketAddr;
 
 /// Errors related to the node.

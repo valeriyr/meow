@@ -1,3 +1,5 @@
+//! Events emitted by the gossip network layer and consumed by the node to dispatch incoming messages.
+
 use crate::{message_id::MessageId, multiaddr::Multiaddr, peer_id::PeerId};
 
 /// An event produced by the gossip network.

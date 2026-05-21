@@ -17,12 +17,24 @@
 | **meow-vm-bytecode-verifier** | Bytecode verifier — structural and type-safety checks at publish time |
 | **meow-vm-adapter** | VM ↔ chain glue |
 | **meow-vm-types** | VM type definitions |
-| **meow-gossip-network** | libp2p peer-to-peer networking |
-| **meow-gossip-types** | Network-level shared types |
+| **meow-gossip-network** | libp2p gossipsub + mDNS networking |
+| **meow-gossip-types** | Network-level shared types and config |
 | **meow-genesis** | Genesis file loading and validation |
-| **meow-framework** | Built-in modules (`meow_coin`) |
+| **meow-framework** | System framework modules |
 | **meow-vm-examples** | Runnable example contracts with integration tests |
 | **meow-e2e-tests** | End-to-end, network, and security tests |
+
+## Subsystems
+
+**[Consensus](consensus.md)** — Nakamoto proof-of-work. `meow-nakamoto` owns the chain, block validation, mempool, miner, and object store. `meow-nakamoto-types` holds the block and block-header definitions shared between it and the networking layer.
+
+**[Object model](object-model.md)** — State is a flat map of typed objects, each identified by a 32-byte address and owned by a key pair. Transactions consume and produce objects; the gas coin is itself an object. Core types live in `meow-types`.
+
+**[Smart contracts](contracts.md)** — Programs are written in the [Meow Language](language.md) and compiled to bytecode by `meow-vm-compiler`. `meow-vm-bytecode-verifier` validates modules at publish time. `meow-vm` executes bytecode; `meow-vm-adapter` bridges the VM to the chain's object model — see [Adapter & Native Functions](adapter.md). Shared VM type definitions live in `meow-vm-types`. The `meow-framework` crate provides the built-in system modules (`meow_object`, `meow_coin`).
+
+**[Networking](networking.md)** — Nodes communicate over libp2p gossipsub. Peers are discovered on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. `meow-gossip-network` owns the transport; `meow-gossip-types` provides shared message types and config.
+
+**[RPC](rpc.md)** — `meow-node` exposes a JSON-over-HTTP API on `127.0.0.1:8600` by default. `meow-node-client` is the typed HTTP client library for that API, used by the `meow` CLI and in tests.
 
 ## Data Flow
 

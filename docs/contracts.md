@@ -16,7 +16,7 @@ The sequence is seeded from the block's mining hash and the transaction digest, 
 
 `meow_vm_timestamp()` returns the **block timestamp** as Unix milliseconds — the value recorded in the block header by the miner when the block was produced.
 
-```
+```meow
 let now = meow_vm_timestamp(); // e.g. 1712534400000
 ```
 
@@ -37,7 +37,7 @@ meow_vm_abort(meow_vm_timestamp() >= capsule.unlock_time, 1, "still locked");
 meow_vm_abort(meow_vm_timestamp() >= item.last_used + cooldown_ms, 2, "cooldown active");
 ```
 
-See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and miner behaviour.
+See [Consensus — Timestamps](consensus.md#timestamps) for validation rules and miner behavior.
 
 ## Transaction entry points
 
@@ -52,7 +52,7 @@ Native built-in functions (`meow_vm_transfer`, `meow_vm_fresh_id`, etc.) cannot 
 mod vault;
 
 fn internal_helper() -> u64 { return 1; }  // cannot be called from a transaction (private)
-pub fn mint() -> Coin { ... }              // cannot be called from a transaction (returns on-chain object)
+pub fn mint() -> Coin { ... }              // cannot be called from a transaction (returns a struct)
 
 pub fn get_balance(coin: Coin) -> u64 { ... } // valid — u64 return is discarded
 pub fn deposit(amount: u64) { ... }           // valid transaction target
@@ -71,7 +71,7 @@ meow contract build my_module.meow
 
 ### Run locally
 
-Compiles and executes a function in a local VM without submitting a transaction. Primitive arguments (`bool`, `u64`, `address`, `string`) work without a running node. Object arguments (`0x<hex>`) require a running node and the object to already exist on-chain.
+Compiles and executes a function in a local VM without submitting a transaction. A running node is always required — dependency modules are fetched from it. The distinction is in the arguments: primitive arguments (`bool`, `u64`, `address`, `string`) need no additional on-chain objects, while object arguments (`0x<hex>`) require the referenced objects to already exist on-chain.
 
 ```bash
 meow contract run my_module.meow function_name arg1 arg2

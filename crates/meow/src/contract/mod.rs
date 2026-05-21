@@ -1,3 +1,5 @@
+//! `meow contract` commands: compile and run Meow Language contracts against a local VM.
+
 pub mod output;
 
 use std::path::PathBuf;

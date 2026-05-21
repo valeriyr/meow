@@ -1,3 +1,5 @@
+//! Configuration for the gossip network node.
+
 use std::time::Duration;
 
 use crate::multiaddr::Multiaddr;

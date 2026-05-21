@@ -1,3 +1,5 @@
+//! Reference to an on-chain object type declaration (module address + name).
+
 use serde::{Deserialize, Serialize};
 
 use crate::{address::Address, identifier::Identifier};

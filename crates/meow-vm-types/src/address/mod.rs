@@ -34,8 +34,6 @@ impl Address {
     }
 
     /// Creates an address whose last two bytes hold `suffix` (big-endian) and all other bytes are zero.
-    ///
-    /// Used for well-known built-in module addresses (e.g. `Address::suffixed(0x0010)` for `meow_object`).
     pub const fn suffixed(suffix: u16) -> Self {
         let mut addr = [0u8; ADDRESS_LENGTH];
         let [hi, lo] = suffix.to_be_bytes();

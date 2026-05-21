@@ -1,3 +1,5 @@
+//! Execution result recording the outcome of a transaction and the objects it affected.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{digest::Digest, object::Object};

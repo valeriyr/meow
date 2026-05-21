@@ -1,3 +1,5 @@
+//! Shared test helpers for VM tests.
+
 #![allow(dead_code)]
 
 use std::collections::HashMap;
@@ -108,6 +110,18 @@ pub fn run(source: &str, fn_name: &str, args: Vec<Value>) -> Option<Value> {
     vm.call(fn_name, args, &mut gas)
         .expect("execution failed")
         .return_value
+}
+
+/// Build a `Vm` from a pre-compiled module, run `fn_name` with `args`, and return the result.
+pub fn try_run(
+    module: Module,
+    fn_name: &str,
+    args: Vec<Value>,
+) -> Result<Option<Value>, meow_vm::error::VmError> {
+    let mut gas = GasMeter::unlimited();
+    vm(module)
+        .call(fn_name, args, &mut gas)
+        .map(|r| r.return_value)
 }
 
 //

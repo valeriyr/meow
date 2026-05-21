@@ -22,15 +22,15 @@ The goal is not to ship a coin — it is to show how the pieces fit together.
 
 ## How it works
 
-**Consensus** — Nakamoto proof-of-work. The miner continuously attempts blocks over the pending mempool transactions. On reorg, only transactions that are no longer valid against the new chain head are evicted; the rest stay in the mempool and are re-mined automatically.
+**[Consensus](docs/consensus.md)** — Nakamoto proof-of-work. The miner continuously attempts blocks over the pending mempool transactions. On reorg, only transactions that are no longer valid against the new chain head are evicted; the rest stay in the mempool and are re-mined automatically.
 
-**Object model** — State is a flat map of typed objects, each identified by a 32-byte address and owned by a key pair. Transactions consume and produce objects. The gas coin is itself an object, so fees are enforced the same way as any other balance movement.
+**[Object model](docs/object-model.md)** — State is a flat map of typed objects, each identified by a 32-byte address and owned by a key pair. Transactions consume and produce objects. The gas coin is itself an object, so fees are enforced the same way as any other balance movement.
 
-**Smart contracts** — Programs are written in the Meow Language, compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
+**[Smart contracts](docs/contracts.md)** — Programs are written in the Meow Language, compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
 
-**Networking** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node receives a block whose height is more than one ahead of its own chain tip, it requests the missing range from the sender and buffers any blocks that arrive during the catch-up.
+**[Networking](docs/networking.md)** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node receives a block whose height is more than one ahead of its own chain tip, it requests the missing range from the sender and buffers any blocks that arrive during the catch-up.
 
-**RPC** — `meow-node` exposes a JSON-over-HTTP API on `127.0.0.1:8600` by default. The `meow client` CLI sub-commands and the `meow-node-client` library crate both talk to this API.
+**[RPC](docs/rpc.md)** — `meow-node` exposes a JSON-over-HTTP API on `127.0.0.1:8600` by default. The `meow client` CLI sub-commands and the `meow-node-client` library crate both talk to this API.
 
 ## Build & test
 
@@ -57,7 +57,7 @@ crates/
 ├── meow-gossip-network  libp2p gossipsub + mDNS networking
 ├── meow-gossip-types    Network-level shared types and config
 ├── meow-genesis         Genesis file loading and validation
-├── meow-framework       Built-in modules (meow_coin)
+├── meow-framework       System framework modules
 ├── meow-vm-examples     Runnable smart contract examples
 └── meow-e2e-tests       End-to-end, network, and security tests
 ```
@@ -69,14 +69,15 @@ crates/
 | [Quick Start](docs/quickstart.md) | Key generation, genesis, running a node, sending transactions |
 | [Object Model](docs/object-model.md) | Objects, ownership, versioning, gas coins, and lifecycle |
 | [Consensus](docs/consensus.md) | PoW, block validation rules, fork choice, reorgs, mempool, timestamps, and randomness |
+| [Networking](docs/networking.md) | Peer discovery, gossip topics, catch-up sync, and node configuration |
+| [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |
 | [Contracts](docs/contracts.md) | Practical guide: types, native functions, access control, bytecode verification |
 | [Language Reference](docs/language.md) | Complete Meow Language syntax and type-system reference |
 | [Adapter & Natives](docs/adapter.md) | Native functions, on-chain object lifecycle, bytecode verifier, gas metering |
 | [Meow Coin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
 | [Example: timelock coin](docs/example-timelock-coin.md) | Time-locked coin using `meow_vm_timestamp()` |
-| [RPC API](docs/rpc.md) | HTTP endpoints — submit transactions, query objects and blocks |
-| [Architecture](docs/architecture.md) | Crate map, data flow, and testing strategy |
+| [Architecture](docs/architecture.md) | Crate map, subsystems overview, data flow, and testing strategy |
 
 ## License
 

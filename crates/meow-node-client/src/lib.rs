@@ -1,3 +1,5 @@
+//! HTTP client for the Meow node RPC API.
+
 pub mod error;
 
 use std::net::SocketAddr;

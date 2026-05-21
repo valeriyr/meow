@@ -1,3 +1,5 @@
+//! Error type for the proof-of-work miner.
+
 /// An error related to the miner.
 #[derive(Debug, thiserror::Error)]
 pub enum MinerError {

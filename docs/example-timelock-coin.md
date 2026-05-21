@@ -4,7 +4,7 @@
 
 A `TimelockCoin` holds a MeowCoin balance that can only be claimed once the block timestamp reaches a chosen unlock time. This example shows the core pattern for time-gated value: **record an unlock timestamp at creation, enforce it on release**.
 
-See [Contracts](contracts.md) for the language reference and call argument format, and [Meow Coin](meow-coin.md) for the coin module reference.
+See [Contracts](contracts.md) for the CLI commands and call argument format, and [Meow Coin](meow-coin.md) for the coin module reference.
 
 ## The module
 

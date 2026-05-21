@@ -1,3 +1,5 @@
+//! Transaction call argument: an object reference or a raw BCS-encoded primitive value.
+
 pub mod error;
 
 use serde::{Deserialize, Serialize};

@@ -1,3 +1,5 @@
+//! Call payload specifying the module, function, and arguments for a MEOW VM transaction.
+
 use serde::{Deserialize, Serialize};
 
 use crate::{address::Address, identifier::Identifier, transaction::input::Input};

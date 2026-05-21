@@ -1,3 +1,5 @@
+//! Structural transaction validation: size limits, argument count, and gas-coin aliasing checks.
+
 pub mod error;
 
 use std::collections::HashSet;

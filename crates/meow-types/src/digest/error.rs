@@ -1,3 +1,5 @@
+//! Error type for digest parsing and conversion.
+
 /// An error related to digests.
 #[derive(Debug, thiserror::Error)]
 pub enum DigestError {

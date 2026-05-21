@@ -1,3 +1,5 @@
+//! libp2p-based gossip network for peer discovery and message propagation between Meow nodes.
+
 pub mod error;
 
 use crate::error::NetworkError;

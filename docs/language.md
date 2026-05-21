@@ -21,6 +21,7 @@ mod my_game;
 
 use meow_object@0x10;
 use meow_coin@0x20;
+
 use math@0x1a2b3c... as m;  // reference as m:: instead of math::
 ```
 
@@ -33,6 +34,7 @@ After importing, reference types and functions with `module_name::TypeName` or `
 
 ```meow
 use shapes@0x... as geo;
+
 fn run() -> (geo::Point, u64) {
     let p = geo::make_point(3, 7);        // ok — uses constructor
     // let p = geo::Point { x: 3, y: 7 }; // rejected — cross-module construction
@@ -73,16 +75,16 @@ Every struct value has move semantics. A struct held in a local variable must be
 
 The compiler and bytecode verifier both enforce this. A live struct in a non-parameter local slot at `Return` is a compile error.
 
-Function parameters are exempt from the unconsumed check at `Return` — a live struct parameter is treated as an in-place mutation and written back by the effects system.
-
 ## Structs
 
 ```meow
 struct Point { x: u64, y: u64 }
+
 pub struct Coin { id: meow_object::Id, balance: u64 }
 ```
 
 - `pub` makes the struct type visible to other modules that import this one.
+- Structs **must have at least one field**. Empty structs are rejected by the compiler.
 - Fields are always private — readable and writable only within the declaring module.
 - Field types may be primitives (`bool`, `u64`, `address`, `string`) or other struct types. Tuples are not valid field types.
 
@@ -100,19 +102,7 @@ pub struct Hero {
 }
 ```
 
-See [Adapter & Natives — On-chain object lifecycle](adapter.md#on-chain-object-lifecycle) for how objects are created, mutated, transferred, and destroyed.
-
-### The `id` field is immutable
-
-The `id` field of every on-chain object is set at creation time and cannot be reassigned anywhere — even inside the declaring module:
-
-```meow
-use meow_object@0x10;
-struct Coin { id: meow_object::Id, balance: u64 }
-fn bad(c: Coin, new_id: meow_object::Id) {
-    c.id = new_id; // compile error: 'id' is immutable
-}
-```
+The `id` field cannot be reassigned — the compiler rejects any attempt as a compile error. See [Adapter & Natives — On-chain object lifecycle](adapter.md#on-chain-object-lifecycle) for how objects are created, transferred, and destroyed.
 
 ### Struct literals
 
@@ -120,6 +110,7 @@ Struct literals create a new struct value. All fields must be provided in any or
 
 ```meow
 let p = Point { x: 3, y: 7 };
+
 let hero = Hero { id: meow_vm_fresh_id(), name: "Thorin", level: 1 };
 ```
 
@@ -168,7 +159,9 @@ A function can return multiple values using a tuple `(T1, T2, ...)` as the retur
 ```meow
 // shapes module
 pub struct Point { x: u64, y: u64 }
+
 pub fn make_point(x: u64, y: u64) -> Point { return Point { x: x, y: y }; }
+
 pub fn get_x(p: Point) -> (Point, u64) {
     let val = p.x;
     (p, val)   // implicit return
@@ -176,7 +169,8 @@ pub fn get_x(p: Point) -> (Point, u64) {
 
 // user module
 use shapes@0x...;
-fn use_x(p: shapes::Point) -> u64 {
+
+fn use_shapes(p: shapes::Point) -> u64 {
     let (p, val) = shapes::get_x(p);
     return val;
 }
@@ -217,12 +211,19 @@ x = x + 1;
 
 ### Field assignment
 
-Mutates a field on a struct held in a local slot. The `id` field is immutable and cannot be assigned.
+Mutates a field on a struct held in a local slot.
 
 ```meow
 hero.level = hero.level + 1;
 hero.name = "Veteran";
 hero.stats.level = 10;   // nested field path — assigns to a field of a field-typed struct
+```
+
+Fields whose type is a struct cannot be directly assigned.
+
+```meow
+hero.id = new_id;       // error — 'id' cannot be reassigned
+hero.stats = new_stats; // error — struct-typed fields cannot be directly assigned; use destructuring
 ```
 
 ### `if` / `else`
@@ -235,6 +236,8 @@ if cond { ... } else { ... }
 Each branch body is a separate scope — see [Variable shadowing and scoping](#variable-shadowing-and-scoping) below.
 
 Both branches must leave the stack in the same state (same types, same struct liveness). Using `if` without `else` is valid when neither branch creates struct values that survive past the branch.
+
+**There are no loop constructs.** `while`, `for`, and `loop` do not exist. This is intentional — every program is guaranteed to terminate and gas consumption is always bounded. The bytecode verifier also rejects backward jumps, making loops impossible at the bytecode level.
 
 ### Variable shadowing and scoping
 
@@ -285,7 +288,7 @@ The same applies to struct bindings. The inner shadow uses a new slot so the out
 ```meow
 let p = Point { x: 1, y: 2 };
 if cond {
-    let p = Point { x: 9, y: 9 }; // new slot — outer p unaffected
+    let p = Point { x: 9, y: 9 };  // new slot — outer p unaffected
     let Point { x, .. } = p;       // inner p must be consumed here
 }
 let Point { x, .. } = p;           // outer p is still alive
@@ -295,8 +298,8 @@ Any struct introduced inside a branch body **must be consumed before the branch 
 
 ```meow
 if cond {
-    let p = Point { x: 1, y: 2 };
     // error: struct 'p' introduced in if body must be consumed before the branch ends
+    let p = Point { x: 1, y: 2 };
 }
 ```
 
@@ -333,12 +336,16 @@ Reading a struct variable moves it out of the binding (the binding becomes dead)
 ### Field access
 
 ```meow
-hero.level          // read field 'level' from hero
-coin.id             // read the id field (returns meow_object::Id)
-hero.stats.level    // nested field path — reads a field of a field-typed struct
+hero.level          // read primitive field 'level' from hero
 ```
 
-Field access reads a field without consuming the parent struct. For primitives the result is a copy; for struct-typed fields the result is a struct value.
+Field access reads a primitive field (`bool`, `u64`, `address`, `string`) without consuming the parent struct — the result is a copy.
+
+Fields whose type is a struct cannot be read via field access. They can only be extracted through destructuring, which consumes the parent struct:
+
+```meow
+let Hero { id, name, level } = hero;  // ok — destructuring extracts all fields
+```
 
 ### Function calls
 
@@ -395,9 +402,9 @@ All functions and structs are **private by default**. The `pub` keyword makes th
 | Use `pub struct` as a type | Yes |
 | Use private struct as a type | No |
 | Construct any struct with a literal | No (always module-local) |
-| Read any field directly | No (always module-local; use a getter function) |
+| Read primitive field directly | No (always module-local; use a getter function) |
+| Read struct-typed field directly | No (forbidden everywhere; use destructuring) |
 | Write any field | No (always module-local) |
-| Write `id` field | No (immutable everywhere) |
 
 ## Limits
 

@@ -1,3 +1,5 @@
+//! Full node: wires together the chain, miner, gossip, and RPC services.
+
 pub mod config;
 pub mod error;
 
@@ -49,21 +51,21 @@ pub struct Node {
 
 impl Node {
     /// Creates a new node with the given configuration.
-    pub fn empty(mode_config: NodeConfig, miner_config: MinerConfig) -> Self {
+    pub fn empty(node_config: NodeConfig, miner_config: MinerConfig) -> Self {
         Self {
-            config: mode_config,
+            config: node_config,
             miner: Arc::new(Mutex::new(Miner::empty(miner_config))),
         }
     }
 
     /// Creates a new node pre-seeded with the given genesis state.
     pub fn with_genesis(
-        mode_config: NodeConfig,
+        node_config: NodeConfig,
         miner_config: MinerConfig,
         genesis: &Genesis,
     ) -> Self {
         Self {
-            config: mode_config,
+            config: node_config,
             miner: Arc::new(Mutex::new(Miner::with_genesis(genesis, miner_config))),
         }
     }

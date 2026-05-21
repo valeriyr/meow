@@ -1,3 +1,5 @@
+//! Output types for the keytool subcommand.
+
 use meow_types::{address::Address, keypair::KeyPair};
 use serde::Serialize;
 

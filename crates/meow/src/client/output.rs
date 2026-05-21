@@ -1,3 +1,5 @@
+//! Output types for the client subcommands.
+
 use meow_types::{
     digest::Digest,
     object::Object,

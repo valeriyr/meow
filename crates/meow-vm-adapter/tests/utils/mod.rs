@@ -1,3 +1,5 @@
+//! Shared test helpers for executor tests.
+
 #![allow(dead_code)]
 
 use meow_types::{

@@ -1,3 +1,5 @@
+//! Public key type abstracting over supported signature schemes.
+
 use super::{ed25519::Ed25519PublicKey, signature_scheme::SignatureScheme};
 
 /// The public key type.

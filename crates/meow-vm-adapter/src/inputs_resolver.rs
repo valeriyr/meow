@@ -1,8 +1,4 @@
-//! Collects all objects a transaction touches into a flat slice for the executor.
-//!
-//! The executor resolves each object by address, so order does not affect correctness.
-//! The conventional output order is: gas coin, transitive dependency modules (post-order),
-//! main module, call arguments — mirroring how the executor will consume them.
+//! Collects all objects a transaction references into a flat slice for the executor.
 
 use std::{
     collections::{HashMap, HashSet},

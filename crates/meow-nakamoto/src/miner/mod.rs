@@ -1,3 +1,5 @@
+//! Nakamoto PoW miner: builds candidate blocks and grinds for a valid nonce.
+
 pub mod error;
 
 use meow_genesis::Genesis;
@@ -185,53 +187,74 @@ pub struct MiningWork {
 impl MiningWork {
     /// 1. Grind `nonce` until `mining_hash()` meets `difficulty`.
     /// 2. Execute `batch` using `mining_hash()` as the randomness seed.
-    /// 3. Fill in `state_root` (transactions_root was set in `prepare_round`).
-    /// 4. Return the completed block and the resulting store state.
+    /// 3. If any transactions fail (e.g. conflicting object versions within the batch),
+    ///    update `transactions_root`, reset the nonce, and re-grind — because
+    ///    `transactions_root` is part of the mining hash and the previously found nonce
+    ///    is no longer valid for the reduced transaction set.
+    /// 4. Fill in `state_root` and return the completed block and resulting store state.
     pub fn grind(mut self) -> (Block, Store) {
-        while !self.header.meets_difficulty(self.difficulty) {
-            self.header.nonce += 1;
-        }
+        let mut surviving_batch = self.batch;
 
-        tracing::debug!(
-            height = self.header.height,
-            nonce = self.header.nonce,
-            "PoW solved"
-        );
+        loop {
+            // Grind nonce for the current transactions_root.
+            self.header.nonce = 0;
+            while !self.header.meets_difficulty(self.difficulty) {
+                self.header.nonce += 1;
+            }
 
-        // Nonce is now final — mining_hash() is the committed randomness seed.
-        let execution_context =
-            ExternalContext::new(self.header.mining_hash().into(), self.header.timestamp);
+            tracing::debug!(
+                height = self.header.height,
+                nonce = self.header.nonce,
+                "PoW solved"
+            );
 
-        let mut new_store = self.parent_store;
-        let mut executed_txs: Vec<SignedTransaction> = Vec::new();
-        let mut results = Vec::new();
+            // Nonce is now final — mining_hash() is the committed randomness seed.
+            let execution_context =
+                ExternalContext::new(self.header.mining_hash().into(), self.header.timestamp);
 
-        for signed_transaction in self.batch {
-            let transaction = signed_transaction.transaction();
-            let inputs = inputs_resolver::collect_inputs(transaction, |addr| {
-                new_store.get_object(addr).cloned()
-            });
-            match executor::execute(transaction, inputs, &execution_context) {
-                Ok(result) => {
-                    new_store.apply_execution_result(&result);
-                    results.push(result);
-                    executed_txs.push(signed_transaction);
-                }
-                Err(e) => {
-                    tracing::warn!(digest = ?signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
+            let mut new_store = self.parent_store.clone();
+            let mut executed_txs: Vec<SignedTransaction> = Vec::new();
+            let mut results = Vec::new();
+
+            for signed_transaction in &surviving_batch {
+                let transaction = signed_transaction.transaction();
+                let inputs = inputs_resolver::collect_inputs(transaction, |addr| {
+                    new_store.get_object(addr).cloned()
+                });
+                match executor::execute(transaction, inputs, &execution_context) {
+                    Ok(result) => {
+                        new_store.apply_execution_result(&result);
+                        results.push(result);
+                        executed_txs.push(signed_transaction.clone());
+                    }
+                    Err(e) => {
+                        tracing::warn!(digest = ?signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
+                    }
                 }
             }
+
+            // Check whether any transactions were dropped. If so, transactions_root
+            // is now stale — the nonce found above commits to the wrong transaction
+            // set and the block would be rejected by peers. Update the root and
+            // re-grind so the header commits to the actual executed transaction set.
+            let actual_transactions_root = compute_transactions_root(&executed_txs);
+            if actual_transactions_root == self.header.transactions_root {
+                self.header.state_root = compute_state_root(&new_store);
+                let block = Block {
+                    header: self.header,
+                    transactions: executed_txs,
+                    results,
+                };
+                return (block, new_store);
+            }
+
+            tracing::debug!(
+                height = self.header.height,
+                dropped = surviving_batch.len() - executed_txs.len(),
+                "transactions dropped; updating transactions_root and re-grinding"
+            );
+            self.header.transactions_root = actual_transactions_root;
+            surviving_batch = executed_txs;
         }
-
-        // transactions_root was already set in prepare_round; only state_root
-        // is unknown until execution completes.
-        self.header.state_root = compute_state_root(&new_store);
-
-        let block = Block {
-            header: self.header,
-            transactions: executed_txs,
-            results,
-        };
-        (block, new_store)
     }
 }

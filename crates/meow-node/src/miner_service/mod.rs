@@ -1,6 +1,8 @@
+//! Miner service: runs the PoW miner in a background task and feeds produced blocks into the chain.
+
 pub mod error;
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use meow_nakamoto::miner::Miner;
 use tokio::sync::{Mutex, mpsc, watch};
@@ -9,6 +11,9 @@ use crate::miner_service::error::MinerServiceError;
 
 /// The result type related to the miner service.
 pub type Result<T> = std::result::Result<T, MinerServiceError>;
+
+/// How long to wait between mempool polls when there are no pending transactions.
+const MEMPOOL_EMPTY_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(200);
 
 /// The miner service, responsible for preparing and mining blocks in a loop.
 pub struct MinerService {
@@ -50,7 +55,7 @@ impl MinerService {
                         Some(work) => Some(work),
                         None => {
                             // Mempool empty — wait before polling again.
-                            tokio::time::sleep(Duration::from_millis(200)).await;
+                            tokio::time::sleep(MEMPOOL_EMPTY_POLL_INTERVAL).await;
                             None
                         }
                     }

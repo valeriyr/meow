@@ -1,3 +1,5 @@
+//! Types and constants for the built-in `meow_coin` system module.
+
 use meow_vm_types::{
     convert::{VmTypeNames, struct_from_rust},
     types::Value,

@@ -1,3 +1,5 @@
+//! In-memory object store representing the canonical chain state at a given block.
+
 use std::collections::BTreeMap;
 
 use meow_types::{

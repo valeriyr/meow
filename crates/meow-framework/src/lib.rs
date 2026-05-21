@@ -1,10 +1,4 @@
-//! Built-in framework module builders.
-//!
-//! Compiles and exposes the system modules at predefined addresses
-//! as ready-to-use [`Module`] values and on-chain [`Object`] wrappers.
-//!
-//! Used in production by `meow-genesis` to populate the initial object store, and in tests
-//! across the workspace wherever framework modules are needed as transaction inputs.
+//! Builds the system framework modules and exposes them at their fixed genesis addresses.
 
 use meow_types::{
     address::Address,

@@ -1,3 +1,5 @@
+//! CLI library for the Meow blockchain.
+
 pub mod builder;
 pub mod call_arg;
 pub mod client;

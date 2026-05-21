@@ -1,3 +1,5 @@
+//! Error type for the RPC service.
+
 /// Errors related to the RPC service.
 #[derive(Debug, thiserror::Error)]
 pub enum RpcServiceError {

@@ -3,7 +3,7 @@
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum VerificationError {
     //
-    // ─── Naming / structure ───
+    // ─── Identifiers ───
     //
     #[error("invalid identifier '{name}' in {context}")]
     InvalidIdentifier { name: String, context: String },
@@ -14,6 +14,34 @@ pub enum VerificationError {
     #[error("duplicate struct name '{name}'")]
     DuplicateStructName { name: String },
 
+    //
+    // ─── Module limits ───
+    //
+    #[error("module has {count} struct definitions, exceeding the limit of {limit}")]
+    TooManyStructs { count: usize, limit: usize },
+
+    #[error("module has {count} function definitions, exceeding the limit of {limit}")]
+    TooManyFunctions { count: usize, limit: usize },
+
+    #[error("module has {count} imports, exceeding the limit of {limit}")]
+    TooManyImports { count: usize, limit: usize },
+
+    //
+    // ─── Struct shape ───
+    //
+    #[error("struct '{struct_name}' has no fields — structs must have at least one field")]
+    EmptyStruct { struct_name: String },
+
+    #[error("struct '{struct_name}' has {count} fields, exceeding the limit of {limit}")]
+    TooManyFields {
+        struct_name: String,
+        count: usize,
+        limit: usize,
+    },
+
+    //
+    // ─── Function limits ───
+    //
     #[error("function '{function}': tuple has {size} elements, exceeding the limit of {limit}")]
     TupleTooLarge {
         function: String,
@@ -26,19 +54,6 @@ pub enum VerificationError {
         function: String,
         local_count: u8,
         param_count: usize,
-    },
-
-    #[error("module has {count} struct definitions, exceeding the limit of {limit}")]
-    TooManyStructs { count: usize, limit: usize },
-
-    #[error("module has {count} function definitions, exceeding the limit of {limit}")]
-    TooManyFunctions { count: usize, limit: usize },
-
-    #[error("struct '{struct_name}' has {count} fields, exceeding the limit of {limit}")]
-    TooManyFields {
-        struct_name: String,
-        count: usize,
-        limit: usize,
     },
 
     #[error("function '{function}' has {count} parameters, exceeding the limit of {limit}")]
@@ -63,9 +78,6 @@ pub enum VerificationError {
         count: u8,
         limit: u8,
     },
-
-    #[error("module has {count} imports, exceeding the limit of {limit}")]
-    TooManyImports { count: usize, limit: usize },
 
     //
     // ─── Jump / slot bounds ───

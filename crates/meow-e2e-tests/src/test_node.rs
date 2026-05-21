@@ -1,3 +1,5 @@
+//! In-process MEOW node wrapper for use in end-to-end tests.
+
 use std::net::SocketAddr;
 
 use meow_genesis::Genesis;

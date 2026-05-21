@@ -47,6 +47,21 @@ fn struct_id_field_is_arbitrary() {
 }
 
 #[test]
+fn empty_struct_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Empty {}
+
+        fn noop() {}
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("must have at least one field")
+    ));
+}
+
+#[test]
 fn struct_field_unknown_type_rejected() {
     let src = r#"
         mod test;

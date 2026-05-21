@@ -1,12 +1,14 @@
+//! Error type for the transaction mempool.
+
 use meow_types::{address::Address, digest::Digest, object::object_version::ObjectVersion};
 
 /// An error related to the mempool.
 #[derive(Debug, thiserror::Error)]
 pub enum MempoolError {
-    #[error("transaction already in mempool: {0}")]
-    DuplicateTransaction(Digest),
-    #[error("object {0} not found in store")]
-    ObjectNotFound(Address),
+    #[error("transaction already in mempool: {digest}")]
+    DuplicateTransaction { digest: Digest },
+    #[error("object {address} not found in store")]
+    ObjectNotFound { address: Address },
     #[error("object {address} has invalid version: expected {expected}, found {found}")]
     InvalidObjectVersion {
         address: Address,

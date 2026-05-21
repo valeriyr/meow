@@ -1,3 +1,5 @@
+//! Output type for the genesis subcommand.
+
 use meow_genesis::Genesis;
 use serde::Serialize;
 

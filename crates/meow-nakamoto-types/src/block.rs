@@ -1,3 +1,5 @@
+//! A committed block containing a header, transactions, and their execution results.
+
 use meow_types::{
     digest::Digest,
     transaction::{SignedTransaction, execution_result::ExecutionResult},

@@ -236,6 +236,17 @@ fn read_source_file_nonexistent_returns_io_error() {
     ));
 }
 
+#[test]
+fn read_source_file_too_large_returns_error() {
+    // read_source_file checks the file's metadata size before reading content.
+    let path = std::env::temp_dir().join("meow_read_source_oversized_test.meow");
+    std::fs::write(&path, " ".repeat(MAX_SOURCE_SIZE + 1)).unwrap();
+    assert!(matches!(
+        builder::read_source_file(&path).unwrap_err(),
+        BuilderError::SourceTooLarge { .. }
+    ));
+}
+
 //
 // ─── build with deps ───
 //

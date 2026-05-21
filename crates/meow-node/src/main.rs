@@ -1,3 +1,5 @@
+//! Binary entry point for meow-node.
+
 use clap::Parser;
 use meow_node::commands::Command;
 use tracing_subscriber::{EnvFilter, fmt};

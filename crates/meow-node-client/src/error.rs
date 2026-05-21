@@ -1,3 +1,5 @@
+//! Error type for the MEOW node client.
+
 /// An error related to the MEOW node client.
 #[derive(Debug, thiserror::Error)]
 pub enum NodeClientError {

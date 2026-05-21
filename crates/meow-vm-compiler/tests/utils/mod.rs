@@ -1,3 +1,5 @@
+//! Shared test helpers for compiler tests.
+
 #![allow(dead_code)]
 
 use meow_vm_compiler::{Compiler, Result};

@@ -378,8 +378,27 @@ fn too_many_functions_rejected() {
 }
 
 //
-// ─── Struct field count limit ───
+// ─── Struct field count bounds ───
 //
+
+#[test]
+fn empty_struct_rejected() {
+    let mut module = utils::compile(
+        r#"
+        mod m;
+        
+        struct S { x: u64 } fn f() -> u64 { 1 }
+    "#,
+    );
+    module.structs[0].fields.clear();
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(
+            |e| matches!(e, VerificationError::EmptyStruct { struct_name } if struct_name == "S")
+        ),
+        "empty struct must be rejected, got: {errs:?}"
+    );
+}
 
 #[test]
 fn too_many_fields_rejected() {

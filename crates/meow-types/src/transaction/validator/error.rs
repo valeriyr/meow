@@ -1,3 +1,5 @@
+//! Error type for transaction structural validation.
+
 use crate::address::Address;
 
 /// An error produced by transaction validation.

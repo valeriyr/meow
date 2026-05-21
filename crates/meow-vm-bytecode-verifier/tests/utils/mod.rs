@@ -1,3 +1,5 @@
+//! Shared test helpers for bytecode verifier tests.
+
 #![allow(dead_code)]
 
 use std::collections::HashMap;

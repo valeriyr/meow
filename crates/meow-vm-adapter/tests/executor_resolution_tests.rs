@@ -357,8 +357,57 @@ fn execute_meow_call_transitive_dep_missing_returns_failure() {
 //
 
 #[test]
+fn execute_with_object_arg_absent_from_inputs_returns_failure() {
+    // The transaction references a coin as a call argument but the coin object
+    // is not included in the inputs slice — resolve_arg must fail before the VM runs.
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
+    let gas_obj = utils::make_gas_coin_object();
+    // Coin is referenced in the call but intentionally absent from inputs.
+    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+
+    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found")),
+        "missing input object must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
+fn execute_with_raw_input_for_struct_parameter_returns_failure() {
+    // burn expects a meow_coin::MeowCoin (Struct type), but the transaction passes
+    // Input::Raw bytes — resolve_arg must reject the type mismatch.
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
+    let gas_obj = utils::make_gas_coin_object();
+    let tx = utils::make_meow_call_transaction("burn", vec![Input::raw(&42u64).unwrap()]);
+
+    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("Raw input cannot be resolved")),
+        "raw bytes for struct parameter must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
 fn execute_with_input_object_at_max_version_returns_failure() {
-    use meow_types::transaction::input::Input;
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
@@ -388,7 +437,6 @@ fn execute_with_input_object_at_max_version_returns_failure() {
 #[test]
 fn execute_with_input_object_wrong_version_returns_failure() {
     // Coin is at version ONE but the ObjectRef in the call says ZERO.
-    use meow_types::transaction::input::Input;
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();
@@ -414,7 +462,6 @@ fn execute_with_input_object_wrong_version_returns_failure() {
 #[test]
 fn execute_with_input_object_wrong_digest_returns_failure() {
     // Coin has correct address and version in the ObjectRef but the digest is wrong.
-    use meow_types::transaction::input::Input;
     let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
         .try_into()
         .unwrap();

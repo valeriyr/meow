@@ -1,9 +1,7 @@
-//! Native functions that give contracts access to chain operations.
+//! Native functions registered before each VM call to give contracts access to chain operations.
 //!
-//! The VM itself has no built-in object management — creating IDs, transferring ownership,
-//! and reading execution context are all provided as native functions registered before each call.
-//! Two representations exist: full runtime entries with closures, and lightweight signatures
-//! for type-checking at compile and verify time.
+//! Two representations are provided: full runtime entries with closures for execution, and
+//! lightweight signatures for type-checking at compile and verify time.
 
 use std::{cell::RefCell, rc::Rc};
 

@@ -1,3 +1,5 @@
+//! Module builder that compiles source files and resolves transitive dependencies from the node.
+
 use std::collections::HashMap;
 use std::path::PathBuf;
 

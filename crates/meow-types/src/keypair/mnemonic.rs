@@ -1,3 +1,5 @@
+//! Mnemonic word-count variants for BIP-39 key generation.
+
 use strum_macros::EnumString;
 
 /// Determines the number of words that will be present in a mnemonic phrase.

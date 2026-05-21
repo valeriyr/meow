@@ -1,8 +1,4 @@
-//! Ed25519 signing keypair used to authorize transactions.
-//!
-//! Keypairs can be generated from a BIP-39 mnemonic phrase and an optional BIP-32
-//! derivation path for human-readable backup and recovery. The public key determines
-//! the sender address; the private key signs the transaction digest.
+//! Ed25519 signing keypair backed by BIP-39 mnemonics, used to authorize transactions.
 
 mod derivation;
 mod ed25519;

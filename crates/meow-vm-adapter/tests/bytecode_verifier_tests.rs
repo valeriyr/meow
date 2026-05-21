@@ -115,6 +115,130 @@ fn plain_struct_without_id_field_passes() {
 }
 
 //
+// ─── Object-as-field-type checks ───
+//
+
+#[test]
+fn object_type_as_local_struct_field_fails() {
+    // `Inner` is object-shaped; `Outer` nests it as a field — must be rejected.
+    let meow_object_module = meow_object_module();
+    let module = builder::build(
+        r#"
+            mod nested_test;
+
+            use meow_object@0x10;
+
+            pub struct Inner { id: meow_object::Id, value: u64 }
+            pub struct Outer { inner: Inner, amount: u64 }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_object_module_object()],
+    );
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
+        "struct with object-type field must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn cross_module_object_type_as_struct_field_fails() {
+    // `Token` (from dep at 0xFD) is object-shaped; `Wrapper` nests it as a field — must be rejected.
+    let meow_object_module = meow_object_module();
+    let dep_addr = Address::from_str("0xFD").unwrap();
+
+    let dep_module = builder::build(
+        r#"
+            mod dep_with_object;
+
+            use meow_object@0x10;
+
+            pub struct Token { id: meow_object::Id, balance: u64 }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("dep must compile");
+
+    let module = builder::build(
+        r#"
+            mod wrapper_test;
+
+            use dep_with_object@0xFD;
+
+            pub struct Wrapper { token: dep_with_object::Token, extra: u64 }
+        "#,
+        &[
+            (dep_addr, &dep_module),
+            (MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module),
+        ],
+    )
+    .expect("must compile");
+
+    let dep_obj = Object::fresh_module(dep_addr, Digest::ZERO, bcs::to_bytes(&dep_module).unwrap());
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_object_module_object(), dep_obj],
+    );
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
+        "struct with cross-module object-type field must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn plain_struct_as_field_type_passes() {
+    // Non-object structs are allowed as field types.
+    let module = builder::build(
+        r#"
+            mod plain_nested;
+
+            pub struct Point { x: u64, y: u64 }
+            pub struct Line { start: Point, end: Point }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "plain struct as field type must pass, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn non_object_struct_id_field_write_passes() {
+    // A plain struct with a field named `id` (but not object-shaped) may write to it freely.
+    let module = builder::build(
+        r#"
+            mod plain_id_test;
+
+            pub struct Receipt { id: u64, amount: u64 }
+
+            pub fn set_id(r: Receipt, new_id: u64) -> Receipt {
+                r.id = new_id;
+                r
+            }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "plain struct id field write must pass, got: {:?}",
+        result.status()
+    );
+}
+
+//
 // ─── ID freshness checks ───
 //
 
@@ -347,130 +471,6 @@ fn module_without_object_types_skips_freshness_check() {
         result.status(),
         &ExecutionStatus::Success,
         "module without objects must pass adapter verification, got: {:?}",
-        result.status()
-    );
-}
-
-//
-// ─── Object-as-field-type checks ───
-//
-
-#[test]
-fn object_type_as_local_struct_field_fails() {
-    // `Inner` is object-shaped; `Outer` nests it as a field — must be rejected.
-    let meow_object_module = meow_object_module();
-    let module = builder::build(
-        r#"
-            mod nested_test;
-
-            use meow_object@0x10;
-
-            pub struct Inner { id: meow_object::Id, value: u64 }
-            pub struct Outer { inner: Inner, amount: u64 }
-        "#,
-        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
-    )
-    .expect("must compile");
-    let result = publish(
-        bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
-    );
-    assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
-        "struct with object-type field must be rejected, got: {:?}",
-        result.status()
-    );
-}
-
-#[test]
-fn cross_module_object_type_as_struct_field_fails() {
-    // `Token` (from dep at 0xFD) is object-shaped; `Wrapper` nests it as a field — must be rejected.
-    let meow_object_module = meow_object_module();
-    let dep_addr = Address::from_str("0xFD").unwrap();
-
-    let dep_module = builder::build(
-        r#"
-            mod dep_with_object;
-
-            use meow_object@0x10;
-
-            pub struct Token { id: meow_object::Id, balance: u64 }
-        "#,
-        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
-    )
-    .expect("dep must compile");
-
-    let module = builder::build(
-        r#"
-            mod wrapper_test;
-
-            use dep_with_object@0xFD;
-
-            pub struct Wrapper { token: dep_with_object::Token, extra: u64 }
-        "#,
-        &[
-            (dep_addr, &dep_module),
-            (MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module),
-        ],
-    )
-    .expect("must compile");
-
-    let dep_obj = Object::fresh_module(dep_addr, Digest::ZERO, bcs::to_bytes(&dep_module).unwrap());
-    let result = publish(
-        bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object(), dep_obj],
-    );
-    assert!(
-        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
-        "struct with cross-module object-type field must be rejected, got: {:?}",
-        result.status()
-    );
-}
-
-#[test]
-fn plain_struct_as_field_type_passes() {
-    // Non-object structs are allowed as field types.
-    let module = builder::build(
-        r#"
-            mod plain_nested;
-
-            pub struct Point { x: u64, y: u64 }
-            pub struct Line { start: Point, end: Point }
-        "#,
-        &[],
-    )
-    .expect("must compile");
-    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
-    assert_eq!(
-        result.status(),
-        &ExecutionStatus::Success,
-        "plain struct as field type must pass, got: {:?}",
-        result.status()
-    );
-}
-
-#[test]
-fn non_object_struct_id_field_write_passes() {
-    // A plain struct with a field named `id` (but not object-shaped) may write to it freely.
-    let module = builder::build(
-        r#"
-            mod plain_id_test;
-
-            pub struct Receipt { id: u64, amount: u64 }
-
-            pub fn set_id(r: Receipt, new_id: u64) -> Receipt {
-                r.id = new_id;
-                r
-            }
-        "#,
-        &[],
-    )
-    .expect("must compile");
-    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
-    assert_eq!(
-        result.status(),
-        &ExecutionStatus::Success,
-        "plain struct id field write must pass, got: {:?}",
         result.status()
     );
 }

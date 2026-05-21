@@ -31,6 +31,8 @@ Digest    — base58-encoded 32-byte hash
 ObjectRef — { address: Address, version: u64, digest: Digest }
 ```
 
+See [Object Model](object-model.md) for how `ObjectRef` is used for versioned references and replay protection.
+
 ## POST /submit-transaction
 
 Submit a signed transaction to the local mempool and broadcast it via gossip.

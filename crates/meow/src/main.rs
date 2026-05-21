@@ -1,3 +1,5 @@
+//! Binary entry point for meow.
+
 use clap::Parser;
 use meow::commands::Command;
 

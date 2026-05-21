@@ -64,7 +64,7 @@ meow-node run --genesis genesis.bin
 
 ## Running two nodes locally
 
-Nodes discover each other automatically via mDNS when listening on `0.0.0.0`. Start each in a separate terminal:
+Nodes discover each other automatically via mDNS when listening on `0.0.0.0`. See [Networking](networking.md) for peer discovery and catch-up sync details. Start each in a separate terminal:
 
 ```bash
 # Terminal 1
@@ -88,11 +88,13 @@ Node 2 detects any block height gap and pulls the missing range from node 1 auto
 ```bash
 meow-node run --genesis genesis.bin \
   --listen-address /ip4/0.0.0.0/tcp/30333 \
-  --mdns-query-interval 5   # re-query every 5 seconds
-  --check-explicit-peers-ticks 5   # recheck every 5 heartbeat ticks
+  --mdns-query-interval 5 \
+  --check-explicit-peers-ticks 5
 ```
 
 ## 5. Query the Node
+
+See [RPC API](rpc.md) for the full response shapes and all available endpoints.
 
 ```bash
 # Single object
@@ -135,7 +137,7 @@ meow client submit-transaction <BASE64_SIGNED_TRANSACTION>
 meow contract run path/to/module.meow add 3 5
 ```
 
-> This executes locally through the CLI. No transaction is submitted.
+> Requires a running node to resolve dependency modules. No transaction is submitted.
 
 To call a private function (e.g. during development), use `run-privileged`:
 
@@ -143,17 +145,7 @@ To call a private function (e.g. during development), use `run-privileged`:
 meow contract run-privileged path/to/module.meow mint 1000 0xaa
 ```
 
-## 8. Simulate a Transaction
-
-Simulate an unsigned transaction on the node without committing it. The node validates object references and runs the VM against its current state:
-
-```bash
-meow transaction simulate <BASE64_TRANSACTION>
-```
-
-> **Note:** if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()`, the result of simulation may differ from the result of the actual committed transaction because the block hash and timestamp are unknown until the block is mined.
-
-## 9. Execute a Transaction Locally
+## 8. Execute a Transaction Locally
 
 Execute an unsigned transaction locally — objects are fetched from the node but the transaction is not submitted:
 
@@ -169,5 +161,17 @@ Optional flags:
 | `--timestamp` | current system time | Execution timestamp in Unix milliseconds |
 
 > **Note:** the actual committed transaction may produce different results if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()` — the real block hash and miner timestamp are unknown until the block is mined.
+
+## 9. Simulate a Transaction
+
+Simulate an unsigned transaction on the node without committing it. The node validates object references and runs the VM against its current state:
+
+```bash
+meow transaction simulate <BASE64_TRANSACTION>
+```
+
+> **Note:** if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()`, the result of simulation may differ from the result of the actual committed transaction because the block hash and timestamp are unknown until the block is mined.
+
+
 
 For a full worked example — writing a module, publishing it, calling its functions, and sending coins — see [Contracts](contracts.md).

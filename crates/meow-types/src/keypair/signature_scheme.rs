@@ -1,3 +1,5 @@
+//! Signature scheme identifier and its associated flag byte.
+
 use strum_macros::EnumString;
 
 use super::error::KeyPairError;

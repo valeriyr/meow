@@ -1,3 +1,5 @@
+//! Error type for keystore operations.
+
 use crate::address::Address;
 
 /// An error related to keystores.

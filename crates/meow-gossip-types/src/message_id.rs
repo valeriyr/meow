@@ -1,3 +1,5 @@
+//! Opaque identifier for a message in the gossip network.
+
 /// Opaque identifier for a message in the gossip network.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MessageId(libp2p::gossipsub::MessageId);

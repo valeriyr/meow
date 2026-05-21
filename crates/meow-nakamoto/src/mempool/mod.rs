@@ -1,3 +1,5 @@
+//! Pending transaction pool that feeds the miner; evicts spent or invalid transactions on reorg.
+
 pub mod error;
 
 use std::collections::{BTreeSet, VecDeque};
@@ -50,7 +52,7 @@ impl Mempool {
         let digest = signed_transaction.transaction().digest();
 
         if self.seen.contains(&digest) {
-            return Err(MempoolError::DuplicateTransaction(digest));
+            return Err(MempoolError::DuplicateTransaction { digest });
         }
 
         validate_against_store(signed_transaction.transaction(), store)?;
@@ -113,7 +115,9 @@ pub(crate) fn validate_against_store(transaction: &Transaction, store: &Store) -
 fn validate_object_ref(object_ref: &ObjectRef, store: &Store) -> Result<()> {
     let object = store
         .get_object(object_ref.address())
-        .ok_or(MempoolError::ObjectNotFound(*object_ref.address()))?;
+        .ok_or(MempoolError::ObjectNotFound {
+            address: *object_ref.address(),
+        })?;
 
     if object.version() != object_ref.version() {
         return Err(MempoolError::InvalidObjectVersion {

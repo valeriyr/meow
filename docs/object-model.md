@@ -60,14 +60,13 @@ Before execution the node checks:
 
 ## Object lifecycle
 
-During execution objects follow exactly one of four paths:
+During execution objects follow exactly one of three paths:
 
 | Lifecycle | How it happens | Store effect |
 |-----------|----------------|--------------|
 | **Created** | `meow_vm_fresh_id()` allocates an ID; `meow_vm_transfer(obj, owner)` hands it to an owner | Added to store |
-| **Mutated in place** | Fields are updated; neither `transfer` nor `destroy` is called; executor writes it back to the original owner | Updated in store |
 | **Transferred** | `meow_vm_transfer(obj, new_owner)` | Updated in store with new owner |
-| **Destroyed** | `meow_vm_destroy(obj.id)` | Removed from store |
+| **Destroyed** | destructure to extract `id`, then `meow_vm_destroy(id)` | Removed from store |
 
 An object created and destroyed within the same transaction has no net effect on the store.
 
@@ -75,10 +74,11 @@ Every ID allocated by `meow_vm_fresh_id()` must be either transferred or destroy
 
 ## Object IDs
 
-In the Meow Language, every on-chain object is a `struct` whose first field is `id: meow_object::Id` (from the built-in `meow_object` system module at address `0x10`):
+In the Meow Language, every on-chain object is a `struct` whose first field is `id: meow_object::Id` (from the built-in [`meow_object` system module](adapter.md#the-meow_object-system-module) at address `0x10`):
 
 ```meow
 use meow_object@0x10;
+
 struct Hero { id: meow_object::Id, level: u64, experience: u64 }
 ```
 
@@ -94,7 +94,7 @@ The `id` field is not stored in the object's `content` bytes. The encoding layer
 
 ## The gas coin
 
-The gas coin is an ordinary `MeowCoin` object, not a special-cased field. It is owned by the sender and referenced like any other object argument:
+The gas coin is an ordinary [`MeowCoin`](meow-coin.md) object, not a special-cased field. It is owned by the sender and referenced like any other object argument:
 
 ```json
 "gas_coin": { "address": "<Address>", "version": 1, "digest": "<Digest>" }
@@ -103,7 +103,7 @@ The gas coin is an ordinary `MeowCoin` object, not a special-cased field. It is 
 Fee deduction runs unconditionally after execution, on success or failure:
 
 1. A base cost of **1000 gas** is charged at the start.
-2. Individual operations charge additional gas (`meow_vm_fresh_id` = 10, `meow_vm_transfer` = 20, `meow_vm_destroy` = 10, module publish = 10 per compiled byte).
+2. Individual operations charge additional gas (`meow_vm_fresh_id` = 10, `meow_vm_transfer` = 20, `meow_vm_destroy` = 10, module publish = 10 per compiled byte) — see [Gas metering](adapter.md#gas-metering) for the full table.
 3. The gas coin's `balance` is reduced by the total spent, floored at 0.
 4. The updated coin always appears in `changed_objects` in the execution result.
 
@@ -113,7 +113,7 @@ Because the gas coin is an object, every transaction — even a failed one — b
 
 The store is a flat `BTreeMap<Address, Object>`. Each committed block applies its execution results atomically in a single pass: created objects are inserted, changed objects overwrite their previous entry, destroyed objects are removed.
 
-`ChainState` keeps a full store snapshot per block (up to the last 64 blocks). On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed.
+`ChainState` keeps a full store snapshot per block (up to the last 64 blocks). On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed. See [Consensus — Fork choice and reorgs](consensus.md#fork-choice-and-reorgs).
 
 ## In the RPC
 

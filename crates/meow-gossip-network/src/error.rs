@@ -1,3 +1,5 @@
+//! Error type for the gossip network.
+
 use thiserror::Error;
 
 #[derive(Debug, Error)]

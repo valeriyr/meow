@@ -1,3 +1,5 @@
+//! Error type for configuration loading.
+
 /// An error related to configurations.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {

@@ -1,3 +1,5 @@
+//! Output encoder that serialises command results to Base64, debug, or pretty formats.
+
 use base64::{Engine, engine::general_purpose};
 use serde::Serialize;
 use strum_macros::EnumString;

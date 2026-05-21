@@ -1,3 +1,5 @@
+//! Gossip service: bridges the libp2p network with the chain, handles topic routing and catch-up sync.
+
 pub mod error;
 
 use std::{
@@ -280,7 +282,7 @@ impl GossipService {
 
                         buffered_blocks_count
                     } else {
-                        debug_assert!(false, "GossipServiceState should be Syncing when receiving pulled blocks");
+                        tracing::error!("sync_fut completed but state is not Syncing — this is a bug");
                         0
                     };
 

@@ -1,3 +1,5 @@
+//! Serialisable summary of an on-chain object for CLI output.
+
 use std::collections::BTreeMap;
 
 use meow_types::object::{Object, object_conversion};
