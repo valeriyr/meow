@@ -1,6 +1,4 @@
 //! Transaction executor: runs a validated transaction against the VM and produces an `ExecutionResult`.
-//!
-//! Gas is always charged and the gas coin always appears in the output, even when execution fails.
 
 mod effects;
 mod gas;
@@ -90,6 +88,39 @@ pub fn execute(
     ))
 }
 
+/// Execute a system transaction.
+///
+/// This is a special code path that executes a transaction without charging any gas,
+/// with privileged VM configuration, allowing calls to private framework functions.
+///
+/// Only `MeowCall` is permitted — module publishing returns [`ExecutorError::ModulePublishNotAllowed`].
+pub fn execute_system_transaction(
+    transaction: &Transaction,
+    inputs: Vec<Object>,
+) -> Result<ExecutionResult> {
+    let sender = transaction.sender();
+    let tx_digest = transaction.digest();
+
+    let mut gas_meter = GasMeter::unlimited();
+
+    let result = match transaction.type_() {
+        TransactionType::MeowCall(call) => execute_meow_call(
+            sender,
+            &tx_digest,
+            call,
+            &inputs,
+            &mut gas_meter,
+            config::vm_config_privileged(),
+            &ExternalContext::default(),
+        ),
+        TransactionType::MeowModulePublish(_) => {
+            return Err(ExecutorError::ModulePublishNotAllowed);
+        }
+    };
+
+    Ok(result)
+}
+
 /// Execute a genesis transaction.
 ///
 /// This is a special code path that executes a transaction without charging any gas,
@@ -118,7 +149,7 @@ pub fn execute_genesis_transaction(
         }
     };
 
-    Ok(result.with_gas_used(gas_meter.spent()))
+    Ok(result)
 }
 
 /// Execute a `meow_call` transaction.

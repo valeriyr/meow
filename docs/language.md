@@ -408,16 +408,4 @@ All functions and structs are **private by default**. The `pub` keyword makes th
 
 ## Limits
 
-| Limit | Default |
-|-------|---------|
-| Maximum identifier length (chars) | 128 |
-| Maximum struct definitions per module | 128 |
-| Maximum functions per module | 256 |
-| Maximum fields per struct | 32 |
-| Maximum function parameters | 16 |
-| Maximum tuple elements | 16 |
-| Maximum local variables per function | 255 |
-| Maximum bytecode instructions per function | 65 536 |
-| Maximum `use` declarations per module | 64 |
-| Maximum transitive dependency modules | 64 |
-| Maximum call depth | 256 |
+See [Adapter & Natives — Transaction types](adapter.md#transaction-types) for the complete table of limits enforced at call time and at module publish time.

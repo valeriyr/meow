@@ -10,7 +10,7 @@ See [Contracts](contracts.md) for the CLI commands and call argument format.
 
 Source: [`crates/meow-framework/modules/meow_coin.meow`](../crates/meow-framework/modules/meow_coin.meow)
 
-`mint` is called only at genesis and cannot be called by users. `balance`, `to_balance`, and `from_balance` return struct types and cannot be used as transaction entry points — call them from within other contract functions. All remaining public functions are available via `meow transaction meow-call`.
+`mint` is private and cannot be called from user transactions. It is invoked at genesis to create the initial coin supply and by the miner after each block to redistribute collected gas fees as a block reward. `balance`, `to_balance`, and `from_balance` return struct types and cannot be used as transaction entry points — call them from within other contract functions. All remaining public functions are available via `meow transaction meow-call`.
 
 ## Find your coins
 

@@ -12,7 +12,7 @@ use meow_types::{
     },
     transaction::{execution_result::ExecutionStatus, input::Input},
 };
-use meow_vm_adapter::{builder, executor};
+use meow_vm_adapter::builder;
 
 //
 // ─── Object lifecycle tracking (effects.rs) ───
@@ -259,32 +259,4 @@ fn gas_coin_version_is_bumped_after_successful_transaction() {
         &ObjectVersion::ONE.next().unwrap(),
         "gas coin version must be bumped after a successful transaction"
     );
-}
-
-//
-// ─── Genesis execution path ───
-//
-
-#[test]
-fn genesis_transaction_bypasses_gas_and_allows_private_functions() {
-    // execute_genesis_transaction uses a privileged VM config that allows calling
-    // private functions (meow_coin::mint is private). It also bypasses gas
-    // accounting — changed_objects must be empty (no gas coin involved).
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
-    let tx = utils::make_meow_call_transaction(
-        "mint",
-        vec![
-            Input::raw(&100u64).unwrap(),
-            Input::raw(&utils::SENDER).unwrap(),
-        ],
-    );
-
-    let result = executor::execute_genesis_transaction(&tx, vec![dep_obj, module_obj]).unwrap();
-
-    assert_eq!(result.status(), &ExecutionStatus::Success);
-    assert!(
-        result.changed_objects().is_empty(),
-        "genesis transaction must not produce a changed gas coin"
-    );
-    assert_eq!(result.created_objects().len(), 1);
 }

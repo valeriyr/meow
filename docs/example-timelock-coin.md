@@ -12,7 +12,7 @@ Source: [`crates/meow-vm-examples/modules/timelock_coin.meow`](../crates/meow-vm
 
 ### How the timestamp works
 
-`meow_vm_timestamp()` returns the **block timestamp in Unix milliseconds** — the time recorded by the miner when the block was sealed. It is the same value for every transaction in a block and is fixed before any transaction runs.
+`meow_vm_timestamp()` returns the [block timestamp in Unix milliseconds](contracts.md#time) — the same value for every transaction in the block.
 
 When `lock` executes, `meow_vm_timestamp()` is the block time of the block that includes the `lock` transaction. The unlock time is therefore `block_time_of_lock + delay_ms`.
 

@@ -74,6 +74,7 @@ crates/
 | [Contracts](docs/contracts.md) | Practical guide: types, native functions, access control, bytecode verification |
 | [Language Reference](docs/language.md) | Complete Meow Language syntax and type-system reference |
 | [Adapter & Natives](docs/adapter.md) | Native functions, on-chain object lifecycle, bytecode verifier, gas metering |
+| [Tokenomics](docs/tokenomics.md) | Supply, gas model, and block rewards |
 | [Meow Coin](docs/meow-coin.md) | Built-in system coin reference |
 | [Example: hero game](docs/example-hero-game.md) | Full contract lifecycle walkthrough |
 | [Example: timelock coin](docs/example-timelock-coin.md) | Time-locked coin using `meow_vm_timestamp()` |

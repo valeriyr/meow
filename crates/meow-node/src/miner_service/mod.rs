@@ -31,7 +31,14 @@ impl MinerService {
 
     /// Runs the mining loop, preparing and committing blocks as they are mined.
     pub async fn run(self, mut shutdown_rx: watch::Receiver<()>) -> Result<()> {
-        tracing::info!("starting miner service");
+        {
+            let miner = self.miner.lock().await;
+            tracing::info!(
+                miner_address = %miner.miner_address(),
+                reward_address = %miner.reward_address(),
+                "starting miner service"
+            );
+        }
 
         loop {
             tokio::select! {

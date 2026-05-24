@@ -2,10 +2,14 @@
 
 pub mod error;
 
+use std::sync::Arc;
+
 use meow_genesis::Genesis;
 use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
 use meow_types::{
+    address::Address,
     digest::Digest,
+    keypair::KeyPair,
     time,
     transaction::{SignedTransaction, Transaction, execution_result::ExecutionResult},
 };
@@ -16,6 +20,7 @@ use crate::{
     mempool::{self, Mempool},
     miner::error::MinerError,
     store::Store,
+    system_transactions,
 };
 
 /// The result type related to the miner.
@@ -31,24 +36,48 @@ const BATCH_SIZE: usize = 100;
 pub struct Miner {
     chain: ChainState,
     mempool: Mempool,
+    /// Keypair used to sign system transactions.
+    keypair: Arc<KeyPair>,
+    /// Address derived from `keypair` — used as the system transactions sender.
+    miner_address: Address,
+    /// Address that receives the minted reward coins.
+    reward_address: Address,
 }
 
 impl Miner {
     /// Creates a new `Miner` with the given configuration.
     pub fn empty(config: MinerConfig) -> Self {
+        let miner_address = Address::from(&config.keypair);
         Self {
             chain: ChainState::new(Store::default(), config.difficulty),
             mempool: Mempool::empty(),
+            keypair: Arc::new(config.keypair),
+            miner_address,
+            reward_address: config.reward_address,
         }
     }
 
     /// Creates a new `Miner` pre-seeded with the given genesis state.
     pub fn with_genesis(genesis: &Genesis, config: MinerConfig) -> Self {
+        let miner_address = Address::from(&config.keypair);
         let store = Store::with_objects(genesis.objects().iter().cloned());
         Self {
             chain: ChainState::new(store, config.difficulty),
             mempool: Mempool::empty(),
+            keypair: Arc::new(config.keypair),
+            miner_address,
+            reward_address: config.reward_address,
         }
+    }
+
+    /// Returns the address used to sign system transactions (derived from the miner keypair).
+    pub fn miner_address(&self) -> Address {
+        self.miner_address
+    }
+
+    /// Returns the address that receives the minted reward coins.
+    pub fn reward_address(&self) -> Address {
+        self.reward_address
     }
 
     /// Returns a reference to the current head store for transaction validation and execution.
@@ -149,6 +178,9 @@ impl Miner {
             batch,
             parent_store,
             difficulty,
+            miner_keypair: Arc::clone(&self.keypair),
+            miner_address: self.miner_address,
+            reward_address: self.reward_address,
         })
     }
 
@@ -182,6 +214,35 @@ pub struct MiningWork {
     /// Object store snapshot at the parent block tip.
     pub parent_store: Store,
     pub difficulty: u32,
+    /// Keypair used to sign system transactions.
+    pub miner_keypair: Arc<KeyPair>,
+    /// Address derived from the signing keypair — used as the system transactions sender.
+    pub miner_address: Address,
+    /// Address that receives the minted reward coins.
+    pub reward_address: Address,
+}
+
+/// Build, sign, and execute the block reward transaction, then apply it to the store.
+fn mint_block_reward(
+    miner_address: Address,
+    reward_address: Address,
+    amount: u64,
+    block_hash: Digest,
+    keypair: &KeyPair,
+    store: &mut Store,
+) -> (SignedTransaction, ExecutionResult) {
+    let transaction = system_transactions::make_reward_transaction(
+        miner_address,
+        reward_address,
+        amount,
+        block_hash,
+    );
+    let (signed_transaction, _) = transaction.sign(keypair);
+    let inputs = system_transactions::collect_inputs_for_reward_transaction(store);
+    let result = executor::execute_system_transaction(signed_transaction.transaction(), inputs)
+        .expect("block reward mint must not fail");
+    store.apply_execution_result(&result);
+    (signed_transaction, result)
 }
 
 impl MiningWork {
@@ -191,7 +252,9 @@ impl MiningWork {
     ///    update `transactions_root`, reset the nonce, and re-grind — because
     ///    `transactions_root` is part of the mining hash and the previously found nonce
     ///    is no longer valid for the reduced transaction set.
-    /// 4. Fill in `state_root` and return the completed block and resulting store state.
+    /// 4. If total gas across surviving transactions is > 0, build and execute the block
+    ///    reward transaction (`meow_coin::mint`) and apply it to the store.
+    /// 5. Fill in `state_root` and return the completed block and resulting store state.
     pub fn grind(mut self) -> (Block, Store) {
         let mut surviving_batch = self.batch;
 
@@ -239,11 +302,28 @@ impl MiningWork {
             // re-grind so the header commits to the actual executed transaction set.
             let actual_transactions_root = compute_transactions_root(&executed_txs);
             if actual_transactions_root == self.header.transactions_root {
+                let total_reward: u64 = results.iter().map(|r| r.gas_used()).sum();
+                let (reward_transaction, reward_transaction_result) = if total_reward > 0 {
+                    let (signed_transaction, reward_transaction_result) = mint_block_reward(
+                        self.miner_address,
+                        self.reward_address,
+                        total_reward,
+                        self.header.mining_hash(),
+                        &self.miner_keypair,
+                        &mut new_store,
+                    );
+                    (Some(signed_transaction), Some(reward_transaction_result))
+                } else {
+                    (None, None)
+                };
+
                 self.header.state_root = compute_state_root(&new_store);
                 let block = Block {
                     header: self.header,
                     transactions: executed_txs,
                     results,
+                    reward_transaction,
+                    reward_transaction_result,
                 };
                 return (block, new_store);
             }

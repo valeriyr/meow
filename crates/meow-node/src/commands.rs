@@ -11,6 +11,13 @@ use meow_gossip_types::{
     multiaddr::Multiaddr,
 };
 use meow_nakamoto_types::miner_config::MinerConfig;
+use meow_types::{
+    address::Address,
+    config,
+    keypair::{KeyPair, signature_scheme::SignatureScheme},
+    keystore::Keystore,
+};
+use rand::thread_rng;
 
 use crate::node::{Node, config::NodeConfig};
 
@@ -58,6 +65,19 @@ pub enum Command {
             verbatim_doc_comment
         )]
         difficulty: u32,
+        /// Address of the miner key to load from the keystore used to sign system transactions.
+        /// If omitted, an ephemeral random keypair is used and rewards are lost on restart.
+        #[arg(long, verbatim_doc_comment)]
+        miner_address: Option<Address>,
+        /// Address that receives the minted block reward coins.
+        /// If omitted, defaults to the miner's own address.
+        /// Use this to direct earnings to a cold wallet or a separate account.
+        #[arg(long, verbatim_doc_comment)]
+        miner_reward_address: Option<Address>,
+        /// Path to the keystore file used to sign system transactions.
+        /// If omitted, the default keystore path is used. Requires --miner-address.
+        #[arg(long, requires = "miner_address", verbatim_doc_comment)]
+        keystore_path: Option<PathBuf>,
     },
 }
 
@@ -72,8 +92,15 @@ impl Command {
                 check_explicit_peers_ticks,
                 genesis,
                 difficulty,
+                miner_address,
+                miner_reward_address,
+                keystore_path,
             } => {
                 print_startup_banner();
+
+                let miner_keypair = resolve_miner_keypair(keystore_path, miner_address)?;
+                let miner_reward_address =
+                    miner_reward_address.unwrap_or_else(|| Address::from(&miner_keypair));
 
                 let gossip_network_config = GossipNetworkConfig::new(
                     listen_address,
@@ -82,7 +109,8 @@ impl Command {
                     check_explicit_peers_ticks,
                 );
                 let node_config = NodeConfig::new(rpc_listen, gossip_network_config);
-                let miner_config = MinerConfig::new(difficulty);
+                let miner_config =
+                    MinerConfig::new(difficulty, miner_keypair, miner_reward_address);
 
                 let node = if let Some(genesis_path) = genesis {
                     let genesis_bytes = std::fs::read(&genesis_path)?;
@@ -114,4 +142,33 @@ version {}
 "#,
         env!("CARGO_PKG_VERSION")
     );
+}
+
+/// Resolve the miner keypair from the keystore or generate an ephemeral fallback.
+///
+/// - `miner_address` given: load that key from the keystore at `keystore_path`
+///   (or the default path if `keystore_path` is `None`).
+/// - Neither `miner_address` given: generate a random keypair and warn. The resulting miner
+///   address is not stable across restarts and all block rewards will be lost.
+fn resolve_miner_keypair(
+    keystore_path: Option<PathBuf>,
+    miner_address: Option<Address>,
+) -> anyhow::Result<KeyPair> {
+    if let Some(address) = miner_address {
+        let keystore_path = keystore_path.unwrap_or(config::meow_keystore_path()?);
+        let keystore = Keystore::file_based(&keystore_path)?;
+
+        let keypair = keystore.get_key(&address).ok_or_else(|| {
+            anyhow::anyhow!("address {address} not found in keystore {keystore_path:?}")
+        })?;
+
+        return KeyPair::from_bytes(&keypair.to_bytes()).map_err(Into::into);
+    }
+
+    tracing::warn!(
+        "no miner address provided — generating a random miner keypair; \
+         block rewards will be lost on restart"
+    );
+
+    Ok(KeyPair::random(SignatureScheme::Ed25519, thread_rng()))
 }

@@ -19,7 +19,8 @@ The executor bridges chain-level transactions to the VM. Its two entry points ar
 | Function | Use |
 |----------|-----|
 | `execute(transaction, inputs, external_context)` | Normal transaction execution — gas is charged and the gas coin is always returned. |
-| `execute_genesis_transaction(transaction, inputs)` | Genesis-only path — runs with unlimited gas and the privileged VM config; no gas coin required. |
+| `execute_genesis_transaction(transaction, inputs)` | Genesis path — privileged VM config, unlimited gas, no gas coin required. Accepts both `MeowCall` and `MeowModulePublish`. |
+| `execute_system_transaction(transaction, inputs)` | System path for block rewards — privileged VM config, unlimited gas, no gas coin required. `MeowCall` only; `MeowModulePublish` is rejected. |
 
 ### Inputs
 

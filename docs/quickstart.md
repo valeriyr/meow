@@ -26,7 +26,7 @@ meow keytool list
 
 ## 2. Create Allocations
 
-Create `allocations.csv` with one `<address>,<amount>` pair per line:
+Create `allocations.csv` with one `<address>,<amount>` pair per line (see [Tokenomics — Initial supply](tokenomics.md#initial-supply) for how these translate to on-chain coin objects):
 
 ```csv
 0xaa,1000000
@@ -59,6 +59,9 @@ meow-node run --genesis genesis.bin
 | `--mdns-query-interval` | `300` | Seconds between mDNS re-query broadcasts |
 | `--check-explicit-peers-ticks` | `300` | Heartbeat ticks between reconnection attempts to explicit bootstrap peers |
 | `--difficulty` | `8` | Proof-of-work leading zero bits |
+| `--miner-address` | _(none)_ | Address of the signing key to load from the keystore; if omitted, an ephemeral random keypair is used and rewards are lost on restart |
+| `--miner-reward-address` | _(miner address)_ | Address that receives block reward coins; defaults to the miner's own address |
+| `--keystore-path` | _(default path)_ | Path to the keystore file; requires `--miner-address` |
 
 </details>
 

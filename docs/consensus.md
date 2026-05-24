@@ -44,8 +44,9 @@ Mining proceeds as follows:
 4. Increment `nonce` until `mining_hash` has at least `difficulty` leading zero bits.
 5. Execute all transactions using the solved `mining_hash` as the randomness seed. Transactions that fail (e.g. conflicting object versions within the batch) are silently dropped.
 6. If any transactions were dropped, `transactions_root` is now stale — recompute it from the surviving set and go back to step 4. Because `transactions_root` is part of the mining hash, the previously found nonce no longer commits to the actual transaction set and cannot be reused.
-7. Compute `state_root` from the resulting object store.
-8. Broadcast the completed block — see [Networking](networking.md).
+7. If the total gas collected from user transactions is greater than zero, build and execute a `meow_coin::mint` reward transaction that mints that amount to the configured reward address. The reward transaction is attached to the block alongside the user transactions but is not part of `transactions_root`.
+8. Compute `state_root` from the resulting object store (after applying the reward, if any).
+9. Broadcast the completed block — see [Networking](networking.md).
 
 If the chain advances while grinding (another block arrives), the work-in-progress block is **discarded as stale** and a new round starts from the new head.
 
@@ -64,7 +65,8 @@ If the chain advances while grinding (another block arrives), the work-in-progre
 7. **Transactions root** — `transactions_root` must match the hash computed from the block's transaction list.
 8. **Signature validity** — every transaction must carry a valid signature.
 9. **Re-execution match** — transactions are re-executed against the parent store using `mining_hash` as the randomness seed and `timestamp` as the block time; the resulting `Vec<ExecutionResult>` must equal the results included in the block exactly.
-10. **State root** — the `state_root` in the header must match the hash of the object store produced by re-execution.
+10. **Reward** — if the total gas across all user transactions is greater than zero, the block must include a valid `meow_coin::mint` reward transaction signed by the miner, with amount equal to the total gas. The reward is re-executed and the result must match the one included in the block.
+11. **State root** — the `state_root` in the header must match the hash of the object store produced by re-execution (including the reward transaction, if any).
 
 ---
 
@@ -89,7 +91,7 @@ Because the miner has discretion within these bounds, contracts that depend on `
 - **Unknown at submission time** — the nonce is only determined after your transaction is already in the mempool.
 - **Per-transaction** — different transaction digests yield independent sequences even within the same block.
 
-**Miner-bias attack:** a miner can inspect the random outcome after solving PoW and, if unfavorable, discard the block and re-mine. Each attempt costs one block reward, so manipulation is only rational for high-value outcomes.
+**Miner-bias attack:** a miner can inspect the random outcome after solving PoW and, if unfavorable, discard the block and re-mine. Each attempt forfeits the block reward (the gas fees collected from that block), so manipulation is only rational for high-value outcomes.
 
 `meow_vm_rand()` is suitable for low-stakes game mechanics or cosmetic variation. Avoid it where a rational miner would profit from biasing the result. See [Adapter — Native functions](adapter.md#native-functions) for the call signature.
 

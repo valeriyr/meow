@@ -12,7 +12,7 @@ use crate::{
     transaction::TransactionCommand,
 };
 
-use meow_types::{config::meow_keystore_path, keystore::Keystore};
+use meow_types::{config, keystore::Keystore};
 
 /// The default output formatter for commands that support formatting.
 const DEFAULT_OUTPUT_FORMATTER: OutputFormatter = OutputFormatter::Json;
@@ -113,7 +113,7 @@ impl Command {
                 formatter,
                 cmd,
             } => {
-                let keystore_path = keystore_path.unwrap_or(meow_keystore_path()?);
+                let keystore_path = keystore_path.unwrap_or(config::meow_keystore_path()?);
                 let mut keystore = Keystore::file_based(&keystore_path)?;
 
                 let output = cmd.run(&mut keystore)?;

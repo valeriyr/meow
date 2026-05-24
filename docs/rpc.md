@@ -242,12 +242,16 @@ Fetch all committed blocks from `height` onwards (inclusive). Returns an empty a
     "timestamp":         1712534400000,
     "nonce":             99312
   },
-  "transactions": [ ... ],
-  "results":      [ ... ]
+  "transactions":             [ ... ],
+  "results":                  [ ... ],
+  "reward_transaction":       { ... } ,
+  "reward_transaction_result": { ... }
 }
 ```
 
 `transactions` and `results` are parallel arrays — index `i` of `results` is the outcome of index `i` of `transactions`.
+
+`reward_transaction` and `reward_transaction_result` are `null` for blocks where all user transactions paid zero gas.
 
 **Errors:**
 

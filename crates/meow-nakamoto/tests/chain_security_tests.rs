@@ -25,6 +25,8 @@ fn block_with_forged_results_is_rejected() {
         },
         transactions: vec![],
         results: vec![ExecutionResult::failure("forged", Digest::ZERO)],
+        reward_transaction: None,
+        reward_transaction_result: None,
     };
 
     assert!(!chain.apply_block(block));

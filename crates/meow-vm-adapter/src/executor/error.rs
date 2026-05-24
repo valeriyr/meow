@@ -25,4 +25,6 @@ pub enum ExecutorError {
     },
     #[error("object {0} is at the maximum version")]
     ObjectAtMaxVersion(Address),
+    #[error("module publishing is not allowed")]
+    ModulePublishNotAllowed,
 }

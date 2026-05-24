@@ -11,7 +11,7 @@ use meow_types::{
 };
 use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolver};
 
-use crate::store::Store;
+use crate::{store::Store, system_transactions};
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
 ///
@@ -147,7 +147,8 @@ impl ChainState {
     /// 7. Transactions root matches the block's transaction list
     /// 8. All transaction signatures are valid
     /// 9. Local deterministic re-execution matches the included results
-    /// 10. State root matches the store produced by re-execution
+    /// 10. Reward transaction valid and result matches (if total gas > 0)
+    /// 11. State root matches the store produced by re-execution
     ///
     /// If the block extends a chain longer than the current head, the head
     /// is updated (chain reorganization). Returns `true` when the head changed.
@@ -259,6 +260,36 @@ impl ChainState {
             return false;
         }
 
+        let total_gas = recomputed_results.iter().map(|r| r.gas_used()).sum();
+        let is_reward_valid = match (
+            total_gas,
+            block.reward_transaction.as_ref(),
+            block.reward_transaction_result.as_ref(),
+        ) {
+            (0, None, None) => true,
+            (0, _, _) => {
+                tracing::warn!(height, "unexpected reward on zero-gas block — ignoring");
+                false
+            }
+            (_, None, _) | (_, _, None) => {
+                tracing::warn!(height, "missing reward on non-zero-gas block — ignoring");
+                false
+            }
+            (amount, Some(reward_transaction), Some(reward_execution_result)) => {
+                apply_block_reward_transaction(
+                    reward_transaction,
+                    reward_execution_result,
+                    amount,
+                    &mut new_store,
+                    height,
+                )
+            }
+        };
+
+        if !is_reward_valid {
+            return false;
+        }
+
         let recomputed_state_root = compute_state_root(&new_store);
         if recomputed_state_root != block.header.state_root {
             tracing::warn!(height, "block has invalid state root — ignoring");
@@ -306,4 +337,41 @@ pub fn compute_state_root(store: &Store) -> Digest {
 pub fn compute_transactions_root(txs: &[SignedTransaction]) -> Digest {
     let digests: Vec<Digest> = txs.iter().map(|tx| tx.transaction().digest()).collect();
     Digest::compute(&digests).expect("transactions root serialization is infallible")
+}
+
+/// Validate and re-execute the block reward transaction, then apply it to the store.
+/// Returns `false` on any validation or execution mismatch without mutating the store.
+fn apply_block_reward_transaction(
+    reward_transaction: &SignedTransaction,
+    reward_execution_result: &ExecutionResult,
+    total_gas: u64,
+    store: &mut Store,
+    height: u64,
+) -> bool {
+    if let Err(e) = validator::validate_signed_transaction(reward_transaction) {
+        tracing::warn!(height, error = %e, "invalid reward transaction signature");
+        return false;
+    }
+    if !system_transactions::is_valid_reward_transaction(
+        reward_transaction.transaction(),
+        total_gas,
+    ) {
+        tracing::warn!(height, "reward amount or target mismatch");
+        return false;
+    }
+    let inputs = system_transactions::collect_inputs_for_reward_transaction(store);
+    let recomputed_result =
+        match executor::execute_system_transaction(reward_transaction.transaction(), inputs) {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!(height, error = %e, "reward transaction re-execution failed");
+                return false;
+            }
+        };
+    if &recomputed_result != reward_execution_result {
+        tracing::warn!(height, "reward result mismatch local execution");
+        return false;
+    }
+    store.apply_execution_result(&recomputed_result);
+    true
 }

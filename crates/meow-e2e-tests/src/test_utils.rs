@@ -98,6 +98,22 @@ pub async fn wait_for_object(client: &NodeClient, address: &Address) -> Object {
     }
 }
 
+/// Poll until at least one object owned by `address` is available, or panic after 5s.
+pub async fn wait_for_objects_owned(client: &NodeClient, address: &Address) -> Vec<Object> {
+    let deadline = tokio::time::Instant::now() + DEFAULT_WAIT_TIMEOUT;
+    loop {
+        let objects = client.get_objects_owned(address).await.unwrap();
+        if !objects.is_empty() {
+            return objects;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "timed out waiting for objects owned by {address}"
+        );
+        tokio::time::sleep(DEFAULT_POLL_INTERVAL).await;
+    }
+}
+
 /// Poll until the transaction result is available, or panic after 5s.
 pub async fn wait_for_result(client: &NodeClient, digest: &Digest) -> ExecutionResult {
     let deadline = tokio::time::Instant::now() + DEFAULT_WAIT_TIMEOUT;

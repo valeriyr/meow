@@ -8,12 +8,17 @@ use serde::{Deserialize, Serialize};
 
 use crate::block_header::BlockHeader;
 
-/// A committed block: header + transactions + execution results.
+/// A fully validated, committed block that advances the chain by one height.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub header: BlockHeader,
     pub transactions: Vec<SignedTransaction>,
     pub results: Vec<ExecutionResult>,
+    /// Miner-signed reward transaction for the gas fees collected in this block.
+    /// `None` when no gas was collected (all transactions were free).
+    pub reward_transaction: Option<SignedTransaction>,
+    /// Execution result of the reward transaction. `None` when `reward_transaction` is `None`.
+    pub reward_transaction_result: Option<ExecutionResult>,
 }
 
 impl Block {
@@ -35,6 +40,8 @@ impl Block {
             },
             transactions: vec![],
             results: vec![],
+            reward_transaction: None,
+            reward_transaction_result: None,
         }
     }
 }

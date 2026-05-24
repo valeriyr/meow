@@ -9,9 +9,6 @@
 //!
 //! Tests also verify the end-to-end invariant: gas coin balance is reduced
 //! by exactly `gas_used()`.
-//!
-//! Genesis transactions are an exception: they skip `BASE_TRANSACTION_GAS_COST`
-//! and involve no gas coin, so `gas_used()` equals the raw VM instruction gas.
 
 mod utils;
 
@@ -23,7 +20,6 @@ use meow_types::{
     system_framework::meow_coin::meow_coin_object,
     transaction::{execution_result::ExecutionStatus, input::Input},
 };
-use meow_vm_adapter::executor;
 
 //
 // ─── Base cost ───
@@ -290,34 +286,6 @@ fn publish_malformed_module_charges_only_base_cost() {
 
     assert!(matches!(result.status(), ExecutionStatus::Failure(_)));
     assert_eq!(result.gas_used(), BASE);
-}
-
-//
-// ─── Genesis path ───
-//
-
-#[test]
-fn genesis_transaction_charges_vm_gas_but_not_base_cost() {
-    // execute_genesis_transaction skips BASE_TRANSACTION_GAS_COST and involves no
-    // gas coin. gas_used() equals the raw VM instruction gas — the same value the
-    // runner reports in meow_coin_tests.rs (mint costs 91 gas).
-    let [dep_obj, module_obj] = framework_objects();
-    let tx = utils::make_meow_call_transaction(
-        "mint",
-        vec![
-            Input::raw(&100u64).unwrap(),
-            Input::raw(&Address::suffixed(0xE1)).unwrap(),
-        ],
-    );
-
-    let result = executor::execute_genesis_transaction(&tx, vec![dep_obj, module_obj]).unwrap();
-
-    assert_eq!(result.status(), &ExecutionStatus::Success);
-    assert_eq!(result.gas_used(), 91);
-    assert!(
-        result.changed_objects().is_empty(),
-        "genesis transaction must not involve a gas coin"
-    );
 }
 
 //

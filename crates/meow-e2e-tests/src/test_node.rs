@@ -8,6 +8,11 @@ use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
 use meow_nakamoto_types::miner_config::MinerConfig;
 use meow_node::node::{Node, config::NodeConfig};
 use meow_node_client::NodeClient;
+use meow_types::{
+    address::Address,
+    keypair::{KeyPair, signature_scheme::SignatureScheme},
+};
+use rand::thread_rng;
 use tokio::sync::oneshot;
 
 /// Default RPC address for test nodes (port 0 means "pick a random free port").
@@ -29,8 +34,10 @@ impl TestNode {
 
         let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
-        let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
-
+        let miner_keypair = test_miner_keypair();
+        let miner_reward_address = Address::from(&miner_keypair);
+        let miner_config =
+            MinerConfig::new(DEFAULT_DIFFICULTY, miner_keypair, miner_reward_address);
         let node = Node::empty(node_config, miner_config);
 
         Self::start(node, bootstrap_addr).await
@@ -41,14 +48,28 @@ impl TestNode {
         Self::start_with_bootstrap(genesis, vec![]).await
     }
 
+    /// Start a node pre-seeded with the given genesis and an explicit miner configuration.
+    pub async fn start_with_genesis_and_miner_config(
+        genesis: &Genesis,
+        miner_config: MinerConfig,
+    ) -> Self {
+        let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
+        let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
+        let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
+        let node = Node::with_genesis(node_config, miner_config, genesis);
+        Self::start(node, bootstrap_addr).await
+    }
+
     /// Start a node pre-seeded with the given genesis and explicit bootstrap peers.
     pub async fn start_with_bootstrap(genesis: &Genesis, bootstrap_peers: Vec<Multiaddr>) -> Self {
         let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
 
         let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, bootstrap_peers);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
-        let miner_config = MinerConfig::new(DEFAULT_DIFFICULTY);
-
+        let miner_keypair = test_miner_keypair();
+        let miner_reward_address = Address::from(&miner_keypair);
+        let miner_config =
+            MinerConfig::new(DEFAULT_DIFFICULTY, miner_keypair, miner_reward_address);
         let node = Node::with_genesis(node_config, miner_config, genesis);
 
         Self::start(node, bootstrap_addr).await
@@ -112,4 +133,10 @@ fn random_gossip_listen_addr() -> (Multiaddr, Multiaddr) {
         .expect("generated gossip bootstrap address must be valid");
 
     (listen_addr, bootstrap_addr)
+}
+
+/// Returns a fresh miner keypair for a test node.
+/// Each call produces a distinct key so nodes in a multi-node test have unique miner addresses.
+fn test_miner_keypair() -> KeyPair {
+    KeyPair::random(SignatureScheme::Ed25519, thread_rng())
 }
