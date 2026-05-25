@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use meow_node_client::NodeClient;
+use meow_node_client::{NodeClient, error::NodeClientError};
 use url::Url;
 
 //
@@ -25,4 +25,12 @@ fn with_address_builds_correct_url() {
     let addr: SocketAddr = "127.0.0.1:9000".parse().unwrap();
     let client = NodeClient::with_address(addr);
     assert_eq!(client.base_url().as_str(), "http://127.0.0.1:9000/");
+}
+
+#[test]
+fn with_url_str_returns_error_on_invalid_url() {
+    assert!(matches!(
+        NodeClient::with_url_str("not a url"),
+        Err(NodeClientError::UrlParseError(_))
+    ));
 }

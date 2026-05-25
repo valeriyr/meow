@@ -5,9 +5,6 @@
 
 mod utils;
 
-use std::str::FromStr;
-
-use meow_framework::{meow_object_module, meow_object_module_object};
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -19,6 +16,7 @@ use meow_types::{
 };
 use meow_vm_adapter::{builder, executor, external_context::ExternalContext};
 use meow_vm_types::types::Type;
+use std::str::FromStr;
 
 //
 // ─── Object layout checks ───
@@ -26,7 +24,7 @@ use meow_vm_types::types::Type;
 
 #[test]
 fn object_with_correct_id_field_passes() {
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod token_test;
@@ -45,7 +43,7 @@ fn object_with_correct_id_field_passes() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert_eq!(
         result.status(),
@@ -59,7 +57,7 @@ fn object_with_correct_id_field_passes() {
 fn struct_with_address_id_field_is_plain_struct() {
     // A struct whose first field is `id: address` (not `id: meow_object::Id`) is treated
     // as a plain struct — it is not an object and must pass adapter verification.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let mut module = builder::build(
         r#"
             mod layout_test;
@@ -81,7 +79,7 @@ fn struct_with_address_id_field_is_plain_struct() {
 
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert_eq!(
         result.status(),
@@ -121,7 +119,7 @@ fn plain_struct_without_id_field_passes() {
 #[test]
 fn object_type_as_local_struct_field_fails() {
     // `Inner` is object-shaped; `Outer` nests it as a field — must be rejected.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod nested_test;
@@ -136,7 +134,7 @@ fn object_type_as_local_struct_field_fails() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
@@ -148,7 +146,7 @@ fn object_type_as_local_struct_field_fails() {
 #[test]
 fn cross_module_object_type_as_struct_field_fails() {
     // `Token` (from dep at 0xFD) is object-shaped; `Wrapper` nests it as a field — must be rejected.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let dep_addr = Address::from_str("0xFD").unwrap();
 
     let dep_module = builder::build(
@@ -181,7 +179,7 @@ fn cross_module_object_type_as_struct_field_fails() {
     let dep_obj = Object::fresh_module(dep_addr, Digest::ZERO, bcs::to_bytes(&dep_module).unwrap());
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object(), dep_obj],
+        vec![meow_framework::meow_object_module_object(), dep_obj],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("objects cannot be nested")),
@@ -246,7 +244,7 @@ fn non_object_struct_id_field_write_passes() {
 fn object_created_with_stored_fresh_id_passes() {
     // Fresh id stored in a local variable first, then used — freshness tag must
     // propagate through Store/Load, so this must still pass.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod stored_id_test;
@@ -266,7 +264,7 @@ fn object_created_with_stored_fresh_id_passes() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert_eq!(
         result.status(),
@@ -282,7 +280,7 @@ fn object_created_from_parameter_id_fails() {
     // The types are correct (passes language verifier) but the id is not fresh
     // (originated from a parameter, not meow_vm_fresh_id) — adapter verifier
     // must reject it.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod param_id_test;
@@ -301,7 +299,7 @@ fn object_created_from_parameter_id_fails() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
@@ -315,7 +313,7 @@ fn object_created_from_unpacked_id_fails() {
     // A function that unpacks an object to extract its id, then tries to reuse
     // that id to construct a new object. The id from UnpackStruct is not fresh
     // (all unpacked fields are tagged Fresh::Other) — adapter verifier must reject it.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod reuse_id_test;
@@ -335,7 +333,7 @@ fn object_created_from_unpacked_id_fails() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
@@ -349,7 +347,7 @@ fn object_created_from_tuple_unpacked_id_fails() {
     // get_id() wraps meow_vm_fresh_id in a tuple return. UnpackTuple marks every
     // element Fresh::Other — even the Id slot — so the caller cannot use it to
     // construct an object. NewStruct must fire ObjectIdNotFresh.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let module = builder::build(
         r#"
             mod tuple_id_test;
@@ -370,7 +368,7 @@ fn object_created_from_tuple_unpacked_id_fails() {
     .expect("must compile");
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
@@ -402,7 +400,7 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
     //   pc 9: Return
     use meow_vm_types::bytecode::Instruction;
 
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let mut module = builder::build(
         r#"
             mod branch_merge_test;
@@ -445,7 +443,7 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
 
     let result = publish(
         bcs::to_bytes(&module).unwrap(),
-        vec![meow_object_module_object()],
+        vec![meow_framework::meow_object_module_object()],
     );
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
@@ -484,11 +482,11 @@ fn publish(
     mut dep_objects: Vec<Object>,
 ) -> meow_types::transaction::execution_result::ExecutionResult {
     let gas_obj = utils::make_gas_coin_object();
-    let tx = Transaction::new(
+    let transaction = Transaction::new(
         utils::SENDER,
         gas_obj.object_ref(),
         TransactionType::MeowModulePublish(module_bytes),
     );
     dep_objects.push(gas_obj);
-    executor::execute(&tx, dep_objects, &ExternalContext::default()).unwrap()
+    executor::execute(&transaction, dep_objects, &ExternalContext::default()).unwrap()
 }

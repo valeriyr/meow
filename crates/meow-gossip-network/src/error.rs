@@ -4,6 +4,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum NetworkError {
+    #[error("behaviour init error: {0}")]
+    BehaviourInitError(String),
     #[error("config builder error: {0}")]
     ConfigBuilderError(#[from] libp2p::gossipsub::ConfigBuilderError),
     #[error("dial error: {0}")]

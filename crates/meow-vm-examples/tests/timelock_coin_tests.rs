@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use meow_framework::{meow_coin_module, meow_object_module};
 use meow_types::{
     address::Address,
     identifier::Identifier,
@@ -124,8 +123,8 @@ fn timelock_module_name_qualified() -> String {
 }
 
 fn timelock_module() -> (Module, HashMap<Address, Module>) {
-    let obj = meow_object_module();
-    let coin = meow_coin_module();
+    let obj = meow_framework::meow_object_module();
+    let coin = meow_framework::meow_coin_module();
     let deps = [
         (MEOW_OBJECT_MODULE_ADDRESS, &obj),
         (MEOW_COIN_MODULE_ADDRESS, &coin),

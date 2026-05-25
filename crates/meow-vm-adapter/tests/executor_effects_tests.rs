@@ -1,8 +1,5 @@
 mod utils;
 
-use meow_framework::{
-    framework_module_objects, meow_coin_module, meow_object_module, meow_object_module_object,
-};
 use meow_types::{
     address::Address,
     object::{Object, object_version::ObjectVersion},
@@ -22,8 +19,8 @@ use meow_vm_adapter::builder;
 fn fresh_object_appears_in_created_objects() {
     // An object produced by meow_vm_fresh_id + meow_vm_transfer must appear in
     // created_objects with the sender as owner.
-    let meow_object_module = meow_object_module();
-    let meow_object_obj = meow_object_module_object();
+    let meow_object_module = meow_framework::meow_object_module();
+    let meow_object_obj = meow_framework::meow_object_module_object();
     let module = builder::build(
         r#"
             mod effects_test;
@@ -42,10 +39,10 @@ fn fresh_object_appears_in_created_objects() {
     .expect("must compile");
     let module_obj = utils::make_module_object(Address::ZERO, bcs::to_bytes(&module).unwrap());
     let gas_obj = utils::make_gas_coin_object();
-    let tx =
+    let transaction =
         utils::make_call_transaction(Address::ZERO, "create", vec![Input::raw(&42u64).unwrap()]);
 
-    let result = utils::execute(&tx, vec![meow_object_obj, module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![meow_object_obj, module_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -70,8 +67,8 @@ fn fresh_object_appears_in_created_objects() {
 fn transferred_input_object_appears_in_changed_objects() {
     // A coin passed to a function that transfers it back appears in changed_objects
     // with a bumped version.
-    let meow_object_mod = meow_object_module();
-    let meow_coin_mod = meow_coin_module();
+    let meow_object_mod = meow_framework::meow_object_module();
+    let meow_coin_mod = meow_framework::meow_coin_module();
     let module = builder::build(
         &format!(
             r#"
@@ -92,19 +89,21 @@ fn transferred_input_object_appears_in_changed_objects() {
     .expect("must compile");
     let module_addr = Address::ZERO;
     let module_obj = utils::make_module_object(module_addr, bcs::to_bytes(&module).unwrap());
-    let [fw_object_obj, fw_coin_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [fw_object_obj, fw_coin_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
 
     let coin_addr = Address::suffixed(0xF1);
     let coin_obj = utils::make_coin_object(coin_addr, utils::SENDER, 42);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(
+    let transaction = utils::make_call_transaction(
         module_addr,
         "touch",
         vec![Input::Object(coin_obj.object_ref())],
     );
 
     let result = utils::execute(
-        &tx,
+        &transaction,
         vec![fw_object_obj, fw_coin_obj, module_obj, coin_obj, gas_obj],
     )
     .unwrap();
@@ -133,12 +132,16 @@ fn transferred_input_object_appears_in_changed_objects() {
 fn destroyed_input_object_appears_in_destroyed_objects() {
     // An input object whose ID is destroyed via meow_vm_destroy must appear in
     // destroyed_objects and not in changed_objects (except for the gas coin).
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -159,8 +162,8 @@ fn destroyed_input_object_appears_in_destroyed_objects() {
 fn aborted_transaction_input_objects_not_in_effects() {
     // When a transaction aborts, input objects must not appear in any effects:
     // no created, no destroyed, and only the gas coin in changed_objects.
-    let meow_object_mod = meow_object_module();
-    let meow_coin_mod = meow_coin_module();
+    let meow_object_mod = meow_framework::meow_object_module();
+    let meow_coin_mod = meow_framework::meow_coin_module();
     let module = builder::build(
         &format!(
             r#"
@@ -182,17 +185,19 @@ fn aborted_transaction_input_objects_not_in_effects() {
     .expect("must compile");
     let module_addr = Address::ZERO;
     let module_obj = utils::make_module_object(module_addr, bcs::to_bytes(&module).unwrap());
-    let [fw_object_obj, fw_coin_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [fw_object_obj, fw_coin_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(
+    let transaction = utils::make_call_transaction(
         module_addr,
         "transfer_then_abort",
         vec![Input::Object(coin_obj.object_ref())],
     );
 
     let result = utils::execute(
-        &tx,
+        &transaction,
         vec![fw_object_obj, fw_coin_obj, module_obj, coin_obj, gas_obj],
     )
     .unwrap();
@@ -224,9 +229,9 @@ fn gas_coin_balance_reduced_after_successful_transaction() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     let final_balance =
@@ -249,9 +254,9 @@ fn gas_coin_version_is_bumped_after_successful_transaction() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object(); // starts at ObjectVersion::ONE
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(

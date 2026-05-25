@@ -96,4 +96,15 @@ mod tests {
         let digest = Digest::from([0xFF; DIGEST_LENGTH]);
         assert_eq!(leading_zeros(&digest), 0);
     }
+
+    /// First byte is 0x00 (8 leading zeros) and second is 0x7F (1 leading zero):
+    /// the loop must cross the byte boundary and accumulate 8 + 1 = 9 total.
+    #[test]
+    fn leading_zeros_spans_two_bytes() {
+        let mut bytes = [0xFFu8; DIGEST_LENGTH];
+        bytes[0] = 0x00;
+        bytes[1] = 0x7F;
+        let digest = Digest::from(bytes);
+        assert_eq!(leading_zeros(&digest), 9);
+    }
 }

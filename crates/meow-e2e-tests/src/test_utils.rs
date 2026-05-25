@@ -19,6 +19,8 @@ use rand::{SeedableRng, rngs::StdRng};
 const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 /// The interval between polls when waiting for a result to be available.
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(20);
+/// The wait after connecting bootstrap peers before asserting gossip state.
+const GOSSIP_PEER_CONNECT_WAIT: Duration = Duration::from_millis(300);
 
 /// Returns a deterministic test keypair.
 pub fn test_keypair() -> KeyPair {
@@ -194,7 +196,7 @@ pub async fn start_three_nodes_with_genesis(genesis: &Genesis) -> (TestNode, Tes
     )
     .await;
     // Give peers a short moment to establish outgoing bootstrap connections.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    tokio::time::sleep(GOSSIP_PEER_CONNECT_WAIT).await;
     (node1, node2, node3)
 }
 

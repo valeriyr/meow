@@ -194,11 +194,11 @@ fn make_call_transaction(sender: Address) -> Transaction {
     Transaction::new(sender, gas_coin, TransactionType::MeowCall(call))
 }
 
-async fn sign(tmp: &TempDir, tx: Transaction) -> anyhow::Result<TransactionCommandOutput> {
-    let tx_b64 = general_purpose::STANDARD.encode(bcs::to_bytes(&tx).unwrap());
+async fn sign(tmp: &TempDir, transaction: Transaction) -> anyhow::Result<TransactionCommandOutput> {
+    let transaction_b64 = general_purpose::STANDARD.encode(bcs::to_bytes(&transaction).unwrap());
     TransactionCommand::Sign {
         keystore_path: Some(keystore_path(tmp)),
-        transaction: tx_b64,
+        transaction: transaction_b64,
     }
     .run(&fake_client(), OutputEncoder::Base64, false)
     .await

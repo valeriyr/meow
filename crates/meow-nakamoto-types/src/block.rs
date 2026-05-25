@@ -12,10 +12,12 @@ use crate::block_header::BlockHeader;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {
     pub header: BlockHeader,
+    /// Signed user transactions included in this block.
     pub transactions: Vec<SignedTransaction>,
+    /// Execution results for each transaction, in the same order.
     pub results: Vec<ExecutionResult>,
     /// Miner-signed reward transaction for the gas fees collected in this block.
-    /// `None` when no gas was collected (all transactions were free).
+    /// `None` when no gas was collected.
     pub reward_transaction: Option<SignedTransaction>,
     /// Execution result of the reward transaction. `None` when `reward_transaction` is `None`.
     pub reward_transaction_result: Option<ExecutionResult>,

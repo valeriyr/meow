@@ -85,6 +85,8 @@ impl Mempool {
     }
 
     /// Drains up to `limit` transactions from the front of the queue.
+    /// Drained digests are removed from the seen set, so the same transaction
+    /// may be re-submitted after it has been drained.
     pub fn drain_batch(&mut self, limit: usize) -> Vec<SignedTransaction> {
         let count = limit.min(self.pending.len());
         let batch: Vec<_> = self.pending.drain(..count).collect();

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use meow_framework::meow_object_module;
 use meow_types::{
     address::Address,
     identifier::Identifier,
@@ -199,7 +198,10 @@ fn hero_module_name_qualified() -> String {
 fn hero_module() -> Module {
     builder::build(
         HERO_GAME_SRC,
-        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module())],
+        &[(
+            MEOW_OBJECT_MODULE_ADDRESS,
+            &meow_framework::meow_object_module(),
+        )],
     )
     .expect("hero_game.meow must compile")
 }

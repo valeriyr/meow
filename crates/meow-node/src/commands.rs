@@ -148,7 +148,7 @@ version {}
 ///
 /// - `miner_address` given: load that key from the keystore at `keystore_path`
 ///   (or the default path if `keystore_path` is `None`).
-/// - Neither `miner_address` given: generate a random keypair and warn. The resulting miner
+/// - If `miner_address` is not given: generate a random keypair and warn. The resulting miner
 ///   address is not stable across restarts and all block rewards will be lost.
 fn resolve_miner_keypair(
     keystore_path: Option<PathBuf>,

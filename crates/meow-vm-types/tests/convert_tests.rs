@@ -1,5 +1,5 @@
 use meow_vm_types::{
-    convert::{VmTypeNames, error::ConversionError, struct_from_rust, value_to_rust},
+    convert::{self, VmTypeNames, error::ConversionError},
     types::Value,
 };
 use serde::{Deserialize, Serialize};
@@ -11,26 +11,26 @@ use serde::{Deserialize, Serialize};
 #[test]
 fn bool_to_rust() {
     let val = Value::Bool(true);
-    assert!(value_to_rust::<bool>(&val).unwrap());
+    assert!(convert::value_to_rust::<bool>(&val).unwrap());
 }
 
 #[test]
 fn u64_to_rust() {
     let val = Value::U64(42);
-    assert_eq!(value_to_rust::<u64>(&val).unwrap(), 42u64);
+    assert_eq!(convert::value_to_rust::<u64>(&val).unwrap(), 42u64);
 }
 
 #[test]
 fn address_to_rust() {
     let raw = [0xABu8; 32];
     let val = Value::Address(raw.into());
-    assert_eq!(value_to_rust::<[u8; 32]>(&val).unwrap(), raw);
+    assert_eq!(convert::value_to_rust::<[u8; 32]>(&val).unwrap(), raw);
 }
 
 #[test]
 fn string_to_rust() {
     let val = Value::Str("meow".to_string());
-    assert_eq!(value_to_rust::<String>(&val).unwrap(), "meow");
+    assert_eq!(convert::value_to_rust::<String>(&val).unwrap(), "meow");
 }
 
 //
@@ -53,7 +53,10 @@ fn struct_from_value() {
             ("y".to_string(), Value::U64(7)),
         ],
     };
-    assert_eq!(value_to_rust::<Point>(&val).unwrap(), Point { x: 3, y: 7 });
+    assert_eq!(
+        convert::value_to_rust::<Point>(&val).unwrap(),
+        Point { x: 3, y: 7 }
+    );
 }
 
 //
@@ -80,7 +83,7 @@ fn struct_from_rust_with_address_newtype() {
         balance: 100,
     };
     assert_eq!(
-        struct_from_rust(&coin).unwrap(),
+        convert::struct_from_rust(&coin).unwrap(),
         Value::Struct {
             type_name: "Coin".to_string(),
             fields: vec![
@@ -98,8 +101,8 @@ fn round_trip_with_address_newtype() {
         id: AddressWrapper(id),
         balance: 77,
     };
-    let value = struct_from_rust(&original).unwrap();
-    assert_eq!(value_to_rust::<Coin>(&value).unwrap(), original);
+    let value = convert::struct_from_rust(&original).unwrap();
+    assert_eq!(convert::value_to_rust::<Coin>(&value).unwrap(), original);
 }
 
 //
@@ -136,7 +139,7 @@ fn struct_from_rust_translates_nested_type_name() {
         id: ObjectId { inner: addr },
         amount: 42,
     };
-    let value = struct_from_rust(&token).unwrap();
+    let value = convert::struct_from_rust(&token).unwrap();
 
     assert_eq!(
         value,
@@ -171,7 +174,7 @@ fn struct_from_rust_without_mapping_keeps_local_name() {
         id: ObjectId { inner: addr },
         amount: 7,
     };
-    let value = struct_from_rust(&token).unwrap();
+    let value = convert::struct_from_rust(&token).unwrap();
 
     // id field type name is the local "ObjectId", not translated
     let Value::Struct { ref fields, .. } = value else {
@@ -191,7 +194,7 @@ fn struct_from_rust_without_mapping_keeps_local_name() {
 fn struct_from_rust_produces_struct_value() {
     let point = Point { x: 3, y: 7 };
     assert_eq!(
-        struct_from_rust(&point).unwrap(),
+        convert::struct_from_rust(&point).unwrap(),
         Value::Struct {
             type_name: "Point".to_string(),
             fields: vec![
@@ -205,8 +208,8 @@ fn struct_from_rust_produces_struct_value() {
 #[test]
 fn round_trip_struct() {
     let original = Point { x: 10, y: 20 };
-    let value = struct_from_rust(&original).unwrap();
-    assert_eq!(value_to_rust::<Point>(&value).unwrap(), original);
+    let value = convert::struct_from_rust(&original).unwrap();
+    assert_eq!(convert::value_to_rust::<Point>(&value).unwrap(), original);
 }
 
 #[test]
@@ -219,7 +222,7 @@ fn struct_from_rust_accepts_any_first_field() {
     impl VmTypeNames for AnyObject {}
     let v = AnyObject { balance: 10 };
     assert!(matches!(
-        struct_from_rust(&v).unwrap(),
+        convert::struct_from_rust(&v).unwrap(),
         meow_vm_types::types::Value::Struct { .. }
     ));
 }
@@ -232,7 +235,7 @@ fn struct_from_rust_accepts_empty_struct() {
     impl VmTypeNames for Empty {}
     let v = Empty {};
     assert!(matches!(
-        struct_from_rust(&v).unwrap(),
+        convert::struct_from_rust(&v).unwrap(),
         meow_vm_types::types::Value::Struct { .. }
     ));
 }
@@ -248,7 +251,7 @@ fn unsupported_type_returns_error() {
         items: vec![1, 2, 3],
     };
     assert!(matches!(
-        struct_from_rust(&v).unwrap_err(),
+        convert::struct_from_rust(&v).unwrap_err(),
         ConversionError::UnsupportedType(ref msg) if msg == "seq"
     ));
 }
@@ -266,7 +269,7 @@ fn struct_from_rust_rejects_f32() {
     impl VmTypeNames for WithFloat {}
     let v = WithFloat { value: 1.0 };
     assert!(matches!(
-        struct_from_rust(&v).unwrap_err(),
+        convert::struct_from_rust(&v).unwrap_err(),
         ConversionError::UnsupportedType(msg) if msg == "f32"
     ));
 }
@@ -281,13 +284,13 @@ fn struct_from_rust_rejects_option() {
     // Option::None serializes via serialize_none.
     let v_none = WithOption { maybe: None };
     assert!(matches!(
-        struct_from_rust(&v_none).unwrap_err(),
+        convert::struct_from_rust(&v_none).unwrap_err(),
         ConversionError::UnsupportedType(msg) if msg.contains("Option")
     ));
     // Option::Some serializes via serialize_some.
     let v_some = WithOption { maybe: Some(42) };
     assert!(matches!(
-        struct_from_rust(&v_some).unwrap_err(),
+        convert::struct_from_rust(&v_some).unwrap_err(),
         ConversionError::UnsupportedType(msg) if msg.contains("Option")
     ));
 }
@@ -303,7 +306,7 @@ fn tuple_of_wrong_length_rejected() {
     impl VmTypeNames for WithSmallArray {}
     let v = WithSmallArray { tag: [1, 2, 3, 4] };
     assert!(matches!(
-        struct_from_rust(&v).unwrap_err(),
+        convert::struct_from_rust(&v).unwrap_err(),
         ConversionError::UnsupportedType(msg) if msg.contains("tuple of length 4")
     ));
 }
@@ -315,7 +318,7 @@ fn tuple_of_wrong_length_rejected() {
 #[test]
 fn void_returns_error() {
     assert!(matches!(
-        value_to_rust::<u64>(&Value::Void).unwrap_err(),
+        convert::value_to_rust::<u64>(&Value::Void).unwrap_err(),
         ConversionError::BcsError(bcs::Error::Custom(msg)) if msg.contains("void value cannot be serialized")
     ));
 }
@@ -325,7 +328,7 @@ fn wrong_type_returns_deserialize_error() {
     // Bool cannot be deserialized as u64
     let val = Value::Bool(true);
     assert!(matches!(
-        value_to_rust::<u64>(&val).unwrap_err(),
+        convert::value_to_rust::<u64>(&val).unwrap_err(),
         ConversionError::BcsError(bcs::Error::Eof)
     ));
 }

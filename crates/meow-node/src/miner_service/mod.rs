@@ -36,7 +36,7 @@ impl MinerService {
             tracing::info!(
                 miner_address = %miner.miner_address(),
                 reward_address = %miner.reward_address(),
-                "starting miner service"
+                "miner service started"
             );
         }
 

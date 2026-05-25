@@ -13,6 +13,9 @@ use meow_types::{
 };
 use serial_test::serial;
 
+/// The wait after submitting an invalid transaction before asserting it did not propagate.
+const GOSSIP_PROPAGATION_WAIT: Duration = Duration::from_millis(500);
+
 //
 // ─── Signature validation ───
 //
@@ -49,7 +52,7 @@ async fn invalid_signature_transaction_is_rejected_and_not_propagated_three_node
         "unexpected error: {err}"
     );
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(GOSSIP_PROPAGATION_WAIT).await;
 
     test_utils::assert_tx_not_found_on_nodes(&[&node1, &node2, &node3], &tx_digest).await;
 }
@@ -79,7 +82,7 @@ async fn forged_sender_transaction_is_rejected() {
         "unexpected error: {err}"
     );
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    tokio::time::sleep(GOSSIP_PROPAGATION_WAIT).await;
 
     // The forged transaction must not have been committed on any node.
     test_utils::assert_tx_not_found_on_nodes(&[&node1, &node2, &node3], &tx_digest).await;

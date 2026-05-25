@@ -1,6 +1,5 @@
 mod utils;
 
-use meow_framework::{framework_module_objects, meow_object_module, meow_object_module_object};
 use meow_types::{
     address::Address,
     config::NATIVE_FUNCTION_NAMES,
@@ -30,9 +29,9 @@ fn calling_function_returning_primitive_from_transaction_succeeds() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(module_addr, "get_value", vec![]);
+    let transaction = utils::make_call_transaction(module_addr, "get_value", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.status(),
@@ -43,11 +42,13 @@ fn calling_function_returning_primitive_from_transaction_succeeds() {
 
 #[test]
 fn execute_with_function_not_found_returns_failure() {
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("nonexistent_function", vec![]);
+    let transaction = utils::make_meow_call_transaction("nonexistent_function", vec![]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("function 'nonexistent_function' not found in module")),
@@ -70,11 +71,13 @@ fn calling_native_function_by_name_returns_failure() {
     native_functions.extend(NATIVE_FUNCTION_NAMES);
 
     for native in native_functions {
-        let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+        let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+            .try_into()
+            .unwrap();
         let gas_obj = utils::make_gas_coin_object();
-        let tx = utils::make_meow_call_transaction(native, vec![]);
+        let transaction = utils::make_meow_call_transaction(native, vec![]);
 
-        let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+        let result = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap();
 
         assert!(
             matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found in module")),
@@ -97,9 +100,9 @@ fn calling_private_function_from_transaction_returns_failure() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(module_addr, "secret", vec![]);
+    let transaction = utils::make_call_transaction(module_addr, "secret", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("private")),
@@ -126,9 +129,9 @@ fn calling_function_returning_plain_struct_from_transaction_returns_failure() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(module_addr, "origin", vec![]);
+    let transaction = utils::make_call_transaction(module_addr, "origin", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("returns a struct")),
@@ -141,13 +144,16 @@ fn calling_function_returning_plain_struct_from_transaction_returns_failure() {
 fn calling_function_returning_object_in_tuple_from_transaction_returns_failure() {
     // meow_coin::balance returns (MeowCoin, u64) — the object in the tuple makes it
     // ineligible as a transaction entry point.
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
-    let tx =
+    let transaction =
         utils::make_meow_call_transaction("balance", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("returns a struct")),
@@ -159,7 +165,7 @@ fn calling_function_returning_object_in_tuple_from_transaction_returns_failure()
 #[test]
 fn calling_function_returning_bare_object_from_transaction_returns_failure() {
     // A pub fn with a direct object return type (not in a tuple) must also be rejected.
-    let meow_object_module = meow_object_module();
+    let meow_object_module = meow_framework::meow_object_module();
     let test_module = builder::build(
         r#"
             mod test;
@@ -178,16 +184,20 @@ fn calling_function_returning_bare_object_from_transaction_returns_failure() {
         module_addr,
         bcs::to_bytes(&test_module).expect("must serialize"),
     );
-    let meow_object_obj = meow_object_module_object();
+    let meow_object_obj = meow_framework::meow_object_module_object();
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(
+    let transaction = utils::make_call_transaction(
         module_addr,
         "passthrough",
         vec![Input::Object(coin_obj.object_ref())],
     );
 
-    let result = utils::execute(&tx, vec![meow_object_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result = utils::execute(
+        &transaction,
+        vec![meow_object_obj, module_obj, coin_obj, gas_obj],
+    )
+    .unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("returns a struct")),
@@ -198,13 +208,15 @@ fn calling_function_returning_bare_object_from_transaction_returns_failure() {
 
 #[test]
 fn execute_with_module_as_argument_returns_failure() {
-    let [dep_obj, module_obj]: [Object; 2] = framework_module_objects().try_into().unwrap();
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
     let gas_obj = utils::make_gas_coin_object();
     // Pass the module object itself as a call argument.
-    let tx =
+    let transaction =
         utils::make_meow_call_transaction("burn", vec![Input::Object(module_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is a module and cannot be used as a call argument")),
@@ -229,9 +241,10 @@ fn execute_with_argument_count_mismatch_returns_failure() {
     );
     let gas_obj = utils::make_gas_coin_object();
     // add expects 2 args; pass only 1.
-    let tx = utils::make_call_transaction(Address::ZERO, "add", vec![Input::raw(&1u64).unwrap()]);
+    let transaction =
+        utils::make_call_transaction(Address::ZERO, "add", vec![Input::raw(&1u64).unwrap()]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("argument count mismatch")),
@@ -256,9 +269,9 @@ fn execute_vm_abort_returns_failure() {
     let module_addr = Address::ZERO;
     let module_obj = utils::make_module_object_from_src(src);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(module_addr, "do_abort", vec![]);
+    let transaction = utils::make_call_transaction(module_addr, "do_abort", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("abort message")),
@@ -288,9 +301,9 @@ fn fresh_id_not_consumed_returns_failure() {
     let module_addr = Address::ZERO;
     let module_obj = utils::make_module_object_from_src(src);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(module_addr, "generate_id", vec![]);
+    let transaction = utils::make_call_transaction(module_addr, "generate_id", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("created object not consumed")),
@@ -325,9 +338,10 @@ fn exhausted_gas_coin_goes_to_changed() {
     let gas_obj = utils::make_gas_coin_object_at_version_and_balance(ObjectVersion::ZERO, 0);
     let gas_coin_ref = gas_obj.object_ref();
     let call = Call::new(Address::ZERO, Identifier::new("run").unwrap(), vec![]);
-    let tx = Transaction::new(utils::SENDER, gas_coin_ref, TransactionType::MeowCall(call));
+    let transaction =
+        Transaction::new(utils::SENDER, gas_coin_ref, TransactionType::MeowCall(call));
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.changed_objects().len(),

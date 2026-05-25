@@ -1,6 +1,6 @@
 use meow::{call_arg::CallArg, commands::DEFAULT_NODE_URL};
 use meow_node_client::NodeClient;
-use meow_types::address::Address;
+use meow_types::{address::Address, transaction::input::Input};
 use meow_vm_adapter::Value;
 
 //
@@ -78,6 +78,58 @@ fn from_str_object_prefix_with_invalid_address_returns_error() {
         err.to_string().contains("prefix hex error"),
         "unexpected error: {err}"
     );
+}
+
+//
+// ─── into_input tests (non-network variants) ───
+//
+
+#[tokio::test]
+async fn into_input_bool_true() {
+    let input = CallArg::Bool(true)
+        .into_input(&fake_client())
+        .await
+        .unwrap();
+
+    assert_eq!(input, Input::raw(&true).unwrap());
+}
+
+#[tokio::test]
+async fn into_input_bool_false() {
+    let input = CallArg::Bool(false)
+        .into_input(&fake_client())
+        .await
+        .unwrap();
+
+    assert_eq!(input, Input::raw(&false).unwrap());
+}
+
+#[tokio::test]
+async fn into_input_u64() {
+    let input = CallArg::U64(99).into_input(&fake_client()).await.unwrap();
+
+    assert_eq!(input, Input::raw(&99u64).unwrap());
+}
+
+#[tokio::test]
+async fn into_input_address_preserves_bytes() {
+    let addr = Address::suffixed(0xF1);
+    let input = CallArg::Address(addr)
+        .into_input(&fake_client())
+        .await
+        .unwrap();
+
+    assert_eq!(input, Input::raw(&addr).unwrap());
+}
+
+#[tokio::test]
+async fn into_input_str() {
+    let input = CallArg::Str("world".to_string())
+        .into_input(&fake_client())
+        .await
+        .unwrap();
+
+    assert_eq!(input, Input::raw(&"world".to_string()).unwrap());
 }
 
 //

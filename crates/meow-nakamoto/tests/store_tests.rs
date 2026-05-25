@@ -43,7 +43,7 @@ fn apply_changed_objects_overwrites() {
 
     let mut store = Store::with_objects([obj_v1.clone()]);
 
-    let obj_v2 = Object::fresh_module(*obj_v1.address(), Digest::ZERO, vec![]);
+    let obj_v2 = make_module_object(*obj_v1.address());
 
     store.apply_execution_result(&make_execution_result(vec![], vec![obj_v2.clone()], vec![]));
 
@@ -158,6 +158,83 @@ fn get_objects_works_after_apply_execution_result() {
     let addresses: std::collections::HashSet<_> = objects.iter().map(|o| *o.address()).collect();
     assert!(addresses.contains(initial_obj.address()));
     assert!(addresses.contains(new_obj.address()));
+}
+
+//
+// ─── apply_execution_result — invariant violations ───
+//
+
+/// Creating an object whose address is already in the store is an invariant violation.
+#[test]
+#[should_panic(expected = "created object ID collision")]
+fn apply_panics_on_created_object_id_collision() {
+    let obj = make_object(ADDRESS1);
+    let mut store = Store::with_objects([obj.clone()]);
+
+    store.apply_execution_result(&make_execution_result(vec![obj], vec![], vec![]));
+}
+
+/// Changing an object that does not exist in the store is an invariant violation.
+#[test]
+#[should_panic(expected = "changed object not found in store")]
+fn apply_panics_when_changed_object_is_not_in_store() {
+    let mut store = Store::default();
+
+    store.apply_execution_result(&make_execution_result(
+        vec![],
+        vec![make_object(ADDRESS1)],
+        vec![],
+    ));
+}
+
+/// Destroying an object that does not exist in the store is an invariant violation.
+#[test]
+#[should_panic(expected = "destroyed object not found in store")]
+fn apply_panics_when_destroyed_object_is_not_in_store() {
+    let mut store = Store::default();
+
+    store.apply_execution_result(&make_execution_result(
+        vec![],
+        vec![],
+        vec![make_object(ADDRESS1)],
+    ));
+}
+
+//
+// ─── objects() ordering ───
+//
+
+/// `objects()` must return all objects in ascending address order regardless of insertion order,
+/// because `compute_state_root` hashes them in iterator order — a different order on two nodes
+/// would produce a different state root and cause a consensus split.
+#[test]
+fn objects_are_returned_in_sorted_address_order() {
+    // Insert in reverse order to prove ordering is not insertion-dependent.
+    let store = Store::with_objects([
+        make_object(ADDRESS3),
+        make_object(ADDRESS1),
+        make_object(ADDRESS2),
+    ]);
+
+    let addresses: Vec<_> = store.objects().map(|o| *o.address()).collect();
+
+    assert_eq!(addresses, vec![ADDRESS1, ADDRESS2, ADDRESS3]);
+}
+
+//
+// ─── with_objects — duplicate address ───
+//
+
+/// When two objects share the same address the last one wins (BTreeMap insert semantics).
+#[test]
+fn with_objects_last_object_wins_on_duplicate_address() {
+    let obj_a = Object::fresh_module(ADDRESS1, Digest::ZERO, vec![1]);
+    let obj_b = Object::fresh_module(ADDRESS1, Digest::ZERO, vec![2]);
+
+    let store = Store::with_objects([obj_a, obj_b.clone()]);
+
+    assert_eq!(store.objects().count(), 1);
+    assert_eq!(store.get_object(&ADDRESS1), Some(&obj_b));
 }
 
 //

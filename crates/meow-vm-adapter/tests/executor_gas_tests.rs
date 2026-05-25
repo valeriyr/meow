@@ -12,7 +12,6 @@
 
 mod utils;
 
-use meow_framework::framework_module_objects;
 use meow_types::{
     address::Address,
     config::MAX_BCS_SERIALIZED_MODULE_SIZE,
@@ -37,9 +36,9 @@ fn noop_transaction_charges_exactly_base_plus_return() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + 2);
@@ -61,7 +60,7 @@ fn gas_used_always_equals_gas_coin_deduction() {
     let [dep_obj, module_obj] = framework_objects();
     let coin_obj = coin(0xF1, 75);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
@@ -69,7 +68,8 @@ fn gas_used_always_equals_gas_coin_deduction() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -87,9 +87,11 @@ fn burn_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
     let coin_obj = coin(0xF1, 100);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + 39);
@@ -100,7 +102,7 @@ fn transfer_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
     let coin_obj = coin(0xF1, 75);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
@@ -108,7 +110,8 @@ fn transfer_charges_base_plus_vm_gas() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + 45);
@@ -120,7 +123,7 @@ fn merge_and_transfer_charges_base_plus_vm_gas() {
     let from_obj = coin(0xF1, 60);
     let to_obj = coin(0xF2, 40);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "merge_and_transfer",
         vec![
             Input::Object(from_obj.object_ref()),
@@ -129,7 +132,11 @@ fn merge_and_transfer_charges_base_plus_vm_gas() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, from_obj, to_obj, gas_obj]).unwrap();
+    let result = utils::execute(
+        &transaction,
+        vec![dep_obj, module_obj, from_obj, to_obj, gas_obj],
+    )
+    .unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + 93);
@@ -140,7 +147,7 @@ fn split_and_transfer_charges_base_plus_vm_gas() {
     let [dep_obj, module_obj] = framework_objects();
     let coin_obj = coin(0xF1, 100);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "split_and_transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
@@ -149,7 +156,8 @@ fn split_and_transfer_charges_base_plus_vm_gas() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + 193);
@@ -170,7 +178,7 @@ fn merge_costs_more_than_merge_and_transfer_due_to_call_overhead() {
 
     let from_a = coin(0xF1, 60);
     let to_a = coin(0xF2, 40);
-    let tx_mat = utils::make_meow_call_transaction(
+    let transaction_mat = utils::make_meow_call_transaction(
         "merge_and_transfer",
         vec![
             Input::Object(from_a.object_ref()),
@@ -178,20 +186,26 @@ fn merge_costs_more_than_merge_and_transfer_due_to_call_overhead() {
             Input::raw(&utils::SENDER).unwrap(),
         ],
     );
-    let result_mat =
-        utils::execute(&tx_mat, vec![dep_obj_a, module_obj_a, from_a, to_a, gas_a]).unwrap();
+    let result_mat = utils::execute(
+        &transaction_mat,
+        vec![dep_obj_a, module_obj_a, from_a, to_a, gas_a],
+    )
+    .unwrap();
 
     let from_b = coin(0xF3, 60);
     let to_b = coin(0xF4, 40);
-    let tx_m = utils::make_meow_call_transaction(
+    let transaction_m = utils::make_meow_call_transaction(
         "merge",
         vec![
             Input::Object(from_b.object_ref()),
             Input::Object(to_b.object_ref()),
         ],
     );
-    let result_m =
-        utils::execute(&tx_m, vec![dep_obj_b, module_obj_b, from_b, to_b, gas_b]).unwrap();
+    let result_m = utils::execute(
+        &transaction_m,
+        vec![dep_obj_b, module_obj_b, from_b, to_b, gas_b],
+    )
+    .unwrap();
 
     assert_eq!(result_mat.status(), &ExecutionStatus::Success);
     assert_eq!(result_m.status(), &ExecutionStatus::Success);
@@ -212,7 +226,7 @@ fn aborted_transaction_charges_base_plus_gas_up_to_abort() {
     let [dep_obj, module_obj] = framework_objects();
     let coin_obj = coin(0xF1, 10); // balance 10 < amount 20 → abort
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "split_and_transfer",
         vec![
             Input::Object(coin_obj.object_ref()),
@@ -221,7 +235,8 @@ fn aborted_transaction_charges_base_plus_gas_up_to_abort() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(matches!(result.status(), ExecutionStatus::Failure(_)));
     // VM gas up to abort = 28 (measured via runner probe).
@@ -249,9 +264,9 @@ fn publish_charges_base_plus_per_byte_gas() {
     );
     let module_size = module_bytes.len() as u64;
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(module_bytes);
+    let transaction = utils::make_meow_module_publish_transaction(module_bytes);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(result.gas_used(), BASE + module_size * 10);
@@ -267,9 +282,9 @@ fn publish_oversized_module_charges_only_base_cost() {
     // Size check happens before per-byte gas is charged.
     let oversized = vec![0u8; MAX_BCS_SERIALIZED_MODULE_SIZE + 1];
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(oversized);
+    let transaction = utils::make_meow_module_publish_transaction(oversized);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(matches!(result.status(), ExecutionStatus::Failure(_)));
     assert_eq!(result.gas_used(), BASE);
@@ -280,9 +295,9 @@ fn publish_malformed_module_charges_only_base_cost() {
     // Deserialization fails before per-byte gas is charged.
     let not_a_module = vec![1u8, 2, 3, 4, 5];
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(not_a_module);
+    let transaction = utils::make_meow_module_publish_transaction(not_a_module);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(matches!(result.status(), ExecutionStatus::Failure(_)));
     assert_eq!(result.gas_used(), BASE);
@@ -295,7 +310,9 @@ fn publish_malformed_module_charges_only_base_cost() {
 const BASE: u64 = 1000;
 
 fn framework_objects() -> [Object; 2] {
-    framework_module_objects().try_into().unwrap()
+    meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap()
 }
 
 fn coin(id: u16, balance: u64) -> Object {

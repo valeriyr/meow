@@ -1,6 +1,5 @@
 mod utils;
 
-use meow_framework::{meow_object_module, meow_object_module_object};
 use meow_types::{
     address::Address,
     system_framework::meow_object::MEOW_OBJECT_MODULE_ADDRESS,
@@ -79,8 +78,8 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
         }
     "#;
 
-    let meow_object_module = meow_object_module();
-    let meow_object_obj = meow_object_module_object();
+    let meow_object_module = meow_framework::meow_object_module();
+    let meow_object_obj = meow_framework::meow_object_module_object();
     let module = builder::build(
         RAND_MODULE_SRC,
         &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
@@ -91,9 +90,13 @@ fn execute_rand_roll(seed: RandSeed) -> ExecutionResult {
         bcs::to_bytes(&module).expect("must serialize"),
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "roll", vec![]);
-    let result =
-        utils::execute_with_seed(&tx, vec![meow_object_obj, module_obj, gas_obj], seed).unwrap();
+    let transaction = utils::make_call_transaction(Address::ZERO, "roll", vec![]);
+    let result = utils::execute_with_seed(
+        &transaction,
+        vec![meow_object_obj, module_obj, gas_obj],
+        seed,
+    )
+    .unwrap();
     assert_eq!(result.status(), &ExecutionStatus::Success);
     result
 }
@@ -113,8 +116,8 @@ fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
         }
     "#;
 
-    let meow_object_module = meow_object_module();
-    let meow_object_obj = meow_object_module_object();
+    let meow_object_module = meow_framework::meow_object_module();
+    let meow_object_obj = meow_framework::meow_object_module_object();
     let module = builder::build(
         TIMESTAMP_MODULE_SRC,
         &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
@@ -125,10 +128,13 @@ fn execute_timestamp_capture(timestamp: u64) -> ExecutionResult {
         bcs::to_bytes(&module).expect("must serialize"),
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "capture", vec![]);
-    let result =
-        utils::execute_with_timestamp(&tx, vec![meow_object_obj, module_obj, gas_obj], timestamp)
-            .unwrap();
+    let transaction = utils::make_call_transaction(Address::ZERO, "capture", vec![]);
+    let result = utils::execute_with_timestamp(
+        &transaction,
+        vec![meow_object_obj, module_obj, gas_obj],
+        timestamp,
+    )
+    .unwrap();
     assert_eq!(result.status(), &ExecutionStatus::Success);
     result
 }

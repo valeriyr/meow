@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use meow_framework::meow_coin_module;
 use meow_types::{
     address::Address,
     identifier::Identifier,
@@ -21,7 +20,7 @@ use meow_vm_types::types::Value;
 
 #[test]
 fn compile_meow_coin() {
-    let _ = meow_coin_module();
+    let _ = meow_framework::meow_coin_module();
 }
 
 //
@@ -436,7 +435,7 @@ fn from_balance_converts_balance_to_coin() {
 fn run(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
     runner::run(
-        (MEOW_COIN_MODULE_ADDRESS, meow_coin_module()),
+        (MEOW_COIN_MODULE_ADDRESS, meow_framework::meow_coin_module()),
         &fn_name,
         args,
         HashMap::new(),
@@ -447,7 +446,7 @@ fn run(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
 fn run_privileged(fn_name: &str, args: Vec<Value>) -> runner::Result<RunResult> {
     let fn_name = Identifier::new(fn_name).expect("function name must be a valid identifier");
     runner::run_privileged(
-        (MEOW_COIN_MODULE_ADDRESS, meow_coin_module()),
+        (MEOW_COIN_MODULE_ADDRESS, meow_framework::meow_coin_module()),
         &fn_name,
         args,
         HashMap::new(),

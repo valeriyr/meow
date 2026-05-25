@@ -1,9 +1,6 @@
 use std::str::FromStr;
 
-use meow_vm_types::{
-    address::Address,
-    module_ref::{is_qualified, parse_module_ref, qualify},
-};
+use meow_vm_types::{address::Address, module_ref};
 
 //
 // ─── Happy paths ───
@@ -13,7 +10,7 @@ use meow_vm_types::{
 fn parses_valid_ref() {
     let addr = Address::from_str("0xFD").unwrap();
     assert_eq!(
-        parse_module_ref("@0xFD::transfer"),
+        module_ref::parse_module_ref("@0xFD::transfer"),
         Some((addr, "transfer"))
     );
 }
@@ -23,19 +20,19 @@ fn parses_full_address() {
     let hex = "0xFD";
     let addr = Address::from_str(hex).unwrap();
     assert_eq!(
-        parse_module_ref(&format!("{hex}::mint")),
+        module_ref::parse_module_ref(&format!("{hex}::mint")),
         None,
         "missing @ prefix"
     );
     assert_eq!(
-        parse_module_ref(&format!("@{hex}::mint")),
+        module_ref::parse_module_ref(&format!("@{hex}::mint")),
         Some((addr, "mint"))
     );
 }
 
 #[test]
 fn preserves_function_name_exactly() {
-    let (_, name) = parse_module_ref("@0xFD::some_fn_name").unwrap();
+    let (_, name) = module_ref::parse_module_ref("@0xFD::some_fn_name").unwrap();
     assert_eq!(name, "some_fn_name");
 }
 
@@ -46,7 +43,7 @@ fn preserves_function_name_exactly() {
 #[test]
 fn qualify_produces_expected_format() {
     assert_eq!(
-        qualify(&Address::ZERO, "Token"),
+        module_ref::qualify(&Address::ZERO, "Token"),
         "@0x0000000000000000000000000000000000000000000000000000000000000000::Token"
     );
 }
@@ -54,9 +51,9 @@ fn qualify_produces_expected_format() {
 #[test]
 fn qualify_roundtrips_with_parse() {
     let addr = Address::from_str("0xabcd").unwrap();
-    let qualified = qualify(&addr, "Transfer");
+    let qualified = module_ref::qualify(&addr, "Transfer");
 
-    let (parsed_addr, parsed_name) = parse_module_ref(&qualified).unwrap();
+    let (parsed_addr, parsed_name) = module_ref::parse_module_ref(&qualified).unwrap();
 
     assert_eq!(parsed_addr, addr);
     assert_eq!(parsed_name, "Transfer");
@@ -68,15 +65,15 @@ fn qualify_roundtrips_with_parse() {
 
 #[test]
 fn is_qualified_returns_true_for_cross_module_ref() {
-    assert!(is_qualified("dep::Foo"));
-    assert!(is_qualified("my_module::Bar"));
-    assert!(is_qualified("@0xFD::Foo"));
+    assert!(module_ref::is_qualified("dep::Foo"));
+    assert!(module_ref::is_qualified("my_module::Bar"));
+    assert!(module_ref::is_qualified("@0xFD::Foo"));
 }
 
 #[test]
 fn is_qualified_returns_false_for_plain_name() {
-    assert!(!is_qualified("Foo"));
-    assert!(!is_qualified(""));
+    assert!(!module_ref::is_qualified("Foo"));
+    assert!(!module_ref::is_qualified(""));
 }
 
 //
@@ -85,20 +82,23 @@ fn is_qualified_returns_false_for_plain_name() {
 
 #[test]
 fn returns_none_for_plain_name() {
-    assert_eq!(parse_module_ref("transfer"), None);
+    assert_eq!(module_ref::parse_module_ref("transfer"), None);
 }
 
 #[test]
 fn returns_none_for_missing_at() {
-    assert_eq!(parse_module_ref("0xFD::transfer"), None);
+    assert_eq!(module_ref::parse_module_ref("0xFD::transfer"), None);
 }
 
 #[test]
 fn returns_none_for_missing_separator() {
-    assert_eq!(parse_module_ref("@0xFD"), None);
+    assert_eq!(module_ref::parse_module_ref("@0xFD"), None);
 }
 
 #[test]
 fn returns_none_for_invalid_address() {
-    assert_eq!(parse_module_ref("@not_an_address::transfer"), None);
+    assert_eq!(
+        module_ref::parse_module_ref("@not_an_address::transfer"),
+        None
+    );
 }

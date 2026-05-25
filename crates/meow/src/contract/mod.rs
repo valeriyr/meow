@@ -14,6 +14,7 @@ use crate::{
     output_encoder::OutputEncoder,
 };
 
+/// Commands for compiling and running Meow Language contracts.
 #[derive(Parser)]
 #[command(rename_all = "kebab-case", verbatim_doc_comment)]
 pub enum ContractCommand {

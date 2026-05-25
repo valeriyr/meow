@@ -71,22 +71,23 @@ impl GossipNetwork {
                 libp2p::noise::Config::new,
                 libp2p::yamux::Config::default,
             )?
-            .with_behaviour(|key| Behaviour {
-                gossipsub: gossipsub::Behaviour::new(
-                    MessageAuthenticity::Signed(key.clone()),
-                    gossipsub_config,
-                )
-                .expect("gossipsub config must be valid"),
-                mdns: mdns::tokio::Behaviour::new(
-                    mdns::Config {
-                        query_interval: mdns_query_interval,
-                        ..Default::default()
-                    },
-                    key.public().to_peer_id(),
-                )
-                .expect("mDNS config must be valid"),
+            .with_behaviour(|key| {
+                Ok::<_, Box<dyn std::error::Error + Send + Sync>>(Behaviour {
+                    gossipsub: gossipsub::Behaviour::new(
+                        MessageAuthenticity::Signed(key.clone()),
+                        gossipsub_config,
+                    )
+                    .expect("gossipsub config must be valid"),
+                    mdns: mdns::tokio::Behaviour::new(
+                        mdns::Config {
+                            query_interval: mdns_query_interval,
+                            ..Default::default()
+                        },
+                        key.public().to_peer_id(),
+                    )?,
+                })
             })
-            .expect("infallible error")
+            .map_err(|e| NetworkError::BehaviourInitError(e.to_string()))?
             .build();
 
         swarm.listen_on(listen_address.into())?;

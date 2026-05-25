@@ -34,13 +34,13 @@ fn execute_with_gas_coin_not_found_returns_error() {
             Input::raw(&utils::SENDER).unwrap(),
         ],
     );
-    let tx = Transaction::new(
+    let transaction = Transaction::new(
         utils::SENDER,
         ObjectRef::new(Address::suffixed(0xF9), ObjectVersion::ONE, Digest::ZERO),
         TransactionType::MeowCall(call),
     );
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::GasCoinNotFound));
 }
 
@@ -50,7 +50,7 @@ fn execute_with_invalid_gas_coin_returns_error() {
         .try_into()
         .unwrap();
     let gas_obj = utils::make_invalid_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "mint",
         vec![
             Input::raw(&10u64).unwrap(),
@@ -58,7 +58,7 @@ fn execute_with_invalid_gas_coin_returns_error() {
         ],
     );
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::InvalidGasCoin));
 }
 
@@ -68,7 +68,7 @@ fn execute_with_invalid_gas_coin_owner_returns_error() {
         .try_into()
         .unwrap();
     let gas_obj = utils::make_valid_gas_coin_object(Address::suffixed(0xE2));
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "mint",
         vec![
             Input::raw(&10u64).unwrap(),
@@ -76,7 +76,7 @@ fn execute_with_invalid_gas_coin_owner_returns_error() {
         ],
     );
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
     assert!(matches!(err, ExecutorError::InvalidGasCoinOwner));
 }
 
@@ -86,7 +86,7 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
         .try_into()
         .unwrap();
     let gas_obj = utils::make_gas_coin_object_at_version(ObjectVersion::MAX);
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "mint",
         vec![
             Input::raw(&10u64).unwrap(),
@@ -94,7 +94,7 @@ fn execute_with_gas_coin_at_max_version_returns_error() {
         ],
     );
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
     assert!(
         matches!(err, ExecutorError::ObjectAtMaxVersion(address) if address == utils::GAS_ADDR)
     );
@@ -107,7 +107,7 @@ fn execute_with_gas_coin_wrong_version_returns_error() {
         .try_into()
         .unwrap();
     let gas_obj = utils::make_gas_coin_object_at_version(ObjectVersion::ZERO);
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "mint",
         vec![
             Input::raw(&10u64).unwrap(),
@@ -115,7 +115,7 @@ fn execute_with_gas_coin_wrong_version_returns_error() {
         ],
     );
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
         ExecutorError::InvalidObjectVersion { address, expected, found }
@@ -144,9 +144,9 @@ fn execute_with_gas_coin_wrong_digest_returns_error() {
             Input::raw(&utils::SENDER).unwrap(),
         ],
     );
-    let tx = Transaction::new(utils::SENDER, wrong_ref, TransactionType::MeowCall(call));
+    let transaction = Transaction::new(utils::SENDER, wrong_ref, TransactionType::MeowCall(call));
 
-    let err = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
+    let err = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap_err();
     assert!(matches!(
         err,
         ExecutorError::InvalidObjectDigest { address, expected, found }
@@ -177,10 +177,11 @@ fn execute_meow_call_with_unrelated_module_in_inputs_succeeds() {
     );
     let unrelated_obj = utils::make_module_object(Address::suffixed(0xF2), unrelated_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
     let result = utils::execute(
-        &tx,
+        &transaction,
         vec![dep_obj, module_obj, coin_obj, unrelated_obj, gas_obj],
     )
     .unwrap();
@@ -204,9 +205,9 @@ fn execute_meow_call_with_dep_present_succeeds() {
     let main_bytes = bcs::to_bytes(&main_module).unwrap();
     let module_obj = utils::make_module_object(main_addr, main_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(main_addr, "run", vec![]);
+    let transaction = utils::make_call_transaction(main_addr, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![module_obj, dep_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, dep_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.status(),
@@ -230,9 +231,9 @@ fn execute_meow_call_transitive_dep_present_succeeds() {
     let a_bytes = bcs::to_bytes(&a_module).unwrap();
     let a_obj = utils::make_module_object(a_addr, a_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(a_addr, "run", vec![]);
+    let transaction = utils::make_call_transaction(a_addr, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![a_obj, b_obj, c_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![a_obj, b_obj, c_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.status(),
@@ -258,9 +259,9 @@ fn execute_meow_call_diamond_dep_succeeds() {
     let c_obj = utils::make_module_object(Address::from(c_addr), c_bytes);
     let d_obj = utils::make_module_object(Address::from(d_addr), d_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![a_obj, b_obj, c_obj, d_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![a_obj, b_obj, c_obj, d_obj, gas_obj]).unwrap();
 
     assert_eq!(
         result.status(),
@@ -274,7 +275,7 @@ fn execute_meow_call_diamond_dep_succeeds() {
 fn execute_meow_call_without_module_returns_failure() {
     // No module object — only the gas coin in inputs.
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction(
+    let transaction = utils::make_meow_call_transaction(
         "mint",
         vec![
             Input::raw(&10u64).unwrap(),
@@ -282,7 +283,7 @@ fn execute_meow_call_without_module_returns_failure() {
         ],
     );
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found in inputs")),
@@ -306,10 +307,10 @@ fn execute_meow_call_with_missing_dep_returns_failure() {
     let main_bytes = bcs::to_bytes(&main_module).unwrap();
     let module_obj = utils::make_module_object(main_addr, main_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(main_addr, "run", vec![]);
+    let transaction = utils::make_call_transaction(main_addr, "run", vec![]);
 
     // Dep module object is intentionally absent from inputs.
-    let result = utils::execute(&tx, vec![module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("missing dependency")),
@@ -335,10 +336,10 @@ fn execute_meow_call_transitive_dep_missing_returns_failure() {
     let a_bytes = bcs::to_bytes(&a_module).unwrap();
     let a_obj = utils::make_module_object(a_addr, a_bytes);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(a_addr, "run", vec![]);
+    let transaction = utils::make_call_transaction(a_addr, "run", vec![]);
 
     // B is absent; only A, C, and gas are in inputs.
-    let result = utils::execute(&tx, vec![a_obj, c_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![a_obj, c_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("missing dependency")),
@@ -366,9 +367,10 @@ fn execute_with_object_arg_absent_from_inputs_returns_failure() {
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     // Coin is referenced in the call but intentionally absent from inputs.
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not found")),
@@ -390,9 +392,9 @@ fn execute_with_raw_input_for_struct_parameter_returns_failure() {
         .try_into()
         .unwrap();
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::raw(&42u64).unwrap()]);
+    let transaction = utils::make_meow_call_transaction("burn", vec![Input::raw(&42u64).unwrap()]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![dep_obj, module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("Raw input cannot be resolved")),
@@ -418,9 +420,11 @@ fn execute_with_input_object_at_max_version_returns_failure() {
         ObjectVersion::MAX,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("is at the maximum version")),
@@ -443,9 +447,10 @@ fn execute_with_input_object_wrong_version_returns_failure() {
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ZERO, coin_obj.digest());
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
+    let transaction = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid version")),
@@ -468,9 +473,10 @@ fn execute_with_input_object_wrong_digest_returns_failure() {
     let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), utils::SENDER, 50);
     let gas_obj = utils::make_gas_coin_object();
     let wrong_ref = ObjectRef::new(*coin_obj.address(), ObjectVersion::ONE, Digest::ZERO);
-    let tx = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
+    let transaction = utils::make_meow_call_transaction("burn", vec![Input::Object(wrong_ref)]);
 
-    let result = utils::execute(&tx, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("has invalid digest")),
@@ -494,9 +500,9 @@ fn execute_with_corrupt_module_content_returns_failure() {
     // Failure before entering the VM. The gas coin is still returned.
     let corrupt_module_obj = utils::make_module_object(Address::ZERO, vec![0xDE, 0xAD, 0xBE, 0xEF]);
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![corrupt_module_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![corrupt_module_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("failed to deserialize module")),
@@ -525,9 +531,9 @@ fn execute_with_corrupt_dependency_content_returns_failure() {
         vec![0xDE, 0xAD, 0xBE, 0xEF],
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_call_transaction(Address::ZERO, "run", vec![]);
+    let transaction = utils::make_call_transaction(Address::ZERO, "run", vec![]);
 
-    let result = utils::execute(&tx, vec![main_obj, corrupt_dep_obj, gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![main_obj, corrupt_dep_obj, gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("failed to deserialize dependency module")),

@@ -5,13 +5,12 @@ use std::collections::BTreeMap;
 use meow_nakamoto_types::block::Block;
 use meow_types::{
     digest::Digest,
-    object::Object,
     time,
     transaction::{SignedTransaction, execution_result::ExecutionResult, validator},
 };
 use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolver};
 
-use crate::{store::Store, system_transactions};
+use crate::{roots, store::Store, system_transactions};
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
 ///
@@ -102,7 +101,8 @@ impl ChainState {
 
     /// Commit a locally-mined block and its resulting store state.
     /// The caller is responsible for executing the transactions and computing
-    /// the new store; this method simply records them and advances the head.
+    /// the new store; this method records the block, indexes its results, and
+    /// advances the head.
     pub fn commit(&mut self, block: Block, new_store: Store) {
         let hash = block.hash();
         for result in &block.results {
@@ -215,12 +215,13 @@ impl ChainState {
         }
 
         // Transactions root must match the transaction list in the block.
-        let transactions_root = compute_transactions_root(&block.transactions);
+        let transactions_root = roots::compute_transactions_root(&block.transactions);
         if transactions_root != block.header.transactions_root {
             tracing::warn!(height, "block has invalid transactions root — ignoring");
             return false;
         }
 
+        // Validate all transaction signatures before re-executing.
         for signed_transaction in &block.transactions {
             if let Err(e) = validator::validate_signed_transaction(signed_transaction) {
                 tracing::warn!(height, error = %e, "block has invalid transaction signature");
@@ -280,6 +281,7 @@ impl ChainState {
                     reward_transaction,
                     reward_execution_result,
                     amount,
+                    block.header.mining_hash(),
                     &mut new_store,
                     height,
                 )
@@ -290,7 +292,7 @@ impl ChainState {
             return false;
         }
 
-        let recomputed_state_root = compute_state_root(&new_store);
+        let recomputed_state_root = roots::compute_state_root(&new_store);
         if recomputed_state_root != block.header.state_root {
             tracing::warn!(height, "block has invalid state root — ignoring");
             return false;
@@ -315,7 +317,8 @@ impl ChainState {
         false
     }
 
-    /// Returns all blocks from the given height onwards (in height order).
+    /// Returns all blocks at or above the given height.
+    /// Order is not guaranteed — callers must sort if height order is required.
     pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         self.blocks
             .values()
@@ -325,26 +328,13 @@ impl ChainState {
     }
 }
 
-/// Deterministic hash of the object store's current state.
-/// Used as `state_root` in block headers.
-pub fn compute_state_root(store: &Store) -> Digest {
-    let objects: Vec<&Object> = store.objects().collect();
-    Digest::compute(&objects).expect("state root serialization is infallible")
-}
-
-/// Hash over all transaction digests in order.
-/// Used as `transactions_root` in block headers.
-pub fn compute_transactions_root(txs: &[SignedTransaction]) -> Digest {
-    let digests: Vec<Digest> = txs.iter().map(|tx| tx.transaction().digest()).collect();
-    Digest::compute(&digests).expect("transactions root serialization is infallible")
-}
-
 /// Validate and re-execute the block reward transaction, then apply it to the store.
 /// Returns `false` on any validation or execution mismatch without mutating the store.
 fn apply_block_reward_transaction(
     reward_transaction: &SignedTransaction,
     reward_execution_result: &ExecutionResult,
     total_gas: u64,
+    mining_block_hash: Digest,
     store: &mut Store,
     height: u64,
 ) -> bool {
@@ -355,19 +345,21 @@ fn apply_block_reward_transaction(
     if !system_transactions::is_valid_reward_transaction(
         reward_transaction.transaction(),
         total_gas,
+        mining_block_hash,
     ) {
         tracing::warn!(height, "reward amount or target mismatch");
         return false;
     }
-    let inputs = system_transactions::collect_inputs_for_reward_transaction(store);
-    let recomputed_result =
-        match executor::execute_system_transaction(reward_transaction.transaction(), inputs) {
-            Ok(result) => result,
-            Err(e) => {
-                tracing::warn!(height, error = %e, "reward transaction re-execution failed");
-                return false;
-            }
-        };
+    let recomputed_result = match system_transactions::execute_reward_transaction(
+        reward_transaction.transaction(),
+        store,
+    ) {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::warn!(height, error = %e, "reward transaction re-execution failed");
+            return false;
+        }
+    };
     if &recomputed_result != reward_execution_result {
         tracing::warn!(height, "reward result mismatch local execution");
         return false;

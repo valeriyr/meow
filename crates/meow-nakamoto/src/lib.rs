@@ -3,5 +3,6 @@
 pub mod chain;
 pub mod mempool;
 pub mod miner;
+pub mod roots;
 pub mod store;
 pub mod system_transactions;

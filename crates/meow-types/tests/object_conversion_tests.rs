@@ -4,10 +4,7 @@ use meow_types::{
     identifier::Identifier,
     object::{
         Object,
-        object_conversion::{
-            error::ObjectConversionError, extract_human_readable_content,
-            object_to_vm_object_value, vm_object_value_to_object,
-        },
+        object_conversion::{self, error::ObjectConversionError},
         object_decl_ref::ObjectDeclRef,
         object_owner::ObjectOwner,
         object_version::ObjectVersion,
@@ -31,7 +28,7 @@ const OBJECT_ID: Address = Address::suffixed(0xF1);
 fn object_to_vm_injects_id_as_first_field() {
     let obj = make_object(OBJECT_ID, vec![("balance".to_string(), Value::U64(100))]);
 
-    let val = object_to_vm_object_value(&obj).unwrap();
+    let val = object_conversion::object_to_vm_object_value(&obj).unwrap();
 
     let fields = vm_object_fields(&val);
     assert_eq!(fields[0].0, MEOW_OBJECT_ID_FIELD_NAME);
@@ -50,7 +47,7 @@ fn object_to_vm_preserves_other_fields() {
         ],
     );
 
-    let val = object_to_vm_object_value(&obj).unwrap();
+    let val = object_conversion::object_to_vm_object_value(&obj).unwrap();
 
     let fields = vm_object_fields(&val);
     assert_eq!(fields.len(), 3); // id + balance + flag
@@ -62,7 +59,7 @@ fn object_to_vm_preserves_other_fields() {
 fn object_to_vm_carries_type_name() {
     let obj = make_object(OBJECT_ID, vec![]);
 
-    let val = object_to_vm_object_value(&obj).unwrap();
+    let val = object_conversion::object_to_vm_object_value(&obj).unwrap();
 
     assert_eq!(val.type_name(), foo_qualified_type_name());
 }
@@ -71,7 +68,7 @@ fn object_to_vm_carries_type_name() {
 fn object_to_vm_fails_for_module_type() {
     let module = make_module();
 
-    assert!(object_to_vm_object_value(&module).is_err());
+    assert!(object_conversion::object_to_vm_object_value(&module).is_err());
 }
 
 //
@@ -124,7 +121,7 @@ fn vm_to_object_sets_address_from_id_field() {
 
 #[test]
 fn vm_to_object_fails_for_non_object_value() {
-    let err = vm_object_value_to_object(
+    let err = object_conversion::vm_object_value_to_object(
         &Value::U64(42),
         ObjectOwner::Address(OWNER),
         Digest::ZERO,
@@ -143,7 +140,7 @@ fn vm_to_object_fails_for_unqualified_type_name() {
             MeowObjectId::new(OBJECT_ID).into(),
         )],
     };
-    let err = vm_object_value_to_object(
+    let err = object_conversion::vm_object_value_to_object(
         &val,
         ObjectOwner::Address(OWNER),
         Digest::ZERO,
@@ -159,7 +156,7 @@ fn vm_to_object_fails_when_id_field_missing() {
         type_name: foo_qualified_type_name(),
         fields: vec![("balance".to_string(), Value::U64(42))],
     };
-    let err = vm_object_value_to_object(
+    let err = object_conversion::vm_object_value_to_object(
         &val,
         ObjectOwner::Address(OWNER),
         Digest::ZERO,
@@ -183,8 +180,8 @@ fn round_trip_object_to_vm_and_back() {
         ],
     );
 
-    let vm_val = object_to_vm_object_value(&original).unwrap();
-    let restored = vm_object_value_to_object(
+    let vm_val = object_conversion::object_to_vm_object_value(&original).unwrap();
+    let restored = object_conversion::vm_object_value_to_object(
         &vm_val,
         *original.owner(),
         original.digest(),
@@ -211,7 +208,8 @@ fn extract_human_readable_content_returns_fields_for_any_object() {
         ],
     );
 
-    let content = extract_human_readable_content(&object).expect("object must produce content");
+    let content = object_conversion::extract_human_readable_content(&object)
+        .expect("object must produce content");
 
     assert_eq!(content.get("balance").map(String::as_str), Some("100"));
     assert_eq!(content.get("active").map(String::as_str), Some("true"));
@@ -221,7 +219,8 @@ fn extract_human_readable_content_returns_fields_for_any_object() {
 fn extract_human_readable_content_empty_object_returns_empty_map() {
     let object = make_object(OBJECT_ID, vec![]);
 
-    let content = extract_human_readable_content(&object).expect("object must produce content");
+    let content = object_conversion::extract_human_readable_content(&object)
+        .expect("object must produce content");
 
     assert!(content.is_empty());
 }
@@ -230,7 +229,7 @@ fn extract_human_readable_content_empty_object_returns_empty_map() {
 fn extract_human_readable_content_returns_none_for_module_object() {
     let module = make_module();
 
-    assert!(extract_human_readable_content(&module).is_none());
+    assert!(object_conversion::extract_human_readable_content(&module).is_none());
 }
 
 //
@@ -250,7 +249,7 @@ fn make_module() -> Object {
 }
 
 fn make_vm_to_object(val: &Value) -> Object {
-    vm_object_value_to_object(
+    object_conversion::vm_object_value_to_object(
         val,
         ObjectOwner::Address(OWNER),
         Digest::ZERO,

@@ -20,9 +20,9 @@ fn execute_module_publish_succeeds() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(module_bytes);
+    let transaction = utils::make_meow_module_publish_transaction(module_bytes);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert_eq!(result.status(), &ExecutionStatus::Success);
     assert_eq!(
@@ -48,9 +48,9 @@ fn execute_module_publish_fails_when_module_too_large() {
     let module_size = MAX_BCS_SERIALIZED_MODULE_SIZE + 1;
     let oversized = vec![0u8; module_size];
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(oversized);
+    let transaction = utils::make_meow_module_publish_transaction(oversized);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("exceeds maximum")),
@@ -63,9 +63,9 @@ fn execute_module_publish_fails_when_module_too_large() {
 fn execute_module_publish_fails_when_module_not_deserializable() {
     let not_a_module = vec![1u8, 2, 3, 4, 5];
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(not_a_module);
+    let transaction = utils::make_meow_module_publish_transaction(not_a_module);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("failed to deserialize module")),
@@ -93,9 +93,9 @@ fn execute_module_publish_fails_when_bytecode_invalid() {
 
     let module_bytes = bcs::to_bytes(&module).expect("module must serialize");
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(module_bytes);
+    let transaction = utils::make_meow_module_publish_transaction(module_bytes);
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     assert!(
         matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("bytecode verification failed")),
@@ -114,10 +114,10 @@ fn execute_module_publish_derives_address_from_tx_digest() {
         "#,
     );
     let gas_obj = utils::make_gas_coin_object();
-    let tx = utils::make_meow_module_publish_transaction(module_bytes);
-    let tx_digest = tx.digest();
+    let transaction = utils::make_meow_module_publish_transaction(module_bytes);
+    let tx_digest = transaction.digest();
 
-    let result = utils::execute(&tx, vec![gas_obj]).unwrap();
+    let result = utils::execute(&transaction, vec![gas_obj]).unwrap();
 
     let expected_addr = Address::derive(tx_digest, 0, 0);
     assert_eq!(
