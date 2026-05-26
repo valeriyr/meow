@@ -3,7 +3,7 @@
 use meow_types::{address::Address, digest::Digest, object::object_version::ObjectVersion};
 
 /// An error related to the executor.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ExecutorError {
     #[error("gas coin not found")]
     GasCoinNotFound,

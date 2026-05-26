@@ -3,7 +3,7 @@
 use crate::address::Address;
 
 /// An error produced by transaction validation.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum ValidationError {
     #[error("object {0} appears more than once in call arguments")]
     AliasedCallArgument(Address),

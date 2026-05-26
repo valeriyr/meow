@@ -28,7 +28,7 @@ The goal is not to ship a coin — it is to show how the pieces fit together.
 
 **[Smart contracts](docs/contracts.md)** — Programs are written in the Meow Language, compiled to bytecode by `meow-vm-compiler`. The VM executes bytecode against the object store inside a transaction. Contracts can be run locally through the CLI without touching a node.
 
-**[Networking](docs/networking.md)** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node receives a block whose height is more than one ahead of its own chain tip, it requests the missing range from the sender and buffers any blocks that arrive during the catch-up.
+**[Networking](docs/networking.md)** — Nodes communicate over [libp2p](https://libp2p.io/) gossipsub. Peers are discovered automatically on the local network via mDNS; cross-machine peering uses explicit bootstrap addresses. When a node falls behind, it catches up by pulling missing blocks or fetching a full state snapshot from a peer.
 
 **[RPC](docs/rpc.md)** — `meow-node` exposes a JSON-over-HTTP API on `127.0.0.1:8600` by default. The `meow client` CLI sub-commands and the `meow-node-client` library crate both talk to this API.
 

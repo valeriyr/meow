@@ -4,7 +4,7 @@ pub mod error;
 
 use std::net::SocketAddr;
 
-use meow_nakamoto_types::block::Block;
+use meow_nakamoto_types::{block::Block, state_snapshot::StateSnapshot};
 use serde::de::DeserializeOwned;
 use url::Url;
 
@@ -118,6 +118,19 @@ impl NodeClient {
     pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
         let url = self.base_url.join(&format!("blocks-since/{height}"))?;
         self.get_list(url).await
+    }
+
+    /// GET /state-snapshot — fetch a full state snapshot.
+    pub async fn get_state_snapshot(&self) -> Result<StateSnapshot> {
+        let url = self.base_url.join("state-snapshot")?;
+
+        let response = self.inner.get(url).send().await?;
+
+        if response.status().is_success() {
+            return Ok(response.json().await?);
+        }
+
+        Err(Self::node_error(response).await)
     }
 
     /// Sends a GET request and deserializes the JSON body on success.

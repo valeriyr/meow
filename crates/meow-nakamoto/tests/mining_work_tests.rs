@@ -1,9 +1,6 @@
 mod utils;
 
-use std::sync::Arc;
-
 use meow_nakamoto::{miner::mining_work::MiningWork, roots, store::Store};
-use meow_nakamoto_types::block_header::BlockHeader;
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -21,9 +18,9 @@ use rand::{SeedableRng, rngs::StdRng};
 /// initial value of zero — the grind loop exits on the very first candidate.
 #[test]
 fn grind_with_zero_difficulty_sets_nonce_zero() {
-    let mut work = make_work(vec![]);
+    let mut work = make_work_with_publish_transaction();
     work.difficulty = 0;
-    let (block, _) = work.grind();
+    let (block, _) = work.grind().expect("batch has one transaction");
 
     assert_eq!(block.header.nonce, 0);
 }
@@ -31,7 +28,9 @@ fn grind_with_zero_difficulty_sets_nonce_zero() {
 /// The grinder must produce a block whose nonce satisfies `DIFFICULTY`.
 #[test]
 fn grind_produces_block_with_nonce_meeting_difficulty() {
-    let (block, _) = make_work(vec![]).grind();
+    let (block, _) = make_work_with_publish_transaction()
+        .grind()
+        .expect("batch has one transaction");
 
     assert!(block.header.meets_difficulty(DIFFICULTY));
 }
@@ -41,7 +40,9 @@ fn grind_produces_block_with_nonce_meeting_difficulty() {
 /// from the same store snapshot, so any divergence is a bug.
 #[test]
 fn grind_state_root_matches_returned_store() {
-    let (block, store) = make_work(vec![]).grind();
+    let (block, store) = make_work_with_publish_transaction()
+        .grind()
+        .expect("batch has one transaction");
 
     assert_eq!(block.header.state_root, roots::compute_state_root(&store));
 }
@@ -51,7 +52,9 @@ fn grind_state_root_matches_returned_store() {
 /// the header must always commit to the actual executed set.
 #[test]
 fn grind_transactions_root_matches_block_transactions() {
-    let (block, _) = make_work(vec![]).grind();
+    let (block, _) = make_work_with_publish_transaction()
+        .grind()
+        .expect("batch has one transaction");
 
     assert_eq!(
         block.header.transactions_root,
@@ -59,29 +62,57 @@ fn grind_transactions_root_matches_block_transactions() {
     );
 }
 
-/// When no user transactions are executed (empty batch → zero gas), neither
-/// `reward_transaction` nor `reward_transaction_result` may be present.
+/// `grind` must return `None` when the batch is empty — grinding an empty block
+/// is not allowed.
 #[test]
-fn grind_reward_is_none_when_no_gas_used() {
-    let (block, _) = make_work(vec![]).grind();
-
-    assert!(block.reward_transaction.is_none());
-    assert!(block.reward_transaction_result.is_none());
+fn grind_returns_none_for_empty_batch() {
+    assert!(make_work(vec![]).grind().is_none());
 }
 
-/// A transaction whose gas-coin address is absent from the store causes
-/// `executor::execute` to return `Err`, so the miner must drop it.  The
-/// resulting block must be empty, and `transactions_root` must be updated to
-/// commit to the actual (empty) executed set — not the original batch.
+/// When all transactions in the batch fail (e.g. gas coin absent from store),
+/// every transaction is dropped and `grind` must return `None` instead of
+/// committing an empty block.
 #[test]
-fn grind_drops_invalid_transaction_and_updates_transactions_root() {
+fn grind_returns_none_when_all_transactions_fail() {
     let batch = vec![make_failing_transaction(0xA1)];
-    let (block, _) = make_work(batch).grind();
+    assert!(make_work(batch).grind().is_none());
+}
 
-    assert!(block.transactions.is_empty());
+/// When a batch contains both valid and failing transactions, `grind` must drop
+/// only the failing ones, re-grind with the reduced set, and commit a block whose
+/// `transactions_root` reflects the actual executed transactions — not the original
+/// batch.
+#[test]
+fn grind_drops_failed_transactions_and_updates_transactions_root() {
+    let keypair = utils::test_keypair();
+    let miner_address = Address::from(&keypair);
+    let (parent_store, gas_coin_ref) = utils::genesis_store_with_coin(miner_address);
+
+    let valid_tx = Transaction::new(
+        miner_address,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+    let (valid_signed, _) = valid_tx.sign(&keypair);
+
+    let batch = vec![valid_signed, make_failing_transaction(0xA1)];
+    let work = utils::mining_work(
+        batch,
+        parent_store,
+        1,
+        Digest::ZERO,
+        0,
+        DIFFICULTY,
+        REWARD_ADDRESS,
+    );
+
+    let (block, _) = work.grind().expect("valid transaction survives");
+
+    assert_eq!(block.transactions.len(), 1);
     assert_eq!(
         block.header.transactions_root,
-        roots::compute_transactions_root(&[]),
+        roots::compute_transactions_root(&block.transactions),
+        "transactions_root must be recomputed after dropping failed transactions"
     );
 }
 
@@ -91,7 +122,9 @@ fn grind_drops_invalid_transaction_and_updates_transactions_root() {
 /// `reward_transaction_result` must both be present.
 #[test]
 fn grind_results_count_matches_transactions_count() {
-    let (block, _) = make_work_with_publish_transaction().grind();
+    let (block, _) = make_work_with_publish_transaction()
+        .grind()
+        .expect("batch has one transaction");
 
     assert_eq!(block.transactions.len(), 1);
     assert_eq!(block.results.len(), 1);
@@ -111,7 +144,15 @@ const DIFFICULTY: u32 = 4;
 const REWARD_ADDRESS: Address = Address::suffixed(0xE1);
 
 fn make_work(batch: Vec<SignedTransaction>) -> MiningWork {
-    mining_work(batch, Store::default())
+    utils::mining_work(
+        batch,
+        Store::default(),
+        1,
+        Digest::ZERO,
+        0,
+        DIFFICULTY,
+        REWARD_ADDRESS,
+    )
 }
 
 /// Build `MiningWork` containing one valid `MeowModulePublish` transaction that
@@ -127,40 +168,26 @@ fn make_work_with_publish_transaction() -> MiningWork {
         TransactionType::MeowModulePublish(utils::noop_module_bytes()),
     );
     let (signed_transaction, _) = transaction.sign(&keypair);
-    mining_work(vec![signed_transaction], parent_store)
-}
-
-fn mining_work(batch: Vec<SignedTransaction>, parent_store: Store) -> MiningWork {
-    let keypair = utils::test_keypair();
-    let miner_address = Address::from(&keypair);
-    let transactions_root = roots::compute_transactions_root(&batch);
-    MiningWork {
-        header: BlockHeader {
-            height: 1,
-            parent_hash: Digest::ZERO,
-            transactions_root,
-            state_root: Digest::ZERO,
-            timestamp: 0,
-            nonce: 0,
-        },
-        batch,
+    utils::mining_work(
+        vec![signed_transaction],
         parent_store,
-        difficulty: DIFFICULTY,
-        miner_keypair: Arc::new(keypair),
-        miner_address,
-        reward_address: REWARD_ADDRESS,
-    }
+        1,
+        Digest::ZERO,
+        0,
+        DIFFICULTY,
+        REWARD_ADDRESS,
+    )
 }
 
 /// Build a signed transaction that always causes `executor::execute` to return
-/// `Err`: the gas-coin address (`0xEE`) is never present in `Store::default()`,
+/// `Err`: the gas-coin address (`0xF9`) is never present in `Store::default()`,
 /// so `resolve_gas_coin_object` fails before any execution happens.
 fn make_failing_transaction(seed: u8) -> SignedTransaction {
     let keypair = KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([seed; 32]));
     let sender = Address::from(&keypair);
     let transaction = Transaction::new(
         sender,
-        ObjectRef::new(Address::suffixed(0xEE), ObjectVersion::ZERO, Digest::ZERO),
+        ObjectRef::new(Address::suffixed(0xF9), ObjectVersion::ZERO, Digest::ZERO),
         TransactionType::MeowModulePublish(vec![1]),
     );
     let (signed, _) = transaction.sign(&keypair);

@@ -61,6 +61,13 @@ fn from_str_plain_string_is_str() {
 }
 
 #[test]
+fn from_str_empty_string_is_str_not_u64_error() {
+    let arg: CallArg = "".parse().unwrap();
+
+    assert!(matches!(arg, CallArg::Str(ref s) if s.is_empty()));
+}
+
+#[test]
 fn from_str_at_prefix_with_invalid_address_returns_error() {
     let err = "@not_valid".parse::<CallArg>().unwrap_err();
 

@@ -41,6 +41,8 @@ meow genesis build allocations.csv genesis.bin
 
 This produces a BCS-serialized genesis file that `meow-node` can load.
 
+> **All nodes in a network must use the same genesis file.** The genesis defines the initial chain state (framework modules, accounts, and balances) and serves as the shared identity of the network. Nodes using a different genesis file are on an incompatible chain and cannot communicate with the network.
+
 ## 4. Start the Node
 
 ```bash
@@ -52,7 +54,7 @@ meow-node run --genesis genesis.bin
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--genesis` | _(none)_ | Path to a BCS-serialized genesis file |
+| `--genesis` | _(required)_ | Path to a BCS-serialized genesis file |
 | `--rpc-listen` | `127.0.0.1:8600` | HTTP API bind address |
 | `--listen-address` | `/ip4/0.0.0.0/tcp/0` | libp2p listen address |
 | `--bootstrap-peers` | _(none)_ | Multiaddr of an existing peer (repeatable) |
@@ -65,7 +67,7 @@ meow-node run --genesis genesis.bin
 
 </details>
 
-## Running two nodes locally
+### Running two nodes locally
 
 Nodes discover each other automatically via mDNS when listening on `0.0.0.0`. See [Networking](networking.md) for peer discovery and catch-up sync details. Start each in a separate terminal:
 
@@ -86,7 +88,7 @@ meow-node run --genesis genesis.bin \
   --bootstrap-peers /ip4/<node1-ip>/tcp/30333
 ```
 
-Node 2 detects any block height gap and pulls the missing range from node 1 automatically. To reduce the mDNS discovery wait during local development:
+To reduce the mDNS discovery wait during local development:
 
 ```bash
 meow-node run --genesis genesis.bin \
@@ -94,6 +96,8 @@ meow-node run --genesis genesis.bin \
   --mdns-query-interval 5 \
   --check-explicit-peers-ticks 5
 ```
+
+Once connected, node 2 detects any block height gap automatically and initiates a catch-up sync — pulling missing blocks for small gaps or fetching a full state snapshot for large ones. See [Networking — Catch-up sync](networking.md#catch-up-sync) for details.
 
 ## 5. Query the Node
 
@@ -175,6 +179,6 @@ meow transaction simulate <BASE64_TRANSACTION>
 
 > **Note:** if the contract uses `meow_vm_rand()` or `meow_vm_timestamp()`, the result of simulation may differ from the result of the actual committed transaction because the block hash and timestamp are unknown until the block is mined.
 
-
+---
 
 For a full worked example — writing a module, publishing it, calling its functions, and sending coins — see [Contracts](contracts.md).

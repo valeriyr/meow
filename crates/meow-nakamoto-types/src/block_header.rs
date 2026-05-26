@@ -14,6 +14,9 @@ pub struct BlockHeader {
     pub parent_hash: Digest,
     /// Hash over all transaction digests in this block.
     pub transactions_root: Digest,
+    /// Digest of the reward transaction, or `None` when no gas was collected.
+    /// Allows verifying the reward transaction without re-executing the block.
+    pub reward_root: Option<Digest>,
     /// Hash of the object store state after applying this block.
     pub state_root: Digest,
     /// Unix timestamp (milliseconds) at the time of mining.
@@ -32,12 +35,13 @@ impl BlockHeader {
     }
 
     /// Blake2b-256 hash over `height`, `parent_hash`, `transactions_root`,
-    /// `timestamp`, and `nonce` — everything except `state_root`.
+    /// `timestamp`, and `nonce` — everything except `state_root` and `reward_root`.
     ///
     /// Used for two purposes:
     /// - **PoW target**: `meets_difficulty` checks this hash. Excluding `state_root`
-    ///   breaks the circular dependency (state is only known after execution), so
-    ///   the miner can grind the nonce without running transactions first.
+    ///   and `reward_root` breaks the circular dependency (both are only known after
+    ///   execution completes), so the miner can grind the nonce without running
+    ///   transactions first.
     /// - **Randomness seed**: passed to the VM executor so that the random seed is
     ///   fixed the moment the nonce is found — *after* the block is mined but
     ///   *before* any transaction runs. Transaction senders cannot predict it.

@@ -33,6 +33,60 @@ fn submit_accepts_valid_transaction() {
     assert_eq!(mempool.pending().count(), 1);
 }
 
+/// Submitting the same transaction digest a second time must return a duplicate error.
+#[test]
+fn submit_rejects_duplicate_transaction() {
+    let keypair = utils::test_keypair();
+    let gas_coin = make_gas_coin();
+    let store = Store::with_objects([gas_coin.clone()]);
+
+    let mut mempool = Mempool::empty();
+    submit_transaction(&mut mempool, &store, &keypair, &gas_coin).unwrap();
+
+    let err = submit_transaction(&mut mempool, &store, &keypair, &gas_coin).unwrap_err();
+
+    assert!(matches!(err, MempoolError::DuplicateTransaction { .. }));
+}
+
+/// A `MeowCall` transaction whose object argument is absent from the store must
+/// be rejected — `validate_against_store` checks call args as well as the gas coin.
+#[test]
+fn submit_rejects_meow_call_with_missing_object_argument() {
+    let keypair = utils::test_keypair();
+    let gas_coin = make_gas_coin();
+    let arg_obj = make_object(Address::suffixed(0xF1), ObjectVersion::ONE);
+    // Store only has the gas coin — the call argument object is absent.
+    let store = Store::with_objects([gas_coin.clone()]);
+
+    let transaction = Transaction::new(
+        keypair.public().into(),
+        gas_coin.object_ref(),
+        TransactionType::MeowCall(Call::new(
+            Address::suffixed(0xFD),
+            Identifier::new("fn").unwrap(),
+            vec![Input::Object(arg_obj.object_ref())],
+        )),
+    );
+    let (signed, _) = transaction.sign(&keypair);
+
+    let mut mempool = Mempool::empty();
+    let err = mempool.submit(signed, &store).unwrap_err();
+
+    assert!(matches!(err, MempoolError::ObjectNotFound { .. }));
+}
+
+/// A transaction whose gas coin address does not exist in the store must be rejected.
+#[test]
+fn submit_rejects_transaction_for_missing_gas_coin() {
+    let keypair = utils::test_keypair();
+    let gas_coin = make_gas_coin();
+
+    let mut mempool = Mempool::empty();
+    let err = submit_transaction(&mut mempool, &Store::default(), &keypair, &gas_coin).unwrap_err();
+
+    assert!(matches!(err, MempoolError::ObjectNotFound { .. }));
+}
+
 /// A transaction signed by a key that does not match the declared sender must be rejected.
 #[test]
 fn submit_rejects_transaction_with_invalid_signature() {
@@ -55,48 +109,6 @@ fn submit_rejects_transaction_with_invalid_signature() {
     let err = mempool.submit(signed, &store).unwrap_err();
 
     assert!(matches!(err, MempoolError::TransactionValidationError(_)));
-}
-
-/// Submitting the same transaction digest a second time must return a duplicate error.
-#[test]
-fn submit_rejects_duplicate_transaction() {
-    let keypair = utils::test_keypair();
-    let gas_coin = make_gas_coin();
-    let store = Store::with_objects([gas_coin.clone()]);
-
-    let mut mempool = Mempool::empty();
-    submit_transaction(&mut mempool, &store, &keypair, &gas_coin).unwrap();
-
-    let err = submit_transaction(&mut mempool, &store, &keypair, &gas_coin).unwrap_err();
-
-    assert!(matches!(err, MempoolError::DuplicateTransaction { .. }));
-}
-
-/// A transaction whose gas coin address does not exist in the store must be rejected.
-#[test]
-fn submit_rejects_transaction_for_missing_gas_coin() {
-    let keypair = utils::test_keypair();
-    let gas_coin = make_gas_coin();
-
-    let mut mempool = Mempool::empty();
-    let err = submit_transaction(&mut mempool, &Store::default(), &keypair, &gas_coin).unwrap_err();
-
-    assert!(matches!(err, MempoolError::ObjectNotFound { .. }));
-}
-
-/// A transaction referencing a gas coin at a stale version must be rejected.
-#[test]
-fn submit_rejects_transaction_with_stale_gas_coin_version() {
-    let keypair = utils::test_keypair();
-    let coin_v1 = make_gas_coin();
-    let coin_v2 = make_object(*coin_v1.address(), coin_v1.version().next().unwrap());
-    let store_v2 = Store::with_objects([coin_v2]);
-
-    let mut mempool = Mempool::empty();
-    // store has v2, transaction references v1
-    let err = submit_transaction(&mut mempool, &store_v2, &keypair, &coin_v1).unwrap_err();
-
-    assert!(matches!(err, MempoolError::InvalidObjectVersion { .. }));
 }
 
 /// A transaction referencing a gas coin with the wrong digest must be rejected.
@@ -125,31 +137,19 @@ fn submit_rejects_transaction_with_mismatched_gas_coin_digest() {
     assert!(matches!(err, MempoolError::InvalidObjectDigest { .. }));
 }
 
-/// A `MeowCall` transaction whose object argument is absent from the store must
-/// be rejected — `validate_against_store` checks call args as well as the gas coin.
+/// A transaction referencing a gas coin at a stale version must be rejected.
 #[test]
-fn submit_rejects_meow_call_with_missing_object_argument() {
+fn submit_rejects_transaction_with_stale_gas_coin_version() {
     let keypair = utils::test_keypair();
-    let gas_coin = make_gas_coin();
-    let arg_obj = make_object(Address::suffixed(0xF1), ObjectVersion::ONE);
-    // Store only has the gas coin — the call argument object is absent.
-    let store = Store::with_objects([gas_coin.clone()]);
-
-    let transaction = Transaction::new(
-        keypair.public().into(),
-        gas_coin.object_ref(),
-        TransactionType::MeowCall(Call::new(
-            Address::suffixed(0xFD),
-            Identifier::new("fn").unwrap(),
-            vec![Input::Object(arg_obj.object_ref())],
-        )),
-    );
-    let (signed, _) = transaction.sign(&keypair);
+    let coin_v1 = make_gas_coin();
+    let coin_v2 = make_object(*coin_v1.address(), coin_v1.version().next().unwrap());
+    let store_v2 = Store::with_objects([coin_v2]);
 
     let mut mempool = Mempool::empty();
-    let err = mempool.submit(signed, &store).unwrap_err();
+    // store has v2, transaction references v1
+    let err = submit_transaction(&mut mempool, &store_v2, &keypair, &coin_v1).unwrap_err();
 
-    assert!(matches!(err, MempoolError::ObjectNotFound { .. }));
+    assert!(matches!(err, MempoolError::InvalidObjectVersion { .. }));
 }
 
 //

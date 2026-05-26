@@ -15,7 +15,7 @@ Source: [`crates/meow-framework/modules/meow_coin.meow`](../crates/meow-framewor
 ## Find your coins
 
 ```bash
-meow client get-objects <YOUR_ADDRESS>
+meow client get-objects-owned <YOUR_ADDRESS>
 ```
 
 Your coin objects are of type `MeowCoin`. Note their addresses — you'll need them for all operations below.

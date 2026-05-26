@@ -66,7 +66,7 @@ impl FromStr for CallArg {
         if s == "false" {
             return Ok(CallArg::Bool(false));
         }
-        if s.chars().all(|c| c.is_ascii_digit()) {
+        if !s.is_empty() && s.chars().all(|c| c.is_ascii_digit()) {
             return Ok(s.parse::<u64>().map(CallArg::U64)?);
         }
         // @0x... → raw address value

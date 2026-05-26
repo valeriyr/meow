@@ -8,8 +8,8 @@ use crate::block_header::BlockHeader;
 /// A [`BlockHeader`] data subset used for PoW grinding and as the randomness seed for execution.
 ///
 /// Includes `transactions_root` so the miner cannot swap transactions after
-/// finding a valid nonce. Excludes only `state_root`, which is unknowable until
-/// execution completes, breaking the circular dependency.
+/// finding a valid nonce. Excludes `state_root` and `reward_root`, both of which
+/// are unknowable until execution completes, breaking the circular dependency.
 #[derive(Serialize)]
 pub struct MiningBlockHeader<'a> {
     /// Block number (0 = genesis).

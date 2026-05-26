@@ -40,7 +40,11 @@ impl MiningWork {
     /// 4. If total gas across surviving transactions is > 0, build and execute the block
     ///    reward transaction (`meow_coin::mint`) and apply it to the store.
     /// 5. Fill in `state_root` and return the completed block and resulting store state.
-    pub fn grind(mut self) -> (Block, Store) {
+    ///
+    /// Returns `None` when all transactions in the batch are dropped during execution
+    /// (e.g. every gas coin was already spent). The caller should discard the round
+    /// and wait for the next `prepare_round` call.
+    pub fn grind(mut self) -> Option<(Block, Store)> {
         let mut surviving_batch = self.batch;
 
         loop {
@@ -66,9 +70,11 @@ impl MiningWork {
 
             for signed_transaction in &surviving_batch {
                 let transaction = signed_transaction.transaction();
+
                 let inputs = inputs_resolver::collect_inputs(transaction, |addr| {
                     new_store.get_object(addr).cloned()
                 });
+
                 match executor::execute(transaction, inputs, &execution_context) {
                     Ok(result) => {
                         new_store.apply_execution_result(&result);
@@ -76,9 +82,17 @@ impl MiningWork {
                         executed_txs.push(signed_transaction.clone());
                     }
                     Err(e) => {
-                        tracing::warn!(digest = ?signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
+                        tracing::warn!(tx_digest = %signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
                     }
                 }
+            }
+
+            if executed_txs.is_empty() {
+                tracing::debug!(
+                    height = self.header.height,
+                    "all transactions dropped — discarding round"
+                );
+                return None;
             }
 
             // Check whether any transactions were dropped. If so, transactions_root
@@ -112,7 +126,11 @@ impl MiningWork {
                     (None, None)
                 };
 
+                self.header.reward_root = reward_transaction
+                    .as_ref()
+                    .map(|tx| tx.transaction().digest());
                 self.header.state_root = roots::compute_state_root(&new_store);
+
                 let block = Block {
                     header: self.header,
                     transactions: executed_txs,
@@ -120,7 +138,8 @@ impl MiningWork {
                     reward_transaction,
                     reward_transaction_result,
                 };
-                return (block, new_store);
+
+                return Some((block, new_store));
             }
 
             tracing::debug!(
@@ -128,7 +147,9 @@ impl MiningWork {
                 dropped = surviving_batch.len() - executed_txs.len(),
                 "transactions dropped; updating transactions_root and re-grinding"
             );
+
             self.header.transactions_root = actual_transactions_root;
+
             surviving_batch = executed_txs;
         }
     }

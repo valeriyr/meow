@@ -28,19 +28,14 @@ pub struct TestNode {
 }
 
 impl TestNode {
-    /// Start a node with an empty store (no genesis objects).
-    pub async fn start_empty() -> Self {
-        let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
+    /// Start a node with a minimal single-account genesis for tests that need a running node
+    /// but don't interact with any specific on-chain state (e.g. querying unknown addresses).
+    pub async fn start_minimal() -> Self {
+        let keypair = KeyPair::random(SignatureScheme::Ed25519, thread_rng());
+        let address = Address::from(&keypair);
+        let genesis = Genesis::build(&[(address, 1)]).expect("throwaway genesis must build");
 
-        let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
-        let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
-        let miner_keypair = test_miner_keypair();
-        let miner_reward_address = Address::from(&miner_keypair);
-        let miner_config =
-            MinerConfig::new(DEFAULT_DIFFICULTY, miner_keypair, miner_reward_address);
-        let node = Node::empty(node_config, miner_config);
-
-        Self::start(node, bootstrap_addr).await
+        Self::start_with_genesis(&genesis).await
     }
 
     /// Start a node pre-seeded with the given genesis.
@@ -57,6 +52,7 @@ impl TestNode {
         let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
         let node = Node::with_genesis(node_config, miner_config, genesis);
+
         Self::start(node, bootstrap_addr).await
     }
 

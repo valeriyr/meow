@@ -6,7 +6,10 @@ pub mod mining_work;
 use std::sync::Arc;
 
 use meow_genesis::Genesis;
-use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
+use meow_nakamoto_types::{
+    block::Block, block_header::BlockHeader, miner_config::MinerConfig,
+    state_snapshot::StateSnapshot,
+};
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -77,6 +80,12 @@ impl Miner {
         self.miner_address
     }
 
+    /// Earliest block height from which a sync should start to cover all resolvable reorgs.
+    /// See [`ChainState::sync_from_height`] for details.
+    pub fn sync_from_height(&self) -> u64 {
+        self.chain.sync_from_height()
+    }
+
     /// Returns the address that receives the minted reward coins.
     pub fn reward_address(&self) -> Address {
         self.reward_address
@@ -85,6 +94,11 @@ impl Miner {
     /// Returns a reference to the current head store for transaction validation and execution.
     pub fn head_store(&self) -> &Store {
         self.chain.head_store()
+    }
+
+    /// The current best block.
+    pub fn head_block(&self) -> &Block {
+        self.chain.head_block()
     }
 
     /// Hash of the current best block.
@@ -110,6 +124,14 @@ impl Miner {
     /// Get all blocks from the given height onwards.
     pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         self.chain.get_blocks_since(height)
+    }
+
+    /// Returns a full state snapshot at the current head.
+    pub fn get_state_snapshot(&self) -> StateSnapshot {
+        StateSnapshot {
+            head: self.chain.head_block().clone(),
+            objects: self.chain.head_store().objects().cloned().collect(),
+        }
     }
 
     /// Validate and enqueue a transaction. Internally clones the head store
@@ -139,17 +161,37 @@ impl Miner {
         Ok(result)
     }
 
-    /// Apply a block received from a peer. Returns `true` if the head changed.
+    /// Replace the entire chain state from a peer-supplied snapshot.
+    ///
+    /// Delegates all validation to [`ChainState::from_snapshot`]. On success the
+    /// chain is anchored at the snapshot block and the mempool is cleared — all
+    /// pending transactions reference object versions from the old chain.
+    pub fn replace_from_snapshot(&mut self, snapshot: StateSnapshot) -> Result<()> {
+        self.chain = ChainState::from_snapshot(
+            self.chain.head_height(),
+            snapshot.head,
+            Store::with_objects(snapshot.objects),
+            self.chain.difficulty(),
+        )?;
+        self.mempool = Mempool::empty();
+        Ok(())
+    }
+
+    /// Apply a block received from a peer.
+    ///
+    /// Returns `Ok(true)` when the head changed (reorg), `Ok(false)` when the
+    /// block was valid but did not extend the longest chain, or `Err` when the
+    /// block was rejected.
     ///
     /// On a chain reorg, transactions still valid against the new head
     /// store are kept; only those referencing stale object versions are dropped.
-    pub fn apply_block(&mut self, block: Block) -> bool {
-        let reorged = self.chain.apply_block(block);
+    pub fn apply_block(&mut self, block: Block) -> Result<bool> {
+        let reorged = self.chain.apply_block(block)?;
         if reorged {
             let store = self.chain.head_store();
             self.mempool.retain_valid(store);
         }
-        reorged
+        Ok(reorged)
     }
 
     /// Drain the mempool and execute a batch of transactions against the current
@@ -177,6 +219,8 @@ impl Miner {
                 height,
                 parent_hash,
                 transactions_root,
+                // Reward root is unknown until after execution.
+                reward_root: None,
                 // State root is unknown until after execution, so set to ZERO for now.
                 state_root: Digest::ZERO,
                 timestamp: time::current_timestamp(),
@@ -199,6 +243,8 @@ impl Miner {
         if block.header.parent_hash != self.chain.head() {
             tracing::debug!(
                 height = block.header.height,
+                block_hash = %block.hash(),
+                chain_head = %self.chain.head(),
                 "mined block is stale (chain advanced) — discarding"
             );
             return false;

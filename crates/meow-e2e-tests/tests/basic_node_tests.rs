@@ -16,7 +16,7 @@ use serial_test::serial;
 #[tokio::test]
 #[serial]
 async fn get_unknown_object_returns_none() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
 
     let result = node
         .client()
@@ -102,7 +102,7 @@ async fn meow_call_transaction_is_mined_and_succeeds() {
 #[tokio::test]
 #[serial]
 async fn get_objects_owned_returns_empty_for_unknown_owner() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
 
     let objects = node
         .client()
@@ -186,7 +186,7 @@ async fn get_objects_returns_found_objects_and_none_for_unknown() {
 #[tokio::test]
 #[serial]
 async fn get_objects_empty_list_returns_empty() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
 
     let results = node.client().get_objects(&[]).await.unwrap();
 
@@ -196,7 +196,7 @@ async fn get_objects_empty_list_returns_empty() {
 #[tokio::test]
 #[serial]
 async fn get_objects_returns_all_none_for_unknown_addresses() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
 
     let unknown1 = Address::suffixed(0xF1);
     let unknown2 = Address::suffixed(0xF2);
@@ -214,7 +214,7 @@ async fn get_objects_returns_all_none_for_unknown_addresses() {
 #[tokio::test]
 #[serial]
 async fn get_objects_at_limit_succeeds() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
     let addresses: Vec<Address> = (0..100).map(Address::fill).collect(); // exactly 100
 
     let results = node.client().get_objects(&addresses).await.unwrap();
@@ -228,7 +228,7 @@ async fn get_objects_at_limit_succeeds() {
 async fn get_objects_too_many_addresses_returns_400() {
     use meow_node_client::error::NodeClientError;
 
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
     let addresses: Vec<Address> = (0..=100).map(Address::fill).collect(); // 101 addresses
 
     let result = node.client().get_objects(&addresses).await;
@@ -246,7 +246,7 @@ async fn get_objects_too_many_addresses_returns_400() {
 #[tokio::test]
 #[serial]
 async fn get_unknown_transaction_returns_none() {
-    let node = TestNode::start_empty().await;
+    let node = TestNode::start_minimal().await;
 
     let result = node
         .client()
@@ -284,4 +284,36 @@ async fn committed_transaction_is_queryable_by_digest() {
         fetched.transaction().type_(),
         TransactionType::MeowModulePublish(_)
     ));
+}
+
+//
+// ─── get_state_snapshot ───
+//
+
+/// `GET /state-snapshot` must return the current head block and all live objects.
+#[tokio::test]
+#[serial]
+async fn get_state_snapshot_returns_head_and_all_live_objects() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let transaction = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_noop()),
+    );
+    test_utils::sign_and_execute(client, &keypair, transaction).await;
+
+    let snapshot = client
+        .get_state_snapshot()
+        .await
+        .expect("state snapshot request must succeed");
+
+    assert_eq!(snapshot.head.header.height, 1);
+    assert!(
+        snapshot.objects.iter().any(|o| o.address() == &coin_addr),
+        "genesis coin must be present in the snapshot"
+    );
 }

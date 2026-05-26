@@ -22,6 +22,7 @@ The `meow client` CLI commands and the `meow-node-client` library crate are both
 | `GET` | [`/transaction/{digest}`](#get-transactiondigest) | Fetch a committed transaction |
 | `GET` | [`/transaction-result/{digest}`](#get-transaction-resultdigest) | Fetch a transaction's execution result |
 | `GET` | [`/blocks-since/{height}`](#get-blocks-sinceheight) | Fetch all blocks from a given height |
+| `GET` | [`/state-snapshot`](#get-state-snapshot) | Fetch the full chain state at the current head |
 
 ## Common types
 
@@ -238,20 +239,56 @@ Fetch all committed blocks from `height` onwards (inclusive). Returns an empty a
     "height":            42,
     "parent_hash":       "<Digest>",
     "transactions_root": "<Digest>",
+    "reward_root":       "<Digest>" | null,
     "state_root":        "<Digest>",
     "timestamp":         1712534400000,
     "nonce":             99312
   },
   "transactions":             [ ... ],
   "results":                  [ ... ],
-  "reward_transaction":       { ... } ,
-  "reward_transaction_result": { ... }
+  "reward_transaction":       { ... } | null,
+  "reward_transaction_result": { ... } | null
 }
 ```
 
 `transactions` and `results` are parallel arrays — index `i` of `results` is the outcome of index `i` of `transactions`.
 
 `reward_transaction` and `reward_transaction_result` are `null` for blocks where all user transactions paid zero gas.
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `500` | `internal_error` | Unexpected error |
+
+## GET /state-snapshot
+
+Fetch a full state snapshot at the current chain head: the head block and all live objects in the store. Used by nodes when the height gap to a peer exceeds [`SNAPSHOT_DEPTH`](consensus.md#fork-choice-and-reorgs) and block-by-block replay would be prohibitively slow.
+
+**Success (`200`):** `StateSnapshot`:
+
+```json
+{
+  "head": {
+    "header": {
+      "height":             42,
+      "parent_hash":        "<Digest>",
+      "transactions_root":  "<Digest>",
+      "reward_root":        "<Digest>" | null,
+      "state_root":         "<Digest>",
+      "timestamp":          1712534400000,
+      "nonce":              99312
+    },
+    "transactions":              [ ... ],
+    "results":                   [ ... ],
+    "reward_transaction":        { ... } | null,
+    "reward_transaction_result": { ... } | null
+  },
+  "objects": [ ... ]
+}
+```
+
+`objects` is the complete list of live objects at the head block — same shape as `/object/{addr}`.
 
 **Errors:**
 

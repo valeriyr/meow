@@ -144,7 +144,11 @@ fn use_after_move_is_an_error() {
 #[test]
 #[should_panic(expected = "meow_vm_abort override has wrong parameter types")]
 fn meow_vm_abort_override_with_wrong_params_panics() {
-    let src = r#"mod test; pub fn run() { meow_vm_abort(true, 0, "ok"); }"#;
+    let src = r#"
+        mod test;
+        
+        pub fn run() { meow_vm_abort(true, 0, "ok");
+    }"#;
     let module = utils::compile(src);
     utils::vm_with_deps_and_natives(
         module,

@@ -50,14 +50,6 @@ pub struct Node {
 }
 
 impl Node {
-    /// Creates a new node with the given configuration.
-    pub fn empty(node_config: NodeConfig, miner_config: MinerConfig) -> Self {
-        Self {
-            config: node_config,
-            miner: Arc::new(Mutex::new(Miner::empty(miner_config))),
-        }
-    }
-
     /// Creates a new node pre-seeded with the given genesis state.
     pub fn with_genesis(
         node_config: NodeConfig,

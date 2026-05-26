@@ -83,7 +83,8 @@ pub async fn run(
 /// - `GET /objects_owned/{owner}` to fetch all the live objects owned by an address.
 /// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
 /// - `GET /transaction-result/{digest}` to fetch an execution result by transaction digest.
-/// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards (for sync).
+/// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards.
+/// - `GET /state-snapshot` to fetch a full state snapshot.
 pub fn router(state: RpcState) -> Router {
     Router::new()
         .route("/submit-transaction", post(submit_transaction))
@@ -94,6 +95,7 @@ pub fn router(state: RpcState) -> Router {
         .route("/transaction/{digest}", get(get_transaction))
         .route("/transaction-result/{digest}", get(get_transaction_result))
         .route("/blocks-since/{height}", get(get_blocks_since))
+        .route("/state-snapshot", get(get_state_snapshot))
         .with_state(state)
 }
 
@@ -112,6 +114,9 @@ async fn submit_transaction(
         Err(RpcHandlerError::MinerError(err)) => match err {
             MinerError::MempoolError(err) => mempool_error_response(err),
             MinerError::SimulationError(_) => unreachable!("submit_transaction never simulates"),
+            MinerError::ChainError(_) => {
+                unreachable!("submit_transaction never interacts with the chain")
+            }
         },
     }
 }
@@ -135,6 +140,9 @@ async fn simulate_transaction(
                 "simulation_error",
                 format!("transaction simulation failed: {err}"),
             ),
+            MinerError::ChainError(_) => {
+                unreachable!("simulate_transaction never interacts with the chain")
+            }
         },
     }
 }
@@ -235,6 +243,12 @@ async fn get_blocks_since(
     Path(height): Path<u64>,
 ) -> impl IntoResponse {
     Json(state.handler.get_blocks_since(height).await).into_response()
+}
+
+/// GET /state-snapshot — returns a full state snapshot at the current chain head.
+/// Used by nodes when full chain synchronization is required.
+async fn get_state_snapshot(State(state): State<RpcState>) -> impl IntoResponse {
+    Json(state.handler.get_state_snapshot().await).into_response()
 }
 
 /// Creates a uniform JSON error response body for all RPC endpoints.

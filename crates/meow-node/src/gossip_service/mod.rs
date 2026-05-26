@@ -13,7 +13,10 @@ use std::{
 use meow_gossip_network::GossipNetwork;
 use meow_gossip_types::{config::GossipNetworkConfig, event::NetworkEvent, peer_id::PeerId};
 use meow_nakamoto::miner::Miner;
-use meow_nakamoto_types::block::Block;
+use meow_nakamoto_types::{
+    block::Block,
+    state_snapshot::{SNAPSHOT_DEPTH, StateSnapshot},
+};
 use meow_node_client::NodeClient;
 use meow_types::{digest::Digest, transaction::SignedTransaction};
 use tokio::sync::{Mutex, mpsc, watch};
@@ -37,7 +40,13 @@ const TOPICS: [&str; 3] = [TOPIC_TRANSACTIONS, TOPIC_BLOCKS, TOPIC_PEER_INFO];
 /// The state of the gossip service, used to coordinate chain syncing and normal operation.
 enum GossipServiceState {
     Working,
+    /// Block sync in progress: gap ≤ SNAPSHOT_DEPTH, pulling missing blocks from peer.
     Syncing {
+        buffered_blocks: Vec<Block>,
+        buffered_hashes: BTreeSet<Digest>,
+    },
+    /// State sync in progress: gap > SNAPSHOT_DEPTH, fetching a full snapshot from peer.
+    StateSyncing {
         buffered_blocks: Vec<Block>,
         buffered_hashes: BTreeSet<Digest>,
     },
@@ -97,6 +106,8 @@ impl GossipService {
 
         let mut sync_fut: Pin<Box<dyn Future<Output = Vec<Block>> + Send>> =
             Box::pin(std::future::pending());
+        let mut state_sync_fut: Pin<Box<dyn Future<Output = Option<StateSnapshot>> + Send>> =
+            Box::pin(std::future::pending());
         let mut service_state = GossipServiceState::Working;
 
         loop {
@@ -120,8 +131,9 @@ impl GossipService {
                                 NetworkEvent::Message { topic, data, .. } if topic == TOPIC_TRANSACTIONS => {
                                     match bcs::from_bytes::<SignedTransaction>(&data) {
                                         Ok(signed_transaction) => {
+                                            let digest = signed_transaction.transaction().digest();
                                             if let Err(e) = self.miner.lock().await.submit_transaction(signed_transaction) {
-                                                tracing::debug!(error = %e, "incoming transaction rejected");
+                                                tracing::debug!(%digest, error = %e, "incoming transaction rejected");
                                             }
                                         }
                                         Err(e) => tracing::debug!(error = %e, "failed to decode transaction"),
@@ -130,45 +142,90 @@ impl GossipService {
                                 NetworkEvent::Message { topic, data, from, .. } if topic == TOPIC_BLOCKS => {
                                     match bcs::from_bytes::<Block>(&data) {
                                         Ok(block) => {
-                                            if let GossipServiceState::Syncing { buffered_blocks, buffered_hashes } = &mut service_state {
+                                            if let GossipServiceState::Syncing { buffered_blocks, buffered_hashes }
+                                                | GossipServiceState::StateSyncing { buffered_blocks, buffered_hashes } = &mut service_state
+                                            {
                                                 let hash = block.hash();
                                                 if buffered_hashes.insert(hash) {
                                                     buffered_blocks.push(block);
                                                 }
                                             } else {
                                                 let height = block.header.height;
-                                                let local_height = self.miner.lock().await.head_height();
+                                                let block_hash = block.hash();
+                                                let (local_height, sync_start) = {
+                                                    let miner = self.miner.lock().await;
+                                                    (miner.head_height(), miner.sync_from_height())
+                                                };
 
-                                                if height > local_height + 1 {
-                                                    // Gap: we are missing blocks between local_height+1 and height-1.
-                                                    // Pull from the peer that sent this block; fall back to any known peer.
-                                                    tracing::info!(local_height, height, "block gap detected, syncing missing blocks from peer");
+                                                let peer_url = from
+                                                    .as_ref()
+                                                    .and_then(|id| self.known_peer_urls.get(id))
+                                                    .or_else(|| self.known_peer_urls.values().next())
+                                                    .cloned();
 
-                                                    let block_hash = block.hash();
+                                                if height > local_height + SNAPSHOT_DEPTH {
+                                                    // Gap too large for block sync — fetch a full state snapshot.
+                                                    tracing::info!(height, %block_hash, local_height, "large block gap detected, fetching state snapshot from peer");
 
-                                                    service_state = GossipServiceState::Syncing {
+                                                    service_state = GossipServiceState::StateSyncing {
                                                         buffered_blocks: vec![block],
                                                         buffered_hashes: [block_hash].into_iter().collect(),
                                                     };
 
-                                                    let peer_url = from
-                                                        .as_ref()
-                                                        .and_then(|id| self.known_peer_urls.get(id))
-                                                        .or_else(|| self.known_peer_urls.values().next())
-                                                        .cloned();
-
                                                     if let Some(peer_url) = peer_url {
-                                                        sync_fut = Box::pin(async move {
-                                                            let start_height = local_height + 1;
-                                                            pull_blocks_from_peer(peer_url, start_height).await
-                                                        });
+                                                        state_sync_fut = Box::pin(pull_snapshot_from_peer(peer_url));
                                                     } else {
-                                                        tracing::warn!(local_height, height, "block gap detected but no known peer URL yet");
+                                                        tracing::warn!(height, %block_hash, local_height, "state sync needed but no known peer URL yet");
                                                     }
                                                 } else {
-                                                    let switched = self.miner.lock().await.apply_block(block);
-                                                    if switched {
-                                                        tracing::info!(height, "reorged to peer's longer chain");
+                                                    // Decide whether to apply directly or trigger a block sync.
+                                                    //
+                                                    // A block sync is needed in two cases:
+                                                    //   1. Height gap > 1: we are definitely missing intermediate blocks.
+                                                    //   2. Height == local_height + 1 but apply_block fails: the fork
+                                                    //      diverged before our head so the parent is unknown to us.
+                                                    //
+                                                    // In both cases we pull from sync_from_height() (head − SNAPSHOT_DEPTH)
+                                                    // so the pulled range always contains the common ancestor of any
+                                                    // fork we can resolve, even when it started before our current head.
+                                                    let need_sync = if height > local_height + 1 {
+                                                        tracing::info!(height, %block_hash, local_height, sync_start, "block gap detected, syncing from peer");
+                                                        true
+                                                    } else if height > local_height {
+                                                        // Next block — try the fast path first.
+                                                        match self.miner.lock().await.apply_block(block.clone()) {
+                                                            Ok(true) => {
+                                                                tracing::info!(height, %block_hash, "reorged to peer's longer chain");
+                                                                false
+                                                            }
+                                                            Ok(false) => false,
+                                                            Err(e) => {
+                                                                // Block rejected — peer may be on a fork that
+                                                                // diverged before our head; pull back far enough
+                                                                // to find the common ancestor.
+                                                                tracing::info!(height, %block_hash, local_height, error = %e, "block rejected, peer may be on a diverging fork — syncing");
+                                                                true
+                                                            }
+                                                        }
+                                                    } else {
+                                                        // Block at or below our height — apply opportunistically
+                                                        // (builds fork branches that taller blocks can extend).
+                                                        let _ = self.miner.lock().await.apply_block(block.clone());
+                                                        false
+                                                    };
+
+                                                    if need_sync {
+                                                        service_state = GossipServiceState::Syncing {
+                                                            buffered_blocks: vec![block],
+                                                            buffered_hashes: [block_hash].into_iter().collect(),
+                                                        };
+                                                        if let Some(peer_url) = peer_url {
+                                                            sync_fut = Box::pin(async move {
+                                                                pull_blocks_from_peer(peer_url, sync_start).await
+                                                            });
+                                                        } else {
+                                                            tracing::warn!(height, %block_hash, local_height, "sync needed but no known peer URL yet");
+                                                        }
                                                     }
                                                 }
                                             }
@@ -187,8 +244,8 @@ impl GossipService {
                                                 }
                                             };
                                             if let Some(peer_id) = from {
-                                                self.known_peer_urls.entry(peer_id).or_insert_with(|| {
-                                                    tracing::info!(rpc_url = %peer_rpc_url, "new peer discovered");
+                                                self.known_peer_urls.entry(peer_id.clone()).or_insert_with(|| {
+                                                    tracing::info!(%peer_id, rpc_url = %peer_rpc_url, "new peer discovered");
                                                     peer_rpc_url
                                                 });
                                             }
@@ -213,7 +270,7 @@ impl GossipService {
                                     // The peer is now ready to receive on this topic — safe to send.
                                     let data = self.node_rpc_url.as_str().as_bytes().to_vec();
                                     if let Err(e) = gossip.publish(TOPIC_PEER_INFO, data) {
-                                        tracing::warn!(error = %e, "failed to publish peer info");
+                                        tracing::warn!(peer_id = %peer, rpc_url = %self.node_rpc_url, error = %e, "failed to publish peer info");
                                     }
                                 }
                                 NetworkEvent::PeerSubscribedToTopic { topic, .. } => {
@@ -253,6 +310,39 @@ impl GossipService {
                         }
                     }
                 }
+                snapshot = &mut state_sync_fut => {
+                    state_sync_fut = Box::pin(std::future::pending());
+
+                    if let Some(snapshot) = snapshot {
+                        let snap_height = snapshot.head.header.height;
+
+                        let mut miner = self.miner.lock().await;
+                        match miner.replace_from_snapshot(snapshot) {
+                            Ok(()) => {
+                                tracing::info!(snap_height, new_height = miner.head_height(), state_root = %miner.head_block().header.state_root, "state sync complete");
+
+                                if let GossipServiceState::StateSyncing { mut buffered_blocks, .. } = service_state {
+                                    buffered_blocks.sort_unstable_by_key(|b| b.header.height);
+
+                                    let mut seen: BTreeSet<Digest> = BTreeSet::new();
+
+                                    for block in buffered_blocks {
+                                        if seen.insert(block.hash()) {
+                                            let _ = miner.apply_block(block);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(snap_height, error = %e, "state snapshot rejected — staying on current chain");
+                            }
+                        }
+                    } else {
+                        tracing::warn!("state snapshot fetch failed");
+                    }
+
+                    service_state = GossipServiceState::Working;
+                }
                 mut pulled_blocks = &mut sync_fut => {
                     sync_fut = Box::pin(std::future::pending());
 
@@ -266,7 +356,7 @@ impl GossipService {
                     let mut miner = self.miner.lock().await;
                     for block in pulled_blocks {
                         if seen.insert(block.hash()) {
-                            miner.apply_block(block);
+                            let _ = miner.apply_block(block);
                         }
                     }
 
@@ -276,7 +366,7 @@ impl GossipService {
                         buffered_blocks.sort_unstable_by_key(|b| b.header.height);
                         buffered_blocks.into_iter().for_each(|block| {
                             if seen.insert(block.hash()) {
-                                miner.apply_block(block);
+                                let _ = miner.apply_block(block);
                             }
                         });
 
@@ -303,6 +393,23 @@ impl GossipService {
     }
 }
 
+/// Fetches a full state snapshot from `peer_rpc_url`.
+/// Validation (PoW + state_root) is performed by the caller via [`Miner::replace_from_snapshot`].
+async fn pull_snapshot_from_peer(peer_rpc_url: Url) -> Option<StateSnapshot> {
+    let peer_client = NodeClient::with_url(peer_rpc_url.clone());
+
+    match peer_client.get_state_snapshot().await {
+        Ok(snapshot) => {
+            tracing::debug!(%peer_rpc_url, height = snapshot.head.header.height, "received state snapshot from peer");
+            Some(snapshot)
+        }
+        Err(e) => {
+            tracing::warn!(%peer_rpc_url, error = %e, "state snapshot request failed");
+            None
+        }
+    }
+}
+
 /// Pulls all blocks from `peer_rpc_url` starting at `from_height` in a single request.
 /// Blocks that arrive during the sync are buffered by the caller and applied afterwards.
 async fn pull_blocks_from_peer(peer_rpc_url: Url, from_height: u64) -> Vec<Block> {
@@ -311,12 +418,12 @@ async fn pull_blocks_from_peer(peer_rpc_url: Url, from_height: u64) -> Vec<Block
     match peer_client.get_blocks_since(from_height).await {
         Ok(blocks) => {
             if !blocks.is_empty() {
-                tracing::debug!(count = blocks.len(), %peer_rpc_url, "pulled blocks from peer");
+                tracing::debug!(from_height, count = blocks.len(), %peer_rpc_url, "pulled blocks from peer");
             }
             blocks
         }
         Err(e) => {
-            tracing::warn!(%peer_rpc_url, error = %e, "chain sync: request failed");
+            tracing::warn!(from_height, %peer_rpc_url, error = %e, "chain sync: request failed");
             Vec::new()
         }
     }

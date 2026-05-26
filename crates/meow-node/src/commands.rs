@@ -53,9 +53,8 @@ pub enum Command {
         #[arg(long, default_value_t = DEFAULT_CHECK_EXPLICIT_PEERS_TICKS, verbatim_doc_comment)]
         check_explicit_peers_ticks: u64,
         /// Path to a BCS-serialized Genesis file.
-        /// If omitted, the node starts with an empty state.
         #[arg(long, verbatim_doc_comment)]
-        genesis: Option<PathBuf>,
+        genesis: PathBuf,
         /// PoW difficulty: number of leading zero bits required in a block hash.
         /// Dev guidance: 8 = ~256 hashes per block (fast), 20 = ~1M hashes (slow).
         #[arg(
@@ -112,14 +111,9 @@ impl Command {
                 let miner_config =
                     MinerConfig::new(difficulty, miner_keypair, miner_reward_address);
 
-                let node = if let Some(genesis_path) = genesis {
-                    let genesis_bytes = std::fs::read(&genesis_path)?;
-                    let genesis = bcs::from_bytes::<Genesis>(&genesis_bytes)?;
-
-                    Node::with_genesis(node_config, miner_config, &genesis)
-                } else {
-                    Node::empty(node_config, miner_config)
-                };
+                let genesis_bytes = std::fs::read(&genesis)?;
+                let genesis = bcs::from_bytes::<Genesis>(&genesis_bytes)?;
+                let node = Node::with_genesis(node_config, miner_config, &genesis);
 
                 node.run().await?;
             }

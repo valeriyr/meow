@@ -103,7 +103,7 @@ The gas coin is an ordinary [`MeowCoin`](meow-coin.md) object, not a special-cas
 Fee deduction runs unconditionally after execution, on success or failure:
 
 1. A base cost of **1000 gas** is charged at the start.
-2. Individual operations charge additional gas (`meow_vm_fresh_id` = 10, `meow_vm_transfer` = 20, `meow_vm_destroy` = 10, module publish = 10 per compiled byte) — see [Gas metering](adapter.md#gas-metering) for the full table.
+2. Individual operations charge additional gas — see [Gas metering](adapter.md#gas-metering) for the full table.
 3. The gas coin's `balance` is reduced by the total spent, floored at 0.
 4. The updated coin always appears in `changed_objects` in the execution result.
 
@@ -113,7 +113,7 @@ Because the gas coin is an object, every transaction — even a failed one — b
 
 The store is a flat `BTreeMap<Address, Object>`. Each committed block applies its execution results atomically in a single pass: created objects are inserted, changed objects overwrite their previous entry, destroyed objects are removed.
 
-`ChainState` keeps a full store snapshot per block (up to the last 64 blocks). On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed. See [Consensus — Fork choice and reorgs](consensus.md#fork-choice-and-reorgs).
+`ChainState` keeps a full store snapshot per block up to `SNAPSHOT_DEPTH` blocks behind the head. On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed. See [Consensus — Fork choice and reorgs](consensus.md#fork-choice-and-reorgs).
 
 ## In the RPC
 

@@ -28,7 +28,9 @@ The `peer-info` exchange is automatic: when a peer subscribes to the topic, the 
 
 ## Catch-up sync
 
-When a node receives a block whose height is more than one ahead of its local tip, it knows blocks are missing and initiates a sync:
+When a node receives a block whose height is more than one ahead of its local tip, it knows blocks are missing and initiates a sync. The strategy depends on the size of the gap.
+
+### Block sync (gap ≤ `SNAPSHOT_DEPTH`)
 
 1. Transitions to **Syncing** state.
 2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).
@@ -37,7 +39,19 @@ When a node receives a block whose height is more than one ahead of its local ti
 5. Applies the buffered gossip blocks in height order.
 6. Returns to **Working** state.
 
-If no peer RPC URL is known yet when the gap is detected, the sync request is skipped and a warning is logged. Blocks that arrive over gossip continue to buffer until a sync completes.
+### State sync (gap > `SNAPSHOT_DEPTH`)
+
+When the gap exceeds [`SNAPSHOT_DEPTH`](consensus.md#fork-choice-and-reorgs), replaying individual blocks is no longer practical — snapshots older than the horizon have been pruned and can no longer serve as the basis for re-execution. Instead the node fetches the peer's entire current state:
+
+1. Transitions to **StateSyncing** state.
+2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).
+3. Calls [`GET /state-snapshot`](rpc.md#get-state-snapshot) on a known peer.
+4. Validates the snapshot: PoW check on the head block and `compute_state_root(objects) == head.header.state_root`.
+5. Anchors the chain at the snapshot block and clears the mempool (all pending transactions reference object versions from the old chain).
+6. Applies any buffered gossip blocks in height order.
+7. Returns to **Working** state.
+
+If no peer RPC URL is known yet when a gap is detected, the sync request is skipped and a warning is logged. Gossip blocks continue to buffer until a URL is available and sync completes.
 
 ## Configuration
 

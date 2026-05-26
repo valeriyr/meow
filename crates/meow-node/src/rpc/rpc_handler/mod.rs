@@ -5,7 +5,7 @@ pub mod error;
 use std::sync::Arc;
 
 use meow_nakamoto::miner::Miner;
-use meow_nakamoto_types::block::Block;
+use meow_nakamoto_types::{block::Block, state_snapshot::StateSnapshot};
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -118,5 +118,12 @@ impl RpcHandler {
         let miner = self.miner.lock().await;
 
         miner.get_blocks_since(height)
+    }
+
+    /// Returns a full state snapshot at the current head.
+    pub async fn get_state_snapshot(&self) -> StateSnapshot {
+        let miner = self.miner.lock().await;
+
+        miner.get_state_snapshot()
     }
 }

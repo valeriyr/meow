@@ -3,7 +3,7 @@
 use bip32::DerivationPath;
 
 /// An error related to keypairs.
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, PartialEq, thiserror::Error)]
 pub enum KeyPairError {
     #[error("bip32 error: {0}")]
     Bip32Error(#[from] bip32::Error),

@@ -36,6 +36,7 @@ impl Block {
                 height: 0,
                 parent_hash: Digest::ZERO,
                 transactions_root: Digest::ZERO,
+                reward_root: None,
                 state_root: Digest::ZERO,
                 timestamp: 0,
                 nonce: 0,

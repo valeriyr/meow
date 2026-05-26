@@ -1,3 +1,5 @@
+mod utils;
+
 use meow_genesis::Genesis;
 use meow_nakamoto::{store::Store, system_transactions};
 use meow_types::{
@@ -5,7 +7,7 @@ use meow_types::{
     digest::Digest,
     identifier::Identifier,
     object::{
-        Object, object_owner::ObjectOwner, object_ref::ObjectRef, object_type::ObjectType,
+        object_owner::ObjectOwner, object_ref::ObjectRef, object_type::ObjectType,
         object_version::ObjectVersion,
     },
     system_framework::{
@@ -275,8 +277,8 @@ fn is_valid_reward_transaction_returns_false_for_non_meow_call() {
 #[test]
 fn collect_inputs_returns_both_framework_modules() {
     let store = Store::with_objects([
-        make_module_object(MEOW_OBJECT_MODULE_ADDRESS),
-        make_module_object(MEOW_COIN_MODULE_ADDRESS),
+        utils::test_module_object(MEOW_OBJECT_MODULE_ADDRESS),
+        utils::test_module_object(MEOW_COIN_MODULE_ADDRESS),
     ]);
 
     let inputs = system_transactions::collect_inputs_for_reward_transaction(&store);
@@ -293,7 +295,7 @@ fn collect_inputs_returns_both_framework_modules() {
 #[test]
 #[should_panic(expected = "framework module must be present in store")]
 fn collect_inputs_panics_when_framework_module_is_absent() {
-    let store = Store::with_objects([make_module_object(MEOW_COIN_MODULE_ADDRESS)]);
+    let store = Store::with_objects([utils::test_module_object(MEOW_COIN_MODULE_ADDRESS)]);
     system_transactions::collect_inputs_for_reward_transaction(&store);
 }
 
@@ -379,10 +381,6 @@ fn reward_transaction_args(amount: u64, recipient: Address) -> Vec<Input> {
         Input::raw(&amount).unwrap(),
         Input::raw(&recipient).unwrap(),
     ]
-}
-
-fn make_module_object(addr: Address) -> Object {
-    Object::fresh_module(addr, Digest::ZERO, vec![])
 }
 
 /// Build a `Store` pre-populated with compiled framework modules from genesis.

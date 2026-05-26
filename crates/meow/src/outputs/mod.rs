@@ -1,4 +1,4 @@
-//! Output formatters for the CLI's display commands.
+//! Shared output types for CLI display commands.
 
 pub mod object_output;
 pub mod transaction_output;

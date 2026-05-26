@@ -1,21 +1,20 @@
 mod utils;
 
-use std::{slice, sync::Arc};
-
 use meow_genesis::Genesis;
 use meow_nakamoto::{
-    miner::{Miner, mining_work::MiningWork},
+    chain::error::ChainError,
+    miner::{Miner, error::MinerError},
     roots,
+    store::Store,
 };
-use meow_nakamoto_types::{block::Block, block_header::BlockHeader, miner_config::MinerConfig};
+use meow_nakamoto_types::state_snapshot::StateSnapshot;
+use meow_nakamoto_types::{block::Block, miner_config::MinerConfig};
 use meow_types::{
     address::Address,
     digest::Digest,
-    keypair::{KeyPair, signature_scheme::SignatureScheme},
     object::{object_owner::ObjectOwner, object_ref::ObjectRef},
     transaction::{Transaction, transaction_type::TransactionType},
 };
-use rand::{SeedableRng, rngs::StdRng};
 
 //
 // ─── prepare_round ───
@@ -64,18 +63,25 @@ fn prepare_round_drains_mempool_and_returns_correct_header() {
 //
 
 /// `commit_mined` must advance the chain head when the mined block's parent
-/// hash still matches the current head at commit time.
+/// hash still matches the current head at commit time, and the new store must
+/// be accessible via `head_store`.
 #[test]
 fn commit_mined_advances_chain_when_head_matches() {
-    let mut miner = Miner::empty(test_config());
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
 
-    let (block, new_store) = empty_work(&miner, 1).grind();
+    let (block, new_store) = make_block_with_dummy_transaction(&miner, 1);
     let block_hash = block.hash();
 
     assert!(miner.commit_mined(block, new_store));
 
     assert_eq!(miner.head(), block_hash);
     assert_eq!(miner.head_height(), 1);
+    assert!(
+        miner.head_store().get_object(coin_ref.address()).is_some(),
+        "committed store must be accessible via head_store"
+    );
 }
 
 /// `commit_mined` must discard the block and return `false` when the chain head
@@ -84,10 +90,10 @@ fn commit_mined_advances_chain_when_head_matches() {
 fn commit_mined_discards_stale_block() {
     let mut miner = Miner::empty(test_config());
 
-    // Grind two height-1 blocks from the same genesis parent (different timestamps
+    // Build two height-1 blocks from the same genesis parent (different timestamps
     // produce different hashes so they can coexist in the chain).
-    let (block_a, store_a) = empty_work(&miner, 1).grind();
-    let (block_b, store_b) = empty_work(&miner, 2).grind();
+    let (block_a, store_a) = make_block_with_dummy_transaction(&miner, 1);
+    let (block_b, store_b) = make_block_with_dummy_transaction(&miner, 2);
     let block_a_hash = block_a.hash();
 
     // Commit block_a first — head is now block_a's hash.
@@ -137,32 +143,207 @@ fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
     );
     let (signed_peer, _) = tx_peer.sign(&utils::test_keypair());
     let parent_store = miner.head_store().clone();
-    let work = MiningWork {
-        header: BlockHeader {
-            height: 1,
-            parent_hash: Block::genesis().hash(),
-            transactions_root: roots::compute_transactions_root(slice::from_ref(&signed_peer)),
-            state_root: Digest::ZERO,
-            timestamp: 1,
-            nonce: 0,
-        },
-        batch: vec![signed_peer],
+    let (peer_block, _) = utils::mining_work(
+        vec![signed_peer],
         parent_store,
-        difficulty: 0,
-        miner_keypair: Arc::new(utils::test_keypair()),
+        1,
+        Block::genesis().hash(),
+        1,
+        0,
         miner_address,
-        reward_address: miner_address,
-    };
-    let (peer_block, _) = work.grind();
+    )
+    .grind()
+    .expect("batch has one transaction");
     let peer_block_hash = peer_block.hash();
 
     // Apply the peer block — head advances, retain_valid is called on the mempool.
-    assert!(miner.apply_block(peer_block));
+    assert_eq!(miner.apply_block(peer_block), Ok(true));
     assert_eq!(miner.head(), peer_block_hash);
     assert_eq!(miner.head_height(), 1);
 
     // The mempool tx (referencing coin v1) must have been pruned — the coin is now v2.
     assert!(miner.prepare_round().is_none());
+}
+
+/// `apply_block` must return `Ok(false)` for a valid block that does not extend
+/// the current head (equal-height fork), leaving the mempool intact — `retain_valid`
+/// is only called when the head actually changes.
+#[test]
+fn apply_block_on_fork_preserves_mempool() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+
+    // block_a: directly constructed — commit_mined does not validate.
+    let (block_a, store_a) = make_block_with_dummy_transaction(&miner, 1);
+
+    // block_fork: valid height-1 block from genesis; must have a real transaction
+    // because it goes through apply_block which enforces the no-empty-block rule.
+    let genesis_store = miner.head_store().clone();
+    let genesis_hash = miner.head();
+    let fork_tx = Transaction::new(
+        miner_address,
+        coin_ref.clone(),
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+    let (signed_fork, _) = fork_tx.sign(&utils::test_keypair());
+    let (block_fork, _) = utils::mining_work(
+        vec![signed_fork],
+        genesis_store,
+        1,
+        genesis_hash,
+        2,
+        0,
+        miner_address,
+    )
+    .grind()
+    .expect("valid transaction must succeed");
+
+    // Commit block_a — head advances to height 1.
+    assert!(miner.commit_mined(block_a, store_a));
+    assert_eq!(miner.head_height(), 1);
+
+    // Queue a transaction so the mempool is non-empty.
+    let transaction = Transaction::new(
+        miner_address,
+        coin_ref,
+        TransactionType::MeowModulePublish(vec![1, 2, 3]),
+    );
+    let (signed, _) = transaction.sign(&utils::test_keypair());
+    miner.submit_transaction(signed).unwrap();
+
+    // Apply the fork block (height 1, same as head — valid but does not extend chain).
+    assert_eq!(miner.apply_block(block_fork), Ok(false));
+
+    // Mempool must be intact — retain_valid is only called on Ok(true).
+    assert!(
+        miner.prepare_round().is_some(),
+        "mempool must not be pruned on a non-advancing fork block"
+    );
+}
+
+/// `apply_block` must ignore a block whose parent hash is not in the chain,
+/// leaving the head unchanged.
+#[test]
+fn apply_block_ignores_block_with_unknown_parent() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+    let original_head = miner.head();
+
+    // Build a fully valid block, then change only the parent_hash — one defect.
+    let transaction = Transaction::new(
+        miner_address,
+        coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+    let (signed, _) = transaction.sign(&utils::test_keypair());
+    let parent_store = miner.head_store().clone();
+    let (mut block, _) = utils::mining_work(
+        vec![signed],
+        parent_store,
+        1,
+        miner.head(),
+        1,
+        0,
+        miner_address,
+    )
+    .grind()
+    .expect("batch has one transaction");
+
+    block.header.parent_hash = Digest::new([0xFF; 32]); // unknown — one defect
+
+    assert_eq!(
+        miner.apply_block(block),
+        Err(MinerError::ChainError(ChainError::UnknownParent))
+    );
+    assert_eq!(miner.head(), original_head);
+}
+
+//
+// ─── simulate_transaction ───
+//
+
+/// `simulate_transaction` must execute the transaction and return a result
+/// without committing any state change to the chain.
+#[test]
+fn simulate_transaction_returns_result_for_valid_transaction() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+
+    let transaction = Transaction::new(
+        miner_address,
+        coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+
+    assert!(miner.simulate_transaction(transaction).is_ok());
+
+    // Head must not advance — simulation does not commit.
+    assert_eq!(miner.head_height(), 0);
+}
+
+/// `simulate_transaction` must return `MinerError::SimulationError` when
+/// `executor::execute` itself returns `Err`. The coin exists in the store and
+/// passes `validate_against_store`, but the executor's ownership check rejects
+/// it because the sender does not own the coin.
+#[test]
+fn simulate_transaction_returns_simulation_error_when_executor_fails() {
+    let (genesis, coin_ref) = genesis_with_coin(test_miner_address());
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+
+    // Wrong sender: coin address/version/digest match the store, so validate_against_store
+    // passes, but resolve_gas_coin_object rejects it with InvalidGasCoinOwner.
+    let wrong_sender = Address::from([0xE1; 32]);
+    let transaction = Transaction::new(
+        wrong_sender,
+        coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+
+    assert!(matches!(
+        miner.simulate_transaction(transaction),
+        Err(MinerError::SimulationError(_))
+    ));
+}
+
+//
+// ─── replace_from_snapshot ───
+//
+
+/// After a successful snapshot replacement the mempool must be empty,
+/// since all previously queued transactions reference stale object versions.
+#[test]
+fn replace_from_snapshot_wipes_mempool() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+
+    // Queue a transaction so the mempool is non-empty before the snapshot.
+    let transaction = Transaction::new(
+        miner_address,
+        coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+    let (signed, _) = transaction.sign(&utils::test_keypair());
+    miner.submit_transaction(signed).unwrap();
+
+    // Build a valid snapshot at height 1 (ahead of our genesis head at height 0).
+    let peer_store = Store::with_objects(genesis.objects().iter().cloned());
+    let state_root = roots::compute_state_root(&peer_store);
+    let (signed, _) = utils::dummy_signed_transaction();
+    let snap_block = utils::make_block(1, Block::genesis().hash(), 9999, state_root, signed);
+    let snapshot = StateSnapshot {
+        head: snap_block,
+        objects: genesis.objects().to_vec(),
+    };
+    assert!(miner.replace_from_snapshot(snapshot).is_ok());
+
+    assert!(
+        miner.prepare_round().is_none(),
+        "mempool must be empty after snapshot replacement"
+    );
 }
 
 //
@@ -194,26 +375,18 @@ fn genesis_with_coin(owner: Address) -> (Genesis, ObjectRef) {
     (genesis, coin_ref)
 }
 
-/// Build an empty `MiningWork` at height 1 with the given timestamp from the
-/// miner's current head. The batch is empty so no gas is produced and the
-/// keypair / reward address fields are unused by `grind`.
-fn empty_work(miner: &Miner, timestamp: u64) -> MiningWork {
-    let dummy_keypair = KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0xFF; 32]));
+/// Build a valid empty block at the next height from the miner's current head,
+/// together with the unchanged parent store. Bypasses grinding — suitable for
+/// `commit_mined` and `apply_block` tests where the focus is not on mining itself.
+fn make_block_with_dummy_transaction(miner: &Miner, timestamp: u64) -> (Block, Store) {
     let parent_store = miner.head_store().clone();
-    MiningWork {
-        header: BlockHeader {
-            height: 1,
-            parent_hash: Block::genesis().hash(),
-            transactions_root: roots::compute_transactions_root(&[]),
-            state_root: Digest::ZERO,
-            timestamp,
-            nonce: 0,
-        },
-        batch: vec![],
-        parent_store,
-        difficulty: DIFFICULTY,
-        miner_keypair: Arc::new(dummy_keypair),
-        miner_address: miner.miner_address(),
-        reward_address: miner.reward_address(),
-    }
+    let (signed, _) = utils::dummy_signed_transaction();
+    let block = utils::make_block(
+        miner.head_height() + 1,
+        miner.head(),
+        timestamp,
+        roots::compute_state_root(&parent_store),
+        signed,
+    );
+    (block, parent_store)
 }

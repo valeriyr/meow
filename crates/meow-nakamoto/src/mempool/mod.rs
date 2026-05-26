@@ -43,9 +43,9 @@ impl Mempool {
     }
 
     /// Submits a transaction after validating:
-    /// 1. Signature is valid
-    /// 2. Not already in the queue
-    /// 3. Referenced objects match the provided store snapshot
+    /// 1. Signature is valid.
+    /// 2. Not already in the queue.
+    /// 3. Referenced objects match the provided store snapshot.
     pub fn submit(&mut self, signed_transaction: SignedTransaction, store: &Store) -> Result<()> {
         validator::validate_signed_transaction(&signed_transaction)?;
 

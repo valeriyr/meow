@@ -1,3 +1,5 @@
+mod utils;
+
 use meow_nakamoto::store::Store;
 use meow_types::{
     address::Address,
@@ -14,7 +16,7 @@ use meow_types::{
 
 #[test]
 fn with_objects_populates_store() {
-    let obj = make_object(ADDRESS1);
+    let obj = utils::test_module_object(ADDRESS1);
 
     let store = Store::with_objects([obj.clone()]);
 
@@ -27,7 +29,7 @@ fn with_objects_populates_store() {
 fn apply_created_objects() {
     let mut store = Store::default();
 
-    let obj = make_object(ADDRESS1);
+    let obj = utils::test_module_object(ADDRESS1);
     let execution_result = make_execution_result(vec![obj.clone()], vec![], vec![]);
 
     store.apply_execution_result(&execution_result);
@@ -39,11 +41,11 @@ fn apply_created_objects() {
 
 #[test]
 fn apply_changed_objects_overwrites() {
-    let obj_v1 = make_object(ADDRESS1);
+    let obj_v1 = utils::test_module_object(ADDRESS1);
 
     let mut store = Store::with_objects([obj_v1.clone()]);
 
-    let obj_v2 = make_module_object(*obj_v1.address());
+    let obj_v2 = utils::test_module_object(*obj_v1.address());
 
     store.apply_execution_result(&make_execution_result(vec![], vec![obj_v2.clone()], vec![]));
 
@@ -54,7 +56,7 @@ fn apply_changed_objects_overwrites() {
 
 #[test]
 fn apply_destroyed_objects_removes() {
-    let obj = make_object(ADDRESS1);
+    let obj = utils::test_module_object(ADDRESS1);
 
     let mut store = Store::with_objects([obj.clone()]);
 
@@ -67,8 +69,8 @@ fn apply_destroyed_objects_removes() {
 
 #[test]
 fn apply_does_not_touch_unrelated_objects() {
-    let obj_a = make_object(ADDRESS1);
-    let obj_b = make_object(ADDRESS2);
+    let obj_a = utils::test_module_object(ADDRESS1);
+    let obj_b = utils::test_module_object(ADDRESS2);
 
     let mut store = Store::with_objects([obj_a.clone(), obj_b.clone()]);
 
@@ -130,7 +132,7 @@ fn get_objects_returns_multiple_objects_owned_by_address() {
 #[test]
 fn get_objects_filters_out_immutable_objects() {
     let owned_obj = make_owned_object(ADDRESS1, OWNER1);
-    let immutable_module = make_module_object(ADDRESS2);
+    let immutable_module = utils::test_module_object(ADDRESS2);
 
     let store = Store::with_objects([owned_obj.clone(), immutable_module]);
 
@@ -168,7 +170,7 @@ fn get_objects_works_after_apply_execution_result() {
 #[test]
 #[should_panic(expected = "created object ID collision")]
 fn apply_panics_on_created_object_id_collision() {
-    let obj = make_object(ADDRESS1);
+    let obj = utils::test_module_object(ADDRESS1);
     let mut store = Store::with_objects([obj.clone()]);
 
     store.apply_execution_result(&make_execution_result(vec![obj], vec![], vec![]));
@@ -182,7 +184,7 @@ fn apply_panics_when_changed_object_is_not_in_store() {
 
     store.apply_execution_result(&make_execution_result(
         vec![],
-        vec![make_object(ADDRESS1)],
+        vec![utils::test_module_object(ADDRESS1)],
         vec![],
     ));
 }
@@ -196,7 +198,7 @@ fn apply_panics_when_destroyed_object_is_not_in_store() {
     store.apply_execution_result(&make_execution_result(
         vec![],
         vec![],
-        vec![make_object(ADDRESS1)],
+        vec![utils::test_module_object(ADDRESS1)],
     ));
 }
 
@@ -211,9 +213,9 @@ fn apply_panics_when_destroyed_object_is_not_in_store() {
 fn objects_are_returned_in_sorted_address_order() {
     // Insert in reverse order to prove ordering is not insertion-dependent.
     let store = Store::with_objects([
-        make_object(ADDRESS3),
-        make_object(ADDRESS1),
-        make_object(ADDRESS2),
+        utils::test_module_object(ADDRESS3),
+        utils::test_module_object(ADDRESS1),
+        utils::test_module_object(ADDRESS2),
     ]);
 
     let addresses: Vec<_> = store.objects().map(|o| *o.address()).collect();
@@ -247,10 +249,6 @@ const ADDRESS3: Address = Address::suffixed(0xF3);
 const OWNER1: Address = Address::suffixed(0xE1);
 const OWNER2: Address = Address::suffixed(0xE2);
 
-fn make_object(addr: Address) -> Object {
-    Object::fresh_module(addr, Digest::ZERO, vec![])
-}
-
 fn make_owned_object(addr: Address, owner: Address) -> Object {
     Object::fresh_object(
         addr,
@@ -259,10 +257,6 @@ fn make_owned_object(addr: Address, owner: Address) -> Object {
         ObjectDeclRef::new(Address::suffixed(0xFD), Identifier::new("Object").unwrap()),
         vec![],
     )
-}
-
-fn make_module_object(addr: Address) -> Object {
-    Object::fresh_module(addr, Digest::ZERO, vec![])
 }
 
 fn make_execution_result(

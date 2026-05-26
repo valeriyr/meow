@@ -69,7 +69,9 @@ impl MinerService {
                 } => {
                     if let Some(work) = maybe_work {
                         // Grind nonce without holding the lock.
-                        let (block, new_store) = work.grind();
+                        let Some((block, new_store)) = work.grind() else {
+                            continue;
+                        };
 
                         let committed = self
                             .miner
@@ -79,6 +81,7 @@ impl MinerService {
                         if committed {
                             tracing::info!(
                                 height = block.header.height,
+                                block_hash = %block.hash(),
                                 txs = block.results.len(),
                                 nonce = block.header.nonce,
                                 "block mined"
@@ -86,7 +89,7 @@ impl MinerService {
                             if let Ok(data) = bcs::to_bytes(&block)
                                 && let Err(e) = self.blocks_tx.send(data)
                             {
-                                tracing::warn!(error = %e, "failed to publish block");
+                                tracing::warn!(height = block.header.height, block_hash = %block.hash(), error = %e, "failed to publish block");
                             }
                         }
                         // Yield between rounds so other tasks can run.

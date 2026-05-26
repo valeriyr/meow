@@ -14,7 +14,7 @@ The **adapter** (`meow-vm-adapter`) is the glue layer between the stack-based Me
 
 ## Executor
 
-The executor bridges chain-level transactions to the VM. Its two entry points are:
+The executor bridges chain-level transactions to the VM. Its three entry points are:
 
 | Function | Use |
 |----------|-----|
@@ -184,36 +184,9 @@ Objects created and destroyed within the same transaction leave no trace in the 
 
 ## The `meow_coin` system module
 
-`meow_coin` is published at the fixed address `0x20`. It provides `MeowCoin` — the native coin of the MEOW chain.
+`meow_coin` is published at the fixed address `0x20`. It is the native coin of the MEOW chain.
 
-```meow
-pub struct MeowCoin {
-    id: meow_object::Id,
-    balance: u64
-}
-```
-
-`MeowCoinBalance` is a plain (non-object) struct that wraps a coin amount. It can be embedded as a field inside other on-chain objects. Use `to_balance` / `from_balance` to convert between the two types.
-
-```meow
-pub struct MeowCoinBalance {
-    amount: u64
-}
-```
-
-Public functions:
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `balance(coin)` | `(MeowCoin) → (MeowCoin, u64)` | Returns the coin and its balance without consuming it. |
-| `burn(coin)` | `(MeowCoin) → void` | Destroys the coin; balance is lost. |
-| `transfer(coin, to)` | `(MeowCoin, address) → void` | Transfers the coin to a new owner. |
-| `merge(from, to)` | `(MeowCoin, MeowCoin) → void` | Adds `from.balance` to `to.balance`, destroys `from`, then transfers `to` to the transaction sender. |
-| `merge_and_transfer(from, to, recipient)` | `(MeowCoin, MeowCoin, address) → void` | Like `merge` but sends the result to `recipient` instead of the sender. |
-| `split(from, amount)` | `(MeowCoin, u64) → void` | Splits `amount` out of `from` into a new coin sent to the sender. Aborts if balance < amount. |
-| `split_and_transfer(from, amount, to)` | `(MeowCoin, u64, address) → void` | Like `split` but sends the new coin to `to`. |
-| `to_balance(coin)` | `(MeowCoin) → MeowCoinBalance` | Converts the coin to a `MeowCoinBalance` (destroys the coin). |
-| `from_balance(balance)` | `(MeowCoinBalance) → MeowCoin` | Creates a new coin from a balance struct. |
+See [Meow Coin](meow-coin.md) for the full module reference — types, public functions, and CLI usage.
 
 The gas coin used for transaction fees is a `MeowCoin` object. It is deducted after execution (success or failure) and is always returned in `changed_objects`.
 
