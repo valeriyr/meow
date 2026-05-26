@@ -30,7 +30,7 @@ The `peer-info` exchange is automatic: when a peer subscribes to the topic, the 
 
 When a node receives a block whose height is more than one ahead of its local tip, it knows blocks are missing and initiates a sync. The strategy depends on the size of the gap.
 
-### Block sync (gap ≤ `SNAPSHOT_DEPTH`)
+### Block sync (gap ≤ `snapshot_depth`)
 
 1. Transitions to **Syncing** state.
 2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).
@@ -39,9 +39,9 @@ When a node receives a block whose height is more than one ahead of its local ti
 5. Applies the buffered gossip blocks in height order.
 6. Returns to **Working** state.
 
-### State sync (gap > `SNAPSHOT_DEPTH`)
+### State sync (gap > `snapshot_depth`)
 
-When the gap exceeds [`SNAPSHOT_DEPTH`](consensus.md#fork-choice-and-reorgs), replaying individual blocks is no longer practical — snapshots older than the horizon have been pruned and can no longer serve as the basis for re-execution. Instead the node fetches the peer's entire current state:
+When the gap exceeds [`snapshot_depth`](consensus.md#fork-choice-and-reorgs), replaying individual blocks is no longer practical — snapshots older than the horizon have been pruned and can no longer serve as the basis for re-execution. Instead the node fetches the peer's entire current state:
 
 1. Transitions to **StateSyncing** state.
 2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).

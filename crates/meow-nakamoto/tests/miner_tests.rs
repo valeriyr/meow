@@ -1,6 +1,5 @@
 mod utils;
 
-use meow_genesis::Genesis;
 use meow_nakamoto::{
     chain::error::ChainError,
     miner::{Miner, error::MinerError},
@@ -12,13 +11,41 @@ use meow_nakamoto_types::{block::Block, miner_config::MinerConfig};
 use meow_types::{
     address::Address,
     digest::Digest,
-    object::{object_owner::ObjectOwner, object_ref::ObjectRef},
+    object::object_ref::ObjectRef,
     transaction::{Transaction, transaction_type::TransactionType},
 };
 
 //
 // ─── prepare_round ───
 //
+
+/// `prepare_round` must return `None` while the mempool holds fewer than `batch_size`
+/// transactions, drain exactly `batch_size` per call once the threshold is met, and
+/// return `None` again once the remainder falls back below the threshold.
+#[test]
+fn prepare_round_enforces_batch_size_threshold_and_drain_count() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, config_with_batch_size(2));
+
+    // One transaction — below batch_size=2, must not start a round.
+    submit_dummy_tx(&mut miner, coin_ref.clone(), 1);
+    assert!(miner.prepare_round().is_none());
+
+    // Four more bring the total to 5 (the first is still queued — None does not drain).
+    for tag in 2..=5u8 {
+        submit_dummy_tx(&mut miner, coin_ref.clone(), tag);
+    }
+
+    let work1 = miner.prepare_round().expect("5 >= batch_size=2");
+    assert_eq!(work1.batch.len(), 2);
+
+    let work2 = miner.prepare_round().expect("3 remaining >= batch_size=2");
+    assert_eq!(work2.batch.len(), 2);
+
+    // 1 remaining — below batch_size=2.
+    assert!(miner.prepare_round().is_none());
+}
 
 /// `prepare_round` must return `None` when the mempool has no pending transactions.
 #[test]
@@ -34,7 +61,7 @@ fn prepare_round_returns_none_when_mempool_is_empty() {
 #[test]
 fn prepare_round_drains_mempool_and_returns_correct_header() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     let transaction = Transaction::new(
@@ -68,7 +95,7 @@ fn prepare_round_drains_mempool_and_returns_correct_header() {
 #[test]
 fn commit_mined_advances_chain_when_head_matches() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     let (block, new_store) = make_block_with_dummy_transaction(&miner, 1);
@@ -121,7 +148,7 @@ fn commit_mined_discards_stale_block() {
 #[test]
 fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     // Submit a transaction referencing the coin at its current version (v1).
@@ -171,7 +198,7 @@ fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
 #[test]
 fn apply_block_on_fork_preserves_mempool() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     // block_a: directly constructed — commit_mined does not validate.
@@ -227,7 +254,7 @@ fn apply_block_on_fork_preserves_mempool() {
 #[test]
 fn apply_block_ignores_block_with_unknown_parent() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
     let original_head = miner.head();
 
@@ -269,7 +296,7 @@ fn apply_block_ignores_block_with_unknown_parent() {
 #[test]
 fn simulate_transaction_returns_result_for_valid_transaction() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     let transaction = Transaction::new(
@@ -290,7 +317,7 @@ fn simulate_transaction_returns_result_for_valid_transaction() {
 /// it because the sender does not own the coin.
 #[test]
 fn simulate_transaction_returns_simulation_error_when_executor_fails() {
-    let (genesis, coin_ref) = genesis_with_coin(test_miner_address());
+    let (genesis, coin_ref) = utils::genesis_with_coin(test_miner_address());
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     // Wrong sender: coin address/version/digest match the store, so validate_against_store
@@ -317,7 +344,7 @@ fn simulate_transaction_returns_simulation_error_when_executor_fails() {
 #[test]
 fn replace_from_snapshot_wipes_mempool() {
     let miner_address = test_miner_address();
-    let (genesis, coin_ref) = genesis_with_coin(miner_address);
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
 
     // Queue a transaction so the mempool is non-empty before the snapshot.
@@ -346,33 +373,129 @@ fn replace_from_snapshot_wipes_mempool() {
     );
 }
 
+/// `replace_from_snapshot` must leave the chain head and mempool intact when the
+/// snapshot fails validation — a corrupt or malicious snapshot must not destroy local state.
+#[test]
+fn replace_from_snapshot_does_not_corrupt_state_on_failure() {
+    let miner_address = test_miner_address();
+    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
+    let mut miner = Miner::with_genesis(&genesis, test_config());
+    let original_head = miner.head();
+
+    // Queue a transaction so there is something in the mempool to preserve.
+    let transaction = Transaction::new(
+        miner_address,
+        coin_ref,
+        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
+    );
+    let (signed, _) = transaction.sign(&utils::test_keypair());
+    miner.submit_transaction(signed).unwrap();
+
+    // Build a snapshot whose state_root does not match the supplied objects.
+    let (signed_snap, _) = utils::dummy_signed_transaction();
+    let snap_block = utils::make_block(
+        1,
+        Block::genesis().hash(),
+        9999,
+        Digest::new([0xFF; 32]), // wrong: objects produce a different root
+        signed_snap,
+    );
+    let result = miner.replace_from_snapshot(StateSnapshot {
+        head: snap_block,
+        objects: genesis.objects().to_vec(),
+    });
+
+    assert_eq!(
+        result,
+        Err(MinerError::ChainError(ChainError::StateRootMismatch)),
+        "invalid snapshot must be rejected with StateRootMismatch"
+    );
+    assert_eq!(
+        miner.head(),
+        original_head,
+        "head hash must not change after failed snapshot"
+    );
+    assert_eq!(
+        miner.head_height(),
+        0,
+        "head height must not change after failed snapshot"
+    );
+    assert!(
+        miner.prepare_round().is_some(),
+        "mempool must be preserved after failed snapshot"
+    );
+}
+
+/// `replace_from_snapshot` must preserve local miner configuration — `snapshot_depth`
+/// and `batch_size` are local policies and must not be overwritten by the snapshot.
+#[test]
+fn replace_from_snapshot_preserves_local_config() {
+    const CUSTOM_DEPTH: u64 = 10;
+    const CUSTOM_BATCH: usize = 7;
+    let (genesis, _) = utils::genesis_with_coin(test_miner_address());
+
+    let keypair = utils::test_keypair();
+    let reward_address = Address::from(&keypair);
+    let config = MinerConfig::new(
+        utils::DIFFICULTY,
+        keypair,
+        reward_address,
+        CUSTOM_BATCH,
+        CUSTOM_DEPTH,
+    );
+    let mut miner = Miner::with_genesis(&genesis, config);
+
+    let peer_store = Store::with_objects(genesis.objects().iter().cloned());
+    let state_root = roots::compute_state_root(&peer_store);
+    let (signed, _) = utils::dummy_signed_transaction();
+    let snap_block = utils::make_block(1, Block::genesis().hash(), 9999, state_root, signed);
+    assert!(
+        miner
+            .replace_from_snapshot(StateSnapshot {
+                head: snap_block,
+                objects: genesis.objects().to_vec(),
+            })
+            .is_ok()
+    );
+
+    assert_eq!(miner.snapshot_depth(), CUSTOM_DEPTH);
+    assert_eq!(miner.batch_size(), CUSTOM_BATCH);
+}
+
 //
 // ─── Utility functions ───
 //
-
-const DIFFICULTY: u32 = 0;
 
 fn test_miner_address() -> Address {
     Address::from(&utils::test_keypair())
 }
 
 fn test_config() -> MinerConfig {
-    let keypair = utils::test_keypair();
-    let reward_address = Address::from(&keypair);
-    MinerConfig::new(DIFFICULTY, keypair, reward_address)
+    config_with_batch_size(utils::BATCH_SIZE)
 }
 
-/// Build a genesis that pre-allocates a coin to `owner` and return the genesis
-/// together with the coin's `ObjectRef`.
-fn genesis_with_coin(owner: Address) -> (Genesis, ObjectRef) {
-    let genesis = Genesis::build(&[(owner, 10_000)]).expect("genesis must build");
-    let coin = genesis
-        .objects()
-        .iter()
-        .find(|o| o.owner() == &ObjectOwner::Address(owner))
-        .expect("allocation must produce a coin owned by the address");
-    let coin_ref = coin.object_ref();
-    (genesis, coin_ref)
+fn config_with_batch_size(batch_size: usize) -> MinerConfig {
+    let keypair = utils::test_keypair();
+    let reward_address = Address::from(&keypair);
+    MinerConfig::new(
+        utils::DIFFICULTY,
+        keypair,
+        reward_address,
+        batch_size,
+        utils::SNAPSHOT_DEPTH,
+    )
+}
+
+/// Submit a `MeowModulePublish` transaction with a unique `tag` byte as content so that
+/// repeated calls produce distinct digests and can all be accepted by the mempool.
+fn submit_dummy_tx(miner: &mut Miner, coin_ref: ObjectRef, tag: u8) {
+    miner
+        .submit_transaction(utils::make_signed_transaction(
+            &utils::test_keypair(),
+            coin_ref,
+            vec![tag],
+        ))
+        .unwrap();
 }
 
 /// Build a valid empty block at the next height from the miner's current head,

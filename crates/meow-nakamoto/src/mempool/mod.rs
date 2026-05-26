@@ -37,6 +37,16 @@ impl Mempool {
         }
     }
 
+    /// Returns `true` if the mempool is empty.
+    pub fn is_empty(&self) -> bool {
+        self.pending.is_empty()
+    }
+
+    /// Returns the number of pending transactions in the mempool.
+    pub fn len(&self) -> usize {
+        self.pending.len()
+    }
+
     /// Returns the pending transactions in the mempool.
     pub fn pending(&self) -> impl Iterator<Item = &SignedTransaction> {
         self.pending.iter()

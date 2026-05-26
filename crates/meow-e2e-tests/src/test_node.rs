@@ -4,7 +4,6 @@ use std::net::SocketAddr;
 
 use meow_genesis::Genesis;
 use meow_gossip_types::{config::GossipNetworkConfig, multiaddr::Multiaddr};
-
 use meow_nakamoto_types::miner_config::MinerConfig;
 use meow_node::node::{Node, config::NodeConfig};
 use meow_node_client::NodeClient;
@@ -15,10 +14,10 @@ use meow_types::{
 use rand::thread_rng;
 use tokio::sync::oneshot;
 
+use crate::test_utils;
+
 /// Default RPC address for test nodes (port 0 means "pick a random free port").
 const DEFAULT_RPC_ADDR: &str = "127.0.0.1:0";
-// difficulty 0: instant mining
-const DEFAULT_DIFFICULTY: u32 = 0;
 
 /// A running MEOW node for use in tests.
 pub struct TestNode {
@@ -43,6 +42,33 @@ impl TestNode {
         Self::start_with_bootstrap(genesis, vec![]).await
     }
 
+    /// Start a node with a custom snapshot depth; keypair is generated internally.
+    pub async fn start_with_snapshot_depth(genesis: &Genesis, snapshot_depth: u64) -> Self {
+        let keypair = test_miner_keypair();
+        let reward = Address::from(&keypair);
+        Self::start_with_genesis_and_miner_config(
+            genesis,
+            test_utils::test_miner_config_with_snapshot_depth(keypair, reward, snapshot_depth),
+        )
+        .await
+    }
+
+    /// Start a node with bootstrap peers and a custom snapshot depth; keypair is generated internally.
+    pub async fn start_with_bootstrap_and_snapshot_depth(
+        genesis: &Genesis,
+        bootstrap_peers: Vec<Multiaddr>,
+        snapshot_depth: u64,
+    ) -> Self {
+        let keypair = test_miner_keypair();
+        let reward = Address::from(&keypair);
+        Self::start_with_bootstrap_and_miner_config(
+            genesis,
+            bootstrap_peers,
+            test_utils::test_miner_config_with_snapshot_depth(keypair, reward, snapshot_depth),
+        )
+        .await
+    }
+
     /// Start a node pre-seeded with the given genesis and an explicit miner configuration.
     pub async fn start_with_genesis_and_miner_config(
         genesis: &Genesis,
@@ -50,6 +76,20 @@ impl TestNode {
     ) -> Self {
         let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
         let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, vec![]);
+        let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
+        let node = Node::with_genesis(node_config, miner_config, genesis);
+
+        Self::start(node, bootstrap_addr).await
+    }
+
+    /// Start a node with explicit bootstrap peers and a custom miner configuration.
+    pub async fn start_with_bootstrap_and_miner_config(
+        genesis: &Genesis,
+        bootstrap_peers: Vec<Multiaddr>,
+        miner_config: MinerConfig,
+    ) -> Self {
+        let (listen_addr, bootstrap_addr) = random_gossip_listen_addr();
+        let gossip_config = GossipNetworkConfig::new_with_defaults(listen_addr, bootstrap_peers);
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
         let node = Node::with_genesis(node_config, miner_config, genesis);
 
@@ -64,8 +104,7 @@ impl TestNode {
         let node_config = NodeConfig::new(DEFAULT_RPC_ADDR.parse().unwrap(), gossip_config);
         let miner_keypair = test_miner_keypair();
         let miner_reward_address = Address::from(&miner_keypair);
-        let miner_config =
-            MinerConfig::new(DEFAULT_DIFFICULTY, miner_keypair, miner_reward_address);
+        let miner_config = test_utils::test_miner_config(miner_keypair, miner_reward_address);
         let node = Node::with_genesis(node_config, miner_config, genesis);
 
         Self::start(node, bootstrap_addr).await

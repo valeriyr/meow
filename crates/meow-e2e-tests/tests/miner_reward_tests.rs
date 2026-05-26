@@ -1,5 +1,4 @@
 use meow_e2e_tests::{test_node::TestNode, test_utils};
-use meow_nakamoto_types::miner_config::MinerConfig;
 use meow_types::{
     address::Address,
     system_framework::meow_coin::meow_coin_object,
@@ -22,7 +21,7 @@ async fn miner_receives_reward_coin_after_block_with_fees() {
 
     let miner_keypair = test_utils::test_keypair_from_seed([99; 32]);
     let miner_reward_address = Address::from(&miner_keypair);
-    let miner_config = MinerConfig::new(0, miner_keypair, miner_reward_address);
+    let miner_config = test_utils::test_miner_config(miner_keypair, miner_reward_address);
     let node = TestNode::start_with_genesis_and_miner_config(&genesis, miner_config).await;
     let client = node.client();
 
@@ -54,7 +53,7 @@ async fn reward_is_minted_to_reward_address_not_signer() {
     let miner_reward_address = Address::suffixed(0xF1);
     assert_ne!(miner_address, miner_reward_address);
 
-    let miner_config = MinerConfig::new(0, miner_keypair, miner_reward_address);
+    let miner_config = test_utils::test_miner_config(miner_keypair, miner_reward_address);
     let node = TestNode::start_with_genesis_and_miner_config(&genesis, miner_config).await;
     let client = node.client();
 
@@ -89,7 +88,7 @@ async fn total_reward_equals_sum_of_fees_across_multiple_transactions() {
 
     let miner_keypair = test_utils::test_keypair_from_seed([99; 32]);
     let miner_reward_address = Address::from(&miner_keypair);
-    let miner_config = MinerConfig::new(0, miner_keypair, miner_reward_address);
+    let miner_config = test_utils::test_miner_config(miner_keypair, miner_reward_address);
     let node = TestNode::start_with_genesis_and_miner_config(&genesis, miner_config).await;
     let client = node.client();
 

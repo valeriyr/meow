@@ -64,6 +64,8 @@ meow-node run --genesis genesis.bin
 | `--miner-address` | _(none)_ | Address of the signing key to load from the keystore; if omitted, an ephemeral random keypair is used and rewards are lost on restart |
 | `--miner-reward-address` | _(miner address)_ | Address that receives block reward coins; defaults to the miner's own address |
 | `--keystore-path` | _(default path)_ | Path to the keystore file; requires `--miner-address` |
+| `--batch-size` | `1` | Minimum transactions to queue before starting a mining round; each round drains exactly this many. Must be ≥ 1. |
+| `--snapshot-depth` | `64` | Block snapshots retained behind the chain head. Sets the maximum safe reorg depth and the threshold above which state sync replaces block sync. Must be ≥ 1. |
 
 </details>
 

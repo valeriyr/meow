@@ -30,9 +30,6 @@ use crate::{
 /// The result type related to the miner.
 pub type Result<T> = std::result::Result<T, MinerError>;
 
-/// Maximum number of transactions drained from the mempool per mining round.
-const BATCH_SIZE: usize = 100;
-
 /// Transaction processor and PoW miner.
 ///
 /// Owns the [`ChainState`] (full block history + store snapshots) and the
@@ -47,6 +44,9 @@ pub struct Miner {
     miner_address: Address,
     /// Address that receives the minted reward coins.
     reward_address: Address,
+    /// Mining starts once this many transactions are queued; a block may still
+    /// end up with fewer if some are dropped during execution.
+    batch_size: usize,
 }
 
 impl Miner {
@@ -54,11 +54,12 @@ impl Miner {
     pub fn empty(config: MinerConfig) -> Self {
         let miner_address = Address::from(&config.keypair);
         Self {
-            chain: ChainState::new(Store::default(), config.difficulty),
+            chain: ChainState::new(Store::default(), config.difficulty, config.snapshot_depth),
             mempool: Mempool::empty(),
             keypair: Arc::new(config.keypair),
             miner_address,
             reward_address: config.reward_address,
+            batch_size: config.batch_size,
         }
     }
 
@@ -67,11 +68,12 @@ impl Miner {
         let miner_address = Address::from(&config.keypair);
         let store = Store::with_objects(genesis.objects().iter().cloned());
         Self {
-            chain: ChainState::new(store, config.difficulty),
+            chain: ChainState::new(store, config.difficulty, config.snapshot_depth),
             mempool: Mempool::empty(),
             keypair: Arc::new(config.keypair),
             miner_address,
             reward_address: config.reward_address,
+            batch_size: config.batch_size,
         }
     }
 
@@ -84,6 +86,16 @@ impl Miner {
     /// See [`ChainState::sync_from_height`] for details.
     pub fn sync_from_height(&self) -> u64 {
         self.chain.sync_from_height()
+    }
+
+    /// Number of block snapshots retained behind the head — the maximum safe reorg depth.
+    pub fn snapshot_depth(&self) -> u64 {
+        self.chain.snapshot_depth()
+    }
+
+    /// Number of transactions to accumulate in the mempool before starting a mining round.
+    pub fn batch_size(&self) -> usize {
+        self.batch_size
     }
 
     /// Returns the address that receives the minted reward coins.
@@ -172,6 +184,7 @@ impl Miner {
             snapshot.head,
             Store::with_objects(snapshot.objects),
             self.chain.difficulty(),
+            self.chain.snapshot_depth(),
         )?;
         self.mempool = Mempool::empty();
         Ok(())
@@ -197,12 +210,12 @@ impl Miner {
     /// Drain the mempool and execute a batch of transactions against the current
     /// head, returning the work needed to grind a valid nonce.
     ///
-    /// Returns `None` if the mempool is empty.
+    /// Returns `None` if the mempool has fewer than `batch_size` transactions.
     pub fn prepare_round(&mut self) -> Option<MiningWork> {
-        let batch = self.mempool.drain_batch(BATCH_SIZE);
-        if batch.is_empty() {
+        if self.mempool.len() < self.batch_size {
             return None;
         }
+        let batch = self.mempool.drain_batch(self.batch_size);
 
         let parent_hash = self.chain.head();
         let height = self.chain.head_height() + 1;

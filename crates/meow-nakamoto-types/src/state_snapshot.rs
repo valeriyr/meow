@@ -5,11 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::block::Block;
 
-/// How many block snapshots to keep behind the head. Limits reorg depth.
-/// Forks deeper than this cannot be resolved because the store snapshots needed
-/// to re-execute them have been discarded.
-pub const SNAPSHOT_DEPTH: u64 = 64;
-
 /// A full state snapshot at the current chain head.
 ///
 /// The snapshot is trustworthy when:

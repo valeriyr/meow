@@ -113,7 +113,7 @@ Because the gas coin is an object, every transaction — even a failed one — b
 
 The store is a flat `BTreeMap<Address, Object>`. Each committed block applies its execution results atomically in a single pass: created objects are inserted, changed objects overwrite their previous entry, destroyed objects are removed.
 
-`ChainState` keeps a full store snapshot per block up to `SNAPSHOT_DEPTH` blocks behind the head. On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed. See [Consensus — Fork choice and reorgs](consensus.md#fork-choice-and-reorgs).
+`ChainState` keeps a full store snapshot per block up to `snapshot_depth` blocks behind the head. On a reorg, the node simply restores the snapshot at the new chain tip — no undo log is needed. See [Consensus — Fork choice and reorgs](consensus.md#fork-choice-and-reorgs).
 
 ## In the RPC
 

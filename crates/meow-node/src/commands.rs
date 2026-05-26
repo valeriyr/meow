@@ -25,6 +25,12 @@ use crate::node::{Node, config::NodeConfig};
 pub const DEFAULT_NODE_URL: &str = "127.0.0.1:8600";
 /// The default gossip listen address.
 pub const DEFAULT_GOSSIP_LISTEN_ADDRESS: &str = "/ip4/0.0.0.0/tcp/0";
+/// The default PoW difficulty.
+const DEFAULT_DIFFICULTY: u32 = 8;
+/// The default batch size for mining rounds.
+const DEFAULT_BATCH_SIZE: u64 = 1;
+/// The default number of block snapshots to retain behind the chain head.
+const DEFAULT_SNAPSHOT_DEPTH: u64 = 64;
 
 /// The main command line commands.
 #[derive(Parser)]
@@ -59,7 +65,7 @@ pub enum Command {
         /// Dev guidance: 8 = ~256 hashes per block (fast), 20 = ~1M hashes (slow).
         #[arg(
             long,
-            default_value_t = 8,
+            default_value_t = DEFAULT_DIFFICULTY,
             value_parser = clap::value_parser!(u32).range(1..=32),
             verbatim_doc_comment
         )]
@@ -77,6 +83,16 @@ pub enum Command {
         /// If omitted, the default keystore path is used. Requires --miner-address.
         #[arg(long, requires = "miner_address", verbatim_doc_comment)]
         keystore_path: Option<PathBuf>,
+        /// Number of transactions to include per mining round.
+        /// Mining starts once this many transactions are in the mempool.
+        /// A block may contain fewer if some are dropped due to execution errors.
+        #[arg(long, default_value_t = DEFAULT_BATCH_SIZE, value_parser = clap::value_parser!(u64).range(1..), verbatim_doc_comment)]
+        batch_size: u64,
+        /// Number of block snapshots retained behind the chain head.
+        /// Determines the maximum reorg depth the node can recover from via block sync.
+        /// Gaps larger than this trigger a full state snapshot sync instead.
+        #[arg(long, default_value_t = DEFAULT_SNAPSHOT_DEPTH, value_parser = clap::value_parser!(u64).range(1..), verbatim_doc_comment)]
+        snapshot_depth: u64,
     },
 }
 
@@ -94,6 +110,8 @@ impl Command {
                 miner_address,
                 miner_reward_address,
                 keystore_path,
+                batch_size,
+                snapshot_depth,
             } => {
                 print_startup_banner();
 
@@ -108,8 +126,13 @@ impl Command {
                     check_explicit_peers_ticks,
                 );
                 let node_config = NodeConfig::new(rpc_listen, gossip_network_config);
-                let miner_config =
-                    MinerConfig::new(difficulty, miner_keypair, miner_reward_address);
+                let miner_config = MinerConfig::new(
+                    difficulty,
+                    miner_keypair,
+                    miner_reward_address,
+                    batch_size as usize,
+                    snapshot_depth,
+                );
 
                 let genesis_bytes = std::fs::read(&genesis)?;
                 let genesis = bcs::from_bytes::<Genesis>(&genesis_bytes)?;

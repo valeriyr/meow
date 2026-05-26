@@ -6,7 +6,7 @@
 
 MEOW uses Nakamoto-style proof-of-work. Miners continuously grind a nonce until the block's mining hash satisfies a difficulty target, then broadcast the solved block to peers. Every node independently re-executes all transactions and verifies the result — a block is only accepted when it passes every validation rule.
 
-The fork choice rule is **longest chain by height**. When two valid chains exist, the one with the higher block height wins. The maximum safe reorg depth is `SNAPSHOT_DEPTH` blocks — see [Fork choice and reorgs](#fork-choice-and-reorgs).
+The fork choice rule is **longest chain by height**. When two valid chains exist, the one with the higher block height wins. The maximum safe reorg depth equals `snapshot_depth` — see [Fork choice and reorgs](#fork-choice-and-reorgs).
 
 ---
 
@@ -39,7 +39,7 @@ The PoW target is expressed as a **minimum number of leading zero bits** in the 
 
 Mining proceeds as follows:
 
-1. Assemble the transaction batch (up to 100 transactions from the mempool).
+1. Wait until the mempool holds at least `batch_size` transactions, then drain exactly `batch_size` into the candidate block. A block may contain fewer if some are dropped during execution.
 2. Compute `transactions_root` from the batch.
 3. Set `timestamp` and `nonce = 0`.
 4. Increment `nonce` until `mining_hash` has at least `difficulty` leading zero bits.
@@ -107,9 +107,9 @@ Because the miner has discretion within these bounds, contracts that depend on `
 
 When a new block arrives that extends a side chain to a height greater than the current head, the node switches to that chain. Re-execution is not needed during the reorg — every block keeps a pre-computed snapshot of the object store, so a fork switch is a pointer update.
 
-**Snapshot pruning:** block data (headers, transactions) and store snapshots for blocks more than `SNAPSHOT_DEPTH` (**64**) heights behind the current head are discarded together. Transaction execution results are indexed separately and retained indefinitely. The practical maximum safe reorg depth is `SNAPSHOT_DEPTH` blocks.
+**Snapshot pruning:** block data (headers, transactions) and store snapshots for blocks more than `snapshot_depth` heights behind the current head are discarded together. Transaction execution results are indexed separately and retained indefinitely. The practical maximum safe reorg depth equals `snapshot_depth`.
 
-When a block arrives with a height more than one ahead of the local tip, the node detects a gap and initiates a catch-up sync. For gaps of up to `SNAPSHOT_DEPTH` blocks the node pulls the missing range block-by-block; for larger gaps it fetches a full state snapshot from a peer, validates it (PoW + state root), and anchors the chain there — see [Networking — Catch-up sync](networking.md#catch-up-sync).
+When a block arrives with a height more than one ahead of the local tip, the node detects a gap and initiates a catch-up sync. For gaps of up to `snapshot_depth` blocks the node pulls the missing range block-by-block; for larger gaps it fetches a full state snapshot from a peer, validates it (PoW + state root), and anchors the chain there — see [Networking — Catch-up sync](networking.md#catch-up-sync).
 
 ---
 
@@ -126,6 +126,8 @@ A transaction is accepted into the mempool only if:
 ### Ordering
 
 Transactions are queued FIFO. There is no fee-based priority ordering.
+
+The miner drains the mempool in rounds of exactly `batch_size` transactions. A mining round does not begin until that many transactions have accumulated. See [Proof of work](#proof-of-work) for the full mining flow.
 
 ### Reorg retention
 

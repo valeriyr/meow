@@ -10,9 +10,7 @@ use meow_types::{
         Object, object_decl_ref::ObjectDeclRef, object_owner::ObjectOwner, object_ref::ObjectRef,
         object_type::ObjectType, object_version::ObjectVersion,
     },
-    transaction::{
-        SignedTransaction, Transaction, call::Call, input::Input, transaction_type::TransactionType,
-    },
+    transaction::{Transaction, call::Call, input::Input, transaction_type::TransactionType},
 };
 use rand::{SeedableRng, rngs::StdRng};
 
@@ -383,22 +381,14 @@ fn coin_decl_ref() -> ObjectDeclRef {
     ObjectDeclRef::new(Address::suffixed(0xFD), Identifier::new("Coin").unwrap())
 }
 
-fn make_transaction(keypair: &KeyPair, gas_coin: &Object) -> SignedTransaction {
-    let sender: Address = keypair.public().into();
-    let (signed, _) = Transaction::new(
-        sender,
-        gas_coin.object_ref(),
-        TransactionType::MeowModulePublish(vec![1, 2, 3]),
-    )
-    .sign(keypair);
-    signed
-}
-
 fn submit_transaction(
     mempool: &mut Mempool,
     store: &Store,
     keypair: &KeyPair,
     gas_coin: &Object,
 ) -> Result<(), MempoolError> {
-    mempool.submit(make_transaction(keypair, gas_coin), store)
+    mempool.submit(
+        utils::make_signed_transaction(keypair, gas_coin.object_ref(), vec![1, 2, 3]),
+        store,
+    )
 }

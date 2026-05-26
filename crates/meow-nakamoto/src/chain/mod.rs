@@ -4,7 +4,7 @@ pub mod error;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use meow_nakamoto_types::{block::Block, state_snapshot::SNAPSHOT_DEPTH};
+use meow_nakamoto_types::block::Block;
 use meow_types::{
     digest::Digest,
     time,
@@ -14,7 +14,7 @@ use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolv
 
 use crate::{chain::error::ChainError, roots, store::Store, system_transactions};
 
-/// The result type related to the miner.
+/// The result type related to the chain.
 pub type Result<T> = std::result::Result<T, ChainError>;
 
 /// Tracks the full chain of blocks and the object store snapshot at each tip.
@@ -34,6 +34,11 @@ pub struct ChainState {
     head: Digest,
     /// PoW difficulty: minimum number of leading zero bits required in a block hash.
     difficulty: u32,
+    /// Number of block snapshots to retain behind the head. Controls both the maximum safe
+    /// reorg depth and the state-sync threshold: peers whose chain is more than
+    /// `snapshot_depth` blocks ahead trigger a full state snapshot download instead of block
+    /// replay.
+    snapshot_depth: u64,
 }
 
 /// Maximum number of milliseconds a block's timestamp may be ahead of local clock.
@@ -43,7 +48,7 @@ const MAX_BLOCK_FUTURE_DRIFT_MS: u64 = 120_000; // 2 minutes
 impl ChainState {
     /// Creates a chain rooted at genesis, with the given initial store as the
     /// state at block 0. The genesis block itself requires no PoW.
-    pub fn new(initial_store: Store, difficulty: u32) -> Self {
+    pub fn new(initial_store: Store, difficulty: u32, snapshot_depth: u64) -> Self {
         let genesis = Block::genesis();
         let genesis_hash = genesis.hash();
 
@@ -59,6 +64,7 @@ impl ChainState {
             results: BTreeMap::new(),
             head: genesis_hash,
             difficulty,
+            snapshot_depth,
         }
     }
 
@@ -75,6 +81,7 @@ impl ChainState {
         head_block: Block,
         store: Store,
         difficulty: u32,
+        snapshot_depth: u64,
     ) -> Result<Self> {
         let snap_height = head_block.header.height;
         if snap_height <= current_head_height {
@@ -116,12 +123,18 @@ impl ChainState {
             results: BTreeMap::new(),
             head: block_hash,
             difficulty,
+            snapshot_depth,
         })
     }
 
     /// PoW difficulty configured for this chain.
     pub fn difficulty(&self) -> u32 {
         self.difficulty
+    }
+
+    /// Number of block snapshots retained behind the head.
+    pub fn snapshot_depth(&self) -> u64 {
+        self.snapshot_depth
     }
 
     /// Hash of the current best block.
@@ -142,10 +155,10 @@ impl ChainState {
     /// Earliest block height from which a sync should start to cover all resolvable reorgs.
     ///
     /// Pulling blocks from this height onwards guarantees that the common ancestor of any
-    /// fork at most `SNAPSHOT_DEPTH` blocks deep is included, so the pulled chain can be
+    /// fork at most `snapshot_depth` blocks deep is included, so the pulled chain can be
     /// applied end-to-end without hitting a missing-parent rejection.
     pub fn sync_from_height(&self) -> u64 {
-        self.head_height().saturating_sub(SNAPSHOT_DEPTH)
+        self.head_height().saturating_sub(self.snapshot_depth)
     }
 
     /// Object store state at the current best tip.
@@ -190,15 +203,15 @@ impl ChainState {
         self.prune_finalized_blocks();
     }
 
-    /// Drop all blocks and store snapshots more than `SNAPSHOT_DEPTH` blocks behind the head.
+    /// Drop all blocks and store snapshots more than `snapshot_depth` blocks behind the head.
     /// Headers and snapshots are always removed together, keeping the invariant that a block
     /// in `self.blocks` always has a corresponding entry in `self.snapshots`.
     fn prune_finalized_blocks(&mut self) {
         let head_height = self.head_block().header.height;
-        if head_height <= SNAPSHOT_DEPTH {
+        if head_height <= self.snapshot_depth {
             return;
         }
-        let cutoff = head_height - SNAPSHOT_DEPTH;
+        let cutoff = head_height - self.snapshot_depth;
         let to_remove: Vec<Digest> = self
             .blocks
             .iter()

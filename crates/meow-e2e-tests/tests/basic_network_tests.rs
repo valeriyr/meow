@@ -1,5 +1,4 @@
 use meow_e2e_tests::{test_node::TestNode, test_utils};
-use meow_nakamoto_types::state_snapshot::SNAPSHOT_DEPTH;
 use meow_types::{
     object::object_type::ObjectType,
     transaction::{Transaction, transaction_type::TransactionType},
@@ -161,45 +160,55 @@ async fn late_joiner_syncs_blocks_mined_during_sync() {
 // ─── State sync ───
 //
 
-/// An empty node joining a peer whose chain is more than `SNAPSHOT_DEPTH` blocks
+/// An empty node joining a peer whose chain is more than `snapshot_depth` blocks
 /// ahead must bootstrap via a full state snapshot rather than block replay.
 ///
+/// Uses snapshot_depth=3 so only 4 pre-mined blocks are needed instead of 65.
+///
 /// Sequence:
-///  1. node1 mines `SNAPSHOT_DEPTH + 1` blocks (gap will be > SNAPSHOT_DEPTH).
-///  2. node2 starts with an empty chain and connects to node1.
+///  1. node1 mines `snapshot_depth + 1` blocks (gap will be > snapshot_depth).
+///  2. node2 starts with the same snapshot_depth and connects to node1.
 ///  3. node1 mines one more block; the gossip message triggers state sync on node2.
 ///  4. node2 fetches the full snapshot, validates the state root, and applies it.
 ///  5. node2 ends up with all objects from node1's chain.
 #[tokio::test]
 #[serial]
 async fn late_joiner_state_syncs_when_gap_exceeds_snapshot_depth() {
-    let blocks_to_pre_mine = (SNAPSHOT_DEPTH + 1) as usize;
-    // Large balance to cover gas for all pre-mined transactions.
-    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(100_000_000);
+    // Small depth so the test only needs 4 pre-mined blocks instead of 65.
+    const SNAPSHOT_DEPTH: u64 = 3;
 
-    let node1 = TestNode::start_with_genesis(&genesis).await;
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(100_000);
+
+    let node1 = TestNode::start_with_snapshot_depth(&genesis, SNAPSHOT_DEPTH).await;
     let client1 = node1.client();
 
-    // Mine `blocks_to_pre_mine` blocks on node1 before node2 joins.
+    // Mine `SNAPSHOT_DEPTH + 1` blocks on node1 before node2 joins.
     let mut first_module_addr = None;
-    for i in 0..blocks_to_pre_mine {
+    for i in 0..=(SNAPSHOT_DEPTH as usize) {
         let gas_coin_ref = test_utils::get_object_ref(client1, &coin_addr).await;
-        let transaction = Transaction::new(
-            sender,
-            gas_coin_ref,
-            TransactionType::MeowModulePublish(test_utils::module_noop()),
-        );
-        let result = test_utils::sign_and_execute(client1, &keypair, transaction).await;
+        let result = test_utils::sign_and_execute(
+            client1,
+            &keypair,
+            Transaction::new(
+                sender,
+                gas_coin_ref,
+                TransactionType::MeowModulePublish(test_utils::module_noop()),
+            ),
+        )
+        .await;
         if i == 0 {
             first_module_addr = Some(test_utils::published_module_addr(&result));
         }
     }
     let first_module_addr = first_module_addr.unwrap();
 
-    // Start node2 with the same genesis, bootstrapped to node1.
-    let node2 =
-        TestNode::start_with_bootstrap(&genesis, vec![node1.gossip_bootstrap_address().clone()])
-            .await;
+    // Start node2 with the same snapshot_depth so it uses the same sync threshold.
+    let node2 = TestNode::start_with_bootstrap_and_snapshot_depth(
+        &genesis,
+        vec![node1.gossip_bootstrap_address().clone()],
+        SNAPSHOT_DEPTH,
+    )
+    .await;
     let client2 = node2.client();
 
     // Wait for gossip peer-info exchange so node2 knows node1's RPC URL before the
@@ -207,14 +216,18 @@ async fn late_joiner_state_syncs_when_gap_exceeds_snapshot_depth() {
     tokio::time::sleep(test_utils::GOSSIP_PEER_CONNECT_WAIT).await;
 
     // Mine one more block on node1. When node2 receives the gossip message its gap
-    // exceeds SNAPSHOT_DEPTH, which triggers state sync instead of block replay.
+    // exceeds snapshot_depth, which triggers state sync instead of block replay.
     let gas_coin_ref = test_utils::get_object_ref(client1, &coin_addr).await;
-    let transaction = Transaction::new(
-        sender,
-        gas_coin_ref,
-        TransactionType::MeowModulePublish(test_utils::module_noop()),
-    );
-    test_utils::sign_and_execute(client1, &keypair, transaction).await;
+    test_utils::sign_and_execute(
+        client1,
+        &keypair,
+        Transaction::new(
+            sender,
+            gas_coin_ref,
+            TransactionType::MeowModulePublish(test_utils::module_noop()),
+        ),
+    )
+    .await;
 
     // After state sync, node2 must have the module published in the very first block.
     let fetched = test_utils::wait_for_object(client2, &first_module_addr).await;

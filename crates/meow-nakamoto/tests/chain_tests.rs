@@ -6,9 +6,8 @@ use meow_nakamoto::{
     store::Store,
     system_transactions,
 };
-use meow_nakamoto_types::{
-    block::Block, block_header::BlockHeader, state_snapshot::SNAPSHOT_DEPTH,
-};
+use meow_nakamoto_types::{block::Block, block_header::BlockHeader};
+
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -29,7 +28,7 @@ use rand::{SeedableRng, rngs::StdRng};
 #[test]
 fn valid_block_advances_chain() {
     let (store, cs) = utils::coins(1);
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     let (block, _) = make_valid_block(chain.head(), &store, 1, 1, cs[0].0, &cs[0].1);
 
@@ -42,7 +41,7 @@ fn valid_block_advances_chain() {
 #[test]
 fn already_known_block_is_skipped() {
     let (store, cs) = utils::coins(1);
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     let (block, _) = make_valid_block(chain.head(), &store, 1, 1, cs[0].0, &cs[0].1);
 
@@ -57,7 +56,7 @@ fn already_known_block_is_skipped() {
 #[test]
 fn block_on_equal_height_fork_does_not_change_head() {
     let (store, cs) = utils::coins(2);
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
     let genesis_hash = chain.head();
 
     let (block1, _) = make_valid_block(genesis_hash, &store, 1, 1, cs[0].0, &cs[0].1);
@@ -80,7 +79,7 @@ fn block_on_equal_height_fork_does_not_change_head() {
 #[test]
 fn chain_reorg_switches_head_to_longer_fork() {
     let (genesis_store, cs) = utils::coins(3);
-    let mut chain = ChainState::new(genesis_store.clone(), 0);
+    let mut chain = utils::new_chain(genesis_store.clone());
     let genesis_hash = chain.head();
 
     // Block B1: first chain at height 1 (uses coin 0).
@@ -126,7 +125,7 @@ fn valid_block_with_reward_advances_chain() {
 #[test]
 fn deep_fork_resolves_when_ancestor_blocks_applied_before_tip() {
     let (genesis_store, cs) = utils::coins(7);
-    let mut chain = ChainState::new(genesis_store.clone(), 0);
+    let mut chain = utils::new_chain(genesis_store.clone());
     let genesis_hash = chain.head();
 
     // Main chain: genesis → A1 → A2 → A3 (head at height 3).
@@ -270,7 +269,7 @@ fn block_with_future_timestamp_is_rejected() {
 #[test]
 fn empty_block_is_rejected() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     // make_empty_block is intentionally empty — this is the one test where that is the defect.
     let block = make_empty_block(chain.head(), &store, 1, 1);
@@ -373,7 +372,7 @@ fn block_failing_pow_difficulty_is_rejected() {
     // make_valid_gas_block uses difficulty=0 so the block's nonce=0. Apply it to a
     // chain that requires 32 leading zero bits — the hash won't meet that bar.
     let (block, parent_store) = make_valid_gas_block();
-    let mut chain = ChainState::new(parent_store, 32);
+    let mut chain = ChainState::new(parent_store, utils::POW_DIFFICULTY, utils::SNAPSHOT_DEPTH);
 
     assert_eq!(chain.apply_block(block), Err(ChainError::PowCheckFailed));
 
@@ -464,12 +463,12 @@ fn block_with_tampered_reward_result_is_rejected() {
 }
 
 /// A block whose parent has been pruned (header and snapshot removed together once it
-/// falls more than `SNAPSHOT_DEPTH` blocks behind the head) must be rejected with
+/// falls more than `utils::SNAPSHOT_DEPTH` blocks behind the head) must be rejected with
 /// `UnknownParent` — the parent no longer exists in the chain.
 #[test]
 fn block_extending_pruned_parent_is_rejected_with_unknown_parent() {
     let (store, cs) = utils::coins(1);
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
     let genesis_hash = chain.head();
 
     // Build a valid height-1 block before advancing the chain. All structural
@@ -477,17 +476,17 @@ fn block_extending_pruned_parent_is_rejected_with_unknown_parent() {
     // timestamp=2: distinct from the committed height-1 block (timestamp=1).
     let (valid_block, _) = make_valid_block(genesis_hash, &store, 1, 2, cs[0].0, &cs[0].1);
 
-    // Advance the head past SNAPSHOT_DEPTH so genesis is pruned (header + snapshot).
-    advance_head_via_commit(&mut chain, &store, SNAPSHOT_DEPTH + 1);
+    // Advance the head past utils::SNAPSHOT_DEPTH so genesis is pruned (header + snapshot).
+    advance_head_via_commit(&mut chain, &store, utils::SNAPSHOT_DEPTH + 1);
 
-    assert!(chain.head_height() > SNAPSHOT_DEPTH);
+    assert!(chain.head_height() > utils::SNAPSHOT_DEPTH);
 
     assert_eq!(
         chain.apply_block(valid_block),
         Err(ChainError::UnknownParent)
     );
 
-    assert_eq!(chain.head_height(), SNAPSHOT_DEPTH + 1);
+    assert_eq!(chain.head_height(), utils::SNAPSHOT_DEPTH + 1);
 }
 
 //
@@ -499,7 +498,7 @@ fn block_extending_pruned_parent_is_rejected_with_unknown_parent() {
 #[test]
 fn get_blocks_since_returns_blocks_from_height() {
     let (store, cs) = utils::coins(2);
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     let (block1, _) = make_valid_block(chain.head(), &store, 1, 1, cs[0].0, &cs[0].1);
     assert!(chain.apply_block(block1).is_ok());
@@ -529,16 +528,16 @@ fn get_blocks_since_returns_blocks_from_height() {
 #[test]
 fn finalized_blocks_are_absent_from_get_blocks_since() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
-    // Advance to height SNAPSHOT_DEPTH + 1.
-    // cutoff = (SNAPSHOT_DEPTH + 1) - SNAPSHOT_DEPTH = 1 → genesis (height 0) is pruned.
-    advance_head_via_commit(&mut chain, &store, SNAPSHOT_DEPTH + 1);
+    // Advance to height utils::SNAPSHOT_DEPTH + 1.
+    // cutoff = (utils::SNAPSHOT_DEPTH + 1) - utils::SNAPSHOT_DEPTH = 1 → genesis (height 0) is pruned.
+    advance_head_via_commit(&mut chain, &store, utils::SNAPSHOT_DEPTH + 1);
 
     let blocks = chain.get_blocks_since(0);
 
-    // Genesis must be gone; only heights 1..=SNAPSHOT_DEPTH+1 are kept.
-    assert_eq!(blocks.len(), SNAPSHOT_DEPTH as usize + 1);
+    // Genesis must be gone; only heights 1..=utils::SNAPSHOT_DEPTH+1 are kept.
+    assert_eq!(blocks.len(), utils::SNAPSHOT_DEPTH as usize + 1);
     assert!(
         blocks.iter().all(|b| b.header.height >= 1),
         "no block below the finality horizon must appear in get_blocks_since"
@@ -554,7 +553,7 @@ fn finalized_blocks_are_absent_from_get_blocks_since() {
 #[test]
 fn get_transaction_returns_committed_transaction() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     let (signed, tx_digest) = utils::dummy_signed_transaction();
 
@@ -579,7 +578,7 @@ fn get_transaction_returns_committed_transaction() {
 #[test]
 fn committed_transaction_result_is_queryable() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
     let (signed, tx_digest) = utils::dummy_signed_transaction();
     let block = utils::make_block(
@@ -599,7 +598,7 @@ fn committed_transaction_result_is_queryable() {
 #[should_panic(expected = "commit called with structurally invalid block")]
 fn commit_panics_on_empty_block() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
     chain.commit(make_empty_block(chain.head(), &store, 1, 1), store);
 }
 
@@ -616,7 +615,7 @@ fn from_snapshot_anchors_chain_at_given_block() {
     let block = utils::make_block(42, Digest::from([0xAA; 32]), 100, state_root, signed);
     let block_hash = block.hash();
 
-    let chain = ChainState::from_snapshot(0, block, store, 0).expect("valid snapshot");
+    let chain = utils::chain_from_snapshot(block, store).expect("valid snapshot");
 
     assert_eq!(chain.head(), block_hash);
     assert_eq!(chain.head_height(), 42);
@@ -636,7 +635,7 @@ fn from_snapshot_rejects_non_advancing_height() {
     ); // height 0: same as current_head_height=0 → not advancing
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::SnapshotNotAdvancing {
@@ -667,7 +666,7 @@ fn from_snapshot_rejects_empty_block() {
     };
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::EmptyBlock
@@ -692,7 +691,7 @@ fn from_snapshot_rejects_duplicate_transaction() {
     block.header.transactions_root = roots::compute_transactions_root(&block.transactions);
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::DuplicateTransaction
@@ -713,7 +712,7 @@ fn from_snapshot_rejects_future_timestamp() {
     ); // u64::MAX: absurdly far in the future
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::TimestampTooFarInFuture
@@ -735,7 +734,7 @@ fn from_snapshot_rejects_results_count_mismatch() {
     block.results.clear(); // mismatch: 1 transaction, 0 results
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::ResultsCountMismatch
@@ -759,7 +758,7 @@ fn from_snapshot_rejects_inconsistent_reward() {
     block.reward_transaction = Some(reward_signed); // present without matching result
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::InconsistentReward
@@ -781,7 +780,7 @@ fn from_snapshot_rejects_reward_root_mismatch() {
     block.header.reward_root = Some(Digest::from([0xFF; 32])); // wrong: body has no reward transaction
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::RewardRootMismatch
@@ -803,7 +802,7 @@ fn from_snapshot_rejects_transactions_root_mismatch() {
     block.header.transactions_root = Digest::ZERO; // wrong: does not match `transactions`
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::TransactionsRootMismatch
@@ -825,9 +824,15 @@ fn from_snapshot_rejects_pow_failure() {
     );
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 32)
-            .err()
-            .expect("expected rejection"),
+        ChainState::from_snapshot(
+            0,
+            block,
+            store,
+            utils::POW_DIFFICULTY,
+            utils::SNAPSHOT_DEPTH
+        )
+        .err()
+        .expect("expected rejection"),
         ChainError::PowCheckFailed
     );
 }
@@ -840,7 +845,7 @@ fn from_snapshot_rejects_state_root_mismatch() {
     let block = utils::make_block(1, Block::genesis().hash(), 1, Digest::ZERO, signed); // state_root=ZERO: wrong, actual root of non-empty store != ZERO
 
     assert_eq!(
-        ChainState::from_snapshot(0, block, store, 0)
+        utils::chain_from_snapshot(block, store)
             .err()
             .expect("expected rejection"),
         ChainError::StateRootMismatch
@@ -856,8 +861,7 @@ fn from_snapshot_accepts_block_extending_snapshot() {
     let snap_block = utils::make_block(5, Digest::from([0xBB; 32]), 50, state_root, signed);
     let snap_hash = snap_block.hash();
 
-    let mut chain =
-        ChainState::from_snapshot(0, snap_block, store.clone(), 0).expect("valid snapshot");
+    let mut chain = utils::chain_from_snapshot(snap_block, store.clone()).expect("valid snapshot");
 
     let (next, _) = make_valid_block(snap_hash, &store, 6, 60, cs[0].0, &cs[0].1);
     assert_eq!(chain.apply_block(next), Ok(true));
@@ -873,7 +877,7 @@ fn from_snapshot_accepts_block_extending_snapshot() {
 #[test]
 fn sync_from_height_is_zero_below_snapshot_depth() {
     let store = Store::default();
-    let chain = ChainState::new(store.clone(), 0);
+    let chain = utils::new_chain(store.clone());
     assert_eq!(chain.sync_from_height(), 0);
 }
 
@@ -882,11 +886,78 @@ fn sync_from_height_is_zero_below_snapshot_depth() {
 #[test]
 fn sync_from_height_is_head_minus_snapshot_depth_when_beyond() {
     let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), 0);
+    let mut chain = utils::new_chain(store.clone());
 
-    advance_head_via_commit(&mut chain, &store, SNAPSHOT_DEPTH + 10);
+    advance_head_via_commit(&mut chain, &store, utils::SNAPSHOT_DEPTH + 10);
 
     assert_eq!(chain.sync_from_height(), 10);
+}
+
+/// `prune_finalized_blocks` must use the configured `snapshot_depth` as the pruning
+/// horizon — a chain constructed with `snapshot_depth=2` must prune heights 0 and 1
+/// once the head reaches height 4 (cutoff = 4 - 2 = 2).
+#[test]
+fn prune_finalized_blocks_respects_custom_snapshot_depth() {
+    let store = Store::default();
+    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 2);
+
+    advance_head_via_commit(&mut chain, &store, 4);
+
+    let blocks = chain.get_blocks_since(0);
+    // Heights 0 and 1 are pruned; heights 2, 3, 4 remain.
+    assert_eq!(blocks.len(), 3);
+    assert!(
+        blocks.iter().all(|b| b.header.height >= 2),
+        "blocks below the custom snapshot depth horizon must be pruned"
+    );
+}
+
+/// `sync_from_height` must reflect a custom `snapshot_depth` — a chain anchored at
+/// height 10 with `snapshot_depth=5` must return `5` (= 10 - 5), not the default 64.
+#[test]
+fn sync_from_height_reflects_custom_snapshot_depth() {
+    let store = Store::default();
+    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 5);
+
+    advance_head_via_commit(&mut chain, &store, 10);
+
+    assert_eq!(chain.sync_from_height(), 5);
+}
+
+/// `sync_from_height` on a chain anchored via `from_snapshot` must correctly reflect
+/// the snapshot head height and `snapshot_depth`. Immediately after anchoring at height
+/// N the result must be `N.saturating_sub(snapshot_depth)`.
+#[test]
+fn sync_from_height_is_correct_on_freshly_anchored_snapshot_chain() {
+    let store = Store::default();
+    let state_root = roots::compute_state_root(&store);
+    let (signed, _) = utils::dummy_signed_transaction();
+    // Anchor at height 20 with snapshot_depth=5 → sync_from_height() must be 15.
+    let block = utils::make_block(20, Digest::from([0xAA; 32]), 100, state_root, signed);
+
+    let chain =
+        ChainState::from_snapshot(0, block, store, utils::DIFFICULTY, 5).expect("valid snapshot");
+
+    assert_eq!(chain.sync_from_height(), 15);
+}
+
+/// With `snapshot_depth=1` every block except the head and its immediate parent must be
+/// pruned after each commit — the most aggressive pruning configuration.
+#[test]
+fn prune_finalized_blocks_with_snapshot_depth_one() {
+    let store = Store::default();
+    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 1);
+
+    // Advance to height 4: cutoff = 4 - 1 = 3 → heights 0, 1, 2 are pruned; 3 and 4 remain.
+    advance_head_via_commit(&mut chain, &store, 4);
+
+    let blocks = chain.get_blocks_since(0);
+    assert_eq!(
+        blocks.len(),
+        2,
+        "only the head and its parent must survive with snapshot_depth=1"
+    );
+    assert!(blocks.iter().all(|b| b.header.height >= 3));
 }
 
 //
@@ -997,7 +1068,7 @@ fn make_valid_gas_block() -> (Block, Store) {
 /// includes a gas-consuming transaction and a correct reward transaction.
 fn chain_and_valid_gas_block() -> (ChainState, Block) {
     let (block, parent_store) = make_valid_gas_block();
-    (ChainState::new(parent_store, 0), block)
+    (utils::new_chain(parent_store), block)
 }
 
 /// Advance the chain head by `n` blocks using `commit()`, bypassing all validation.

@@ -3,7 +3,12 @@
 use std::{slice, sync::Arc};
 
 use meow_genesis::Genesis;
-use meow_nakamoto::{miner::mining_work::MiningWork, roots, store::Store};
+use meow_nakamoto::{
+    chain::{ChainState, error::ChainError},
+    miner::mining_work::MiningWork,
+    roots,
+    store::Store,
+};
 use meow_nakamoto_types::{block::Block, block_header::BlockHeader};
 use meow_types::{
     address::Address,
@@ -19,6 +24,26 @@ use meow_types::{
 };
 use meow_vm_adapter::builder;
 use rand::{SeedableRng, rngs::StdRng};
+
+/// Snapshot depth used across all chain tests.
+pub const SNAPSHOT_DEPTH: u64 = 64;
+/// Batch size used in miner tests — one transaction per block is sufficient for testing.
+/// Keeps tests fast and avoids the need for multiple independent coins per test.
+pub const BATCH_SIZE: usize = 1;
+/// Difficulty used in standard chain tests — zero means nonce=0 is always valid.
+pub const DIFFICULTY: u32 = 0;
+/// Non-trivial difficulty used in PoW rejection tests.
+pub const POW_DIFFICULTY: u32 = 32;
+
+/// Create a `ChainState` with zero difficulty and the standard test snapshot depth.
+pub fn new_chain(store: Store) -> ChainState {
+    ChainState::new(store, DIFFICULTY, SNAPSHOT_DEPTH)
+}
+
+/// Anchor a `ChainState` at a snapshot block with zero difficulty and the standard test snapshot depth.
+pub fn chain_from_snapshot(block: Block, store: Store) -> Result<ChainState, ChainError> {
+    ChainState::from_snapshot(0, block, store, DIFFICULTY, SNAPSHOT_DEPTH)
+}
 
 pub fn test_keypair() -> KeyPair {
     KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0x01; 32]))
@@ -37,9 +62,9 @@ pub fn noop_module_bytes() -> Vec<u8> {
     bcs::to_bytes(&module).expect("module serialization is infallible")
 }
 
-/// Build a genesis that pre-allocates a coin to `owner`, returning the store
-/// and the coin's `ObjectRef` ready to be used as a gas coin.
-pub fn genesis_store_with_coin(owner: Address) -> (Store, ObjectRef) {
+/// Build a genesis that pre-allocates a coin to `owner`, returning the genesis
+/// and the coin's `ObjectRef`.
+pub fn genesis_with_coin(owner: Address) -> (Genesis, ObjectRef) {
     let genesis = Genesis::build(&[(owner, 10_000)]).expect("genesis must build");
     let coin_ref = genesis
         .objects()
@@ -47,8 +72,17 @@ pub fn genesis_store_with_coin(owner: Address) -> (Store, ObjectRef) {
         .find(|o| o.owner() == &ObjectOwner::Address(owner))
         .expect("allocation must produce a coin owned by the address")
         .object_ref();
-    let store = Store::with_objects(genesis.objects().iter().cloned());
-    (store, coin_ref)
+    (genesis, coin_ref)
+}
+
+/// Build a genesis that pre-allocates a coin to `owner`, returning the store
+/// and the coin's `ObjectRef` ready to be used as a gas coin.
+pub fn genesis_store_with_coin(owner: Address) -> (Store, ObjectRef) {
+    let (genesis, coin_ref) = genesis_with_coin(owner);
+    (
+        Store::with_objects(genesis.objects().iter().cloned()),
+        coin_ref,
+    )
 }
 
 /// Build a genesis that pre-allocates one coin per entry in `n`, using
@@ -114,16 +148,32 @@ pub fn mining_work(
     }
 }
 
+/// Build and sign a `MeowModulePublish` transaction using `keypair` and `coin_ref` as gas.
+/// Pass distinct `content` bytes across calls to produce distinct digests so multiple
+/// transactions referencing the same coin can coexist in the mempool.
+pub fn make_signed_transaction(
+    keypair: &KeyPair,
+    coin_ref: ObjectRef,
+    content: Vec<u8>,
+) -> SignedTransaction {
+    let (signed, _) = Transaction::new(
+        Address::from(keypair),
+        coin_ref,
+        TransactionType::MeowModulePublish(content),
+    )
+    .sign(keypair);
+    signed
+}
+
 /// Build a validly signed transaction for use with `commit` and structural tests (no gas coin required).
 /// Returns `(signed_transaction, transaction_digest)`.
 pub fn dummy_signed_transaction() -> (SignedTransaction, Digest) {
     let keypair = test_keypair();
-    let transaction = Transaction::new(
-        Address::from(&keypair),
+    let signed = make_signed_transaction(
+        &keypair,
         ObjectRef::new(Address::ZERO, ObjectVersion::ZERO, Digest::ZERO),
-        TransactionType::MeowModulePublish(vec![1]),
+        vec![1],
     );
-    let (signed, _) = transaction.sign(&keypair);
     let digest = signed.transaction().digest();
     (signed, digest)
 }

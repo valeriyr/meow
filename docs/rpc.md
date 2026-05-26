@@ -263,7 +263,7 @@ Fetch all committed blocks from `height` onwards (inclusive). Returns an empty a
 
 ## GET /state-snapshot
 
-Fetch a full state snapshot at the current chain head: the head block and all live objects in the store. Used by nodes when the height gap to a peer exceeds [`SNAPSHOT_DEPTH`](consensus.md#fork-choice-and-reorgs) and block-by-block replay would be prohibitively slow.
+Fetch a full state snapshot at the current chain head: the head block and all live objects in the store. Used by nodes when the height gap to a peer exceeds [`snapshot_depth`](consensus.md#fork-choice-and-reorgs) and block-by-block replay would be prohibitively slow.
 
 **Success (`200`):** `StateSnapshot`:
 

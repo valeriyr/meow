@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::test_node::TestNode;
 use meow_genesis::Genesis;
+use meow_nakamoto_types::miner_config::MinerConfig;
 use meow_node_client::NodeClient;
 use meow_types::{
     address::Address,
@@ -21,6 +22,39 @@ const DEFAULT_WAIT_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(20);
 /// The wait after connecting bootstrap peers before asserting gossip state.
 pub const GOSSIP_PEER_CONNECT_WAIT: Duration = Duration::from_millis(300);
+
+// difficulty 0: instant mining.
+const DEFAULT_DIFFICULTY: u32 = 0;
+// batch_size 1: mine as soon as any transaction arrives.
+const DEFAULT_BATCH_SIZE: usize = 1;
+// snapshot_depth 64: retain 64 snapshots behind the head (max reorg depth).
+const DEFAULT_SNAPSHOT_DEPTH: u64 = 64;
+
+/// Returns a `MinerConfig` with test defaults.
+pub fn test_miner_config(keypair: KeyPair, reward_address: Address) -> MinerConfig {
+    MinerConfig::new(
+        DEFAULT_DIFFICULTY,
+        keypair,
+        reward_address,
+        DEFAULT_BATCH_SIZE,
+        DEFAULT_SNAPSHOT_DEPTH,
+    )
+}
+
+/// Returns a `MinerConfig` with a custom snapshot depth.
+pub fn test_miner_config_with_snapshot_depth(
+    keypair: KeyPair,
+    reward_address: Address,
+    snapshot_depth: u64,
+) -> MinerConfig {
+    MinerConfig::new(
+        DEFAULT_DIFFICULTY,
+        keypair,
+        reward_address,
+        DEFAULT_BATCH_SIZE,
+        snapshot_depth,
+    )
+}
 
 /// Returns a deterministic test keypair.
 pub fn test_keypair() -> KeyPair {

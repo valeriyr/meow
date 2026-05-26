@@ -13,10 +13,7 @@ use std::{
 use meow_gossip_network::GossipNetwork;
 use meow_gossip_types::{config::GossipNetworkConfig, event::NetworkEvent, peer_id::PeerId};
 use meow_nakamoto::miner::Miner;
-use meow_nakamoto_types::{
-    block::Block,
-    state_snapshot::{SNAPSHOT_DEPTH, StateSnapshot},
-};
+use meow_nakamoto_types::{block::Block, state_snapshot::StateSnapshot};
 use meow_node_client::NodeClient;
 use meow_types::{digest::Digest, transaction::SignedTransaction};
 use tokio::sync::{Mutex, mpsc, watch};
@@ -40,12 +37,12 @@ const TOPICS: [&str; 3] = [TOPIC_TRANSACTIONS, TOPIC_BLOCKS, TOPIC_PEER_INFO];
 /// The state of the gossip service, used to coordinate chain syncing and normal operation.
 enum GossipServiceState {
     Working,
-    /// Block sync in progress: gap ≤ SNAPSHOT_DEPTH, pulling missing blocks from peer.
+    /// Block sync in progress: gap ≤ snapshot_depth, pulling missing blocks from peer.
     Syncing {
         buffered_blocks: Vec<Block>,
         buffered_hashes: BTreeSet<Digest>,
     },
-    /// State sync in progress: gap > SNAPSHOT_DEPTH, fetching a full snapshot from peer.
+    /// State sync in progress: gap > snapshot_depth, fetching a full snapshot from peer.
     StateSyncing {
         buffered_blocks: Vec<Block>,
         buffered_hashes: BTreeSet<Digest>,
@@ -152,9 +149,9 @@ impl GossipService {
                                             } else {
                                                 let height = block.header.height;
                                                 let block_hash = block.hash();
-                                                let (local_height, sync_start) = {
+                                                let (local_height, sync_start, snapshot_depth) = {
                                                     let miner = self.miner.lock().await;
-                                                    (miner.head_height(), miner.sync_from_height())
+                                                    (miner.head_height(), miner.sync_from_height(), miner.snapshot_depth())
                                                 };
 
                                                 let peer_url = from
@@ -163,7 +160,7 @@ impl GossipService {
                                                     .or_else(|| self.known_peer_urls.values().next())
                                                     .cloned();
 
-                                                if height > local_height + SNAPSHOT_DEPTH {
+                                                if height > local_height + snapshot_depth {
                                                     // Gap too large for block sync — fetch a full state snapshot.
                                                     tracing::info!(height, %block_hash, local_height, "large block gap detected, fetching state snapshot from peer");
 
@@ -185,7 +182,7 @@ impl GossipService {
                                                     //   2. Height == local_height + 1 but apply_block fails: the fork
                                                     //      diverged before our head so the parent is unknown to us.
                                                     //
-                                                    // In both cases we pull from sync_from_height() (head − SNAPSHOT_DEPTH)
+                                                    // In both cases we pull from sync_from_height() (head − snapshot_depth)
                                                     // so the pulled range always contains the common ancestor of any
                                                     // fork we can resolve, even when it started before our current head.
                                                     let need_sync = if height > local_height + 1 {
