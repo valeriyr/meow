@@ -109,6 +109,9 @@ impl GossipService {
 
         loop {
             tokio::select! {
+                // Check for shutdown signal with higher priority to allow timely shutdown.
+                biased;
+
                 changed = shutdown_rx.changed() => {
                     match changed {
                         Ok(()) => {
@@ -120,6 +123,84 @@ impl GossipService {
                             break;
                         }
                     }
+                }
+                // State-sync and block-sync futures complete before new gossip events are
+                // processed. This prevents a gossip storm from starving an in-flight
+                // snapshot or block-pull fetch that has already resolved.
+                snapshot = &mut state_sync_fut => {
+                    state_sync_fut = Box::pin(std::future::pending());
+
+                    if let Some(snapshot) = snapshot {
+                        let snap_height = snapshot.head.header.height;
+
+                        let mut miner = self.miner.lock().await;
+                        match miner.replace_from_snapshot(snapshot) {
+                            Ok(()) => {
+                                tracing::info!(snap_height, new_height = miner.head_height(), state_root = %miner.head_block().header.state_root, "state sync complete");
+
+                                if let GossipServiceState::StateSyncing { mut buffered_blocks, .. } = service_state {
+                                    buffered_blocks.sort_unstable_by_key(|b| b.header.height);
+
+                                    let mut seen: BTreeSet<Digest> = BTreeSet::new();
+
+                                    for block in buffered_blocks {
+                                        if seen.insert(block.hash()) {
+                                            let _ = miner.apply_block(block);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(snap_height, error = %e, "state snapshot rejected — staying on current chain");
+                            }
+                        }
+                    } else {
+                        tracing::warn!("state snapshot fetch failed");
+                    }
+
+                    service_state = GossipServiceState::Working;
+                }
+                mut pulled_blocks = &mut sync_fut => {
+                    sync_fut = Box::pin(std::future::pending());
+
+                    let pulled_blocks_count = pulled_blocks.len();
+
+                    // Apply pulled blocks first, then buffered gossip blocks.
+                    let mut seen: BTreeSet<Digest> = BTreeSet::new();
+
+                    pulled_blocks.sort_unstable_by_key(|b| b.header.height);
+
+                    let mut miner = self.miner.lock().await;
+                    for block in pulled_blocks {
+                        if seen.insert(block.hash()) {
+                            let _ = miner.apply_block(block);
+                        }
+                    }
+
+                    let buffered_blocks_count = if let GossipServiceState::Syncing { mut buffered_blocks, .. } = service_state {
+                        let buffered_blocks_count = buffered_blocks.len();
+
+                        buffered_blocks.sort_unstable_by_key(|b| b.header.height);
+                        buffered_blocks.into_iter().for_each(|block| {
+                            if seen.insert(block.hash()) {
+                                let _ = miner.apply_block(block);
+                            }
+                        });
+
+                        buffered_blocks_count
+                    } else {
+                        tracing::error!("sync_fut completed but state is not Syncing — this is a bug");
+                        0
+                    };
+
+                    tracing::info!(
+                        pulled_blocks_count,
+                        buffered_blocks_count,
+                        new_height = miner.head_height(),
+                        "chain sync complete"
+                    );
+
+                    service_state = GossipServiceState::Working;
                 }
                 event = gossip.next_event() => {
                     match event {
@@ -306,81 +387,6 @@ impl GossipService {
                             break;
                         }
                     }
-                }
-                snapshot = &mut state_sync_fut => {
-                    state_sync_fut = Box::pin(std::future::pending());
-
-                    if let Some(snapshot) = snapshot {
-                        let snap_height = snapshot.head.header.height;
-
-                        let mut miner = self.miner.lock().await;
-                        match miner.replace_from_snapshot(snapshot) {
-                            Ok(()) => {
-                                tracing::info!(snap_height, new_height = miner.head_height(), state_root = %miner.head_block().header.state_root, "state sync complete");
-
-                                if let GossipServiceState::StateSyncing { mut buffered_blocks, .. } = service_state {
-                                    buffered_blocks.sort_unstable_by_key(|b| b.header.height);
-
-                                    let mut seen: BTreeSet<Digest> = BTreeSet::new();
-
-                                    for block in buffered_blocks {
-                                        if seen.insert(block.hash()) {
-                                            let _ = miner.apply_block(block);
-                                        }
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                tracing::warn!(snap_height, error = %e, "state snapshot rejected — staying on current chain");
-                            }
-                        }
-                    } else {
-                        tracing::warn!("state snapshot fetch failed");
-                    }
-
-                    service_state = GossipServiceState::Working;
-                }
-                mut pulled_blocks = &mut sync_fut => {
-                    sync_fut = Box::pin(std::future::pending());
-
-                    let pulled_blocks_count = pulled_blocks.len();
-
-                    // Apply pulled blocks first, then buffered gossip blocks.
-                    let mut seen: BTreeSet<Digest> = BTreeSet::new();
-
-                    pulled_blocks.sort_unstable_by_key(|b| b.header.height);
-
-                    let mut miner = self.miner.lock().await;
-                    for block in pulled_blocks {
-                        if seen.insert(block.hash()) {
-                            let _ = miner.apply_block(block);
-                        }
-                    }
-
-                    let buffered_blocks_count = if let GossipServiceState::Syncing { mut buffered_blocks, .. } = service_state {
-                        let buffered_blocks_count = buffered_blocks.len();
-
-                        buffered_blocks.sort_unstable_by_key(|b| b.header.height);
-                        buffered_blocks.into_iter().for_each(|block| {
-                            if seen.insert(block.hash()) {
-                                let _ = miner.apply_block(block);
-                            }
-                        });
-
-                        buffered_blocks_count
-                    } else {
-                        tracing::error!("sync_fut completed but state is not Syncing — this is a bug");
-                        0
-                    };
-
-                    tracing::info!(
-                        pulled_blocks_count,
-                        buffered_blocks_count,
-                        new_height = miner.head_height(),
-                        "chain sync complete"
-                    );
-
-                    service_state = GossipServiceState::Working;
                 }
             }
         }

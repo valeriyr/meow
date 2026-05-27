@@ -34,6 +34,8 @@ pub enum ChainError {
     TimestampNotAdvancing,
     #[error("block timestamp is too far in the future")]
     TimestampTooFarInFuture,
+    #[error("block contains too many transactions (max: {max}, got: {got})")]
+    TooManyTransactions { max: usize, got: usize },
     #[error("transactions root mismatch")]
     TransactionsRootMismatch,
     #[error("block parent is not in the chain")]

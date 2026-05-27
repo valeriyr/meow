@@ -1,5 +1,6 @@
 //! Output types for the client subcommands.
 
+use meow_nakamoto_types::{block::Block, state_snapshot::StateSnapshot};
 use meow_types::{
     digest::Digest,
     object::Object,
@@ -8,6 +9,7 @@ use meow_types::{
 use serde::Serialize;
 
 use crate::outputs::{
+    block_output::BlockOutput, block_snapshot_output::BlockSnapshotOutput,
     object_output::ObjectOutput, transaction_output::TransactionOutput,
     transaction_result_output::TransactionResultOutput,
 };
@@ -21,11 +23,20 @@ pub enum ClientCommandOutput {
     GetTransaction(Option<TransactionOutput>),
     GetTransactionResult(Option<TransactionResultOutput>),
     SubmitTransaction(SubmitTransactionOutput),
+    GetBlock(Option<BlockOutput>),
+    GetBlockSnapshot(Option<BlockSnapshotOutput>),
+    GetChainHead(ChainHeadOutput),
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubmitTransactionOutput {
+    pub digest: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChainHeadOutput {
     pub digest: String,
 }
 
@@ -67,6 +78,22 @@ impl ClientCommandOutput {
 
     pub fn submit_transaction(digest: Digest) -> Self {
         ClientCommandOutput::SubmitTransaction(SubmitTransactionOutput {
+            digest: digest.to_string(),
+        })
+    }
+
+    pub fn get_block(block: Option<Block>, with_object_content: bool) -> Self {
+        ClientCommandOutput::GetBlock(block.map(|b| BlockOutput::new(b, with_object_content)))
+    }
+
+    pub fn get_block_snapshot(snapshot: Option<StateSnapshot>, with_object_content: bool) -> Self {
+        ClientCommandOutput::GetBlockSnapshot(
+            snapshot.map(|s| BlockSnapshotOutput::new(s, with_object_content)),
+        )
+    }
+
+    pub fn get_chain_head(digest: Digest) -> Self {
+        ClientCommandOutput::GetChainHead(ChainHeadOutput {
             digest: digest.to_string(),
         })
     }

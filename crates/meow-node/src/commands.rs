@@ -10,7 +10,7 @@ use meow_gossip_types::{
     },
     multiaddr::Multiaddr,
 };
-use meow_nakamoto_types::miner_config::MinerConfig;
+use meow_nakamoto_types::{block::MAX_TRANSACTIONS_PER_BLOCK, miner_config::MinerConfig};
 use meow_types::{
     address::Address,
     config,
@@ -86,7 +86,7 @@ pub enum Command {
         /// Number of transactions to include per mining round.
         /// Mining starts once this many transactions are in the mempool.
         /// A block may contain fewer if some are dropped due to execution errors.
-        #[arg(long, default_value_t = DEFAULT_BATCH_SIZE, value_parser = clap::value_parser!(u64).range(1..), verbatim_doc_comment)]
+        #[arg(long, default_value_t = DEFAULT_BATCH_SIZE, value_parser = clap::value_parser!(u64).range(1..=MAX_TRANSACTIONS_PER_BLOCK as u64), verbatim_doc_comment)]
         batch_size: u64,
         /// Number of block snapshots retained behind the chain head.
         /// Determines the maximum reorg depth the node can recover from via block sync.

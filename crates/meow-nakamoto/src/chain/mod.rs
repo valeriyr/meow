@@ -4,7 +4,10 @@ pub mod error;
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use meow_nakamoto_types::block::Block;
+use meow_nakamoto_types::{
+    block::{Block, MAX_TRANSACTIONS_PER_BLOCK},
+    state_snapshot::StateSnapshot,
+};
 use meow_types::{
     digest::Digest,
     time,
@@ -72,9 +75,7 @@ impl ChainState {
     ///
     /// Validates in order:
     /// 1. Snapshot height is strictly greater than `current_head_height`.
-    /// 2. All structural checks via [`validate_block_structure`]: non-empty, no duplicate
-    ///    transactions, timestamp not in future, results count, reward consistency, PoW
-    ///    difficulty, transactions root, reward root.
+    /// 2. All structural checks via [`validate_block_structure`].
     /// 3. State root matches the supplied objects.
     pub fn from_snapshot(
         current_head_height: u64,
@@ -229,9 +230,7 @@ impl ChainState {
     /// Validates in order:
     /// 1. Block is not already known.
     /// 2. Parent block is known.
-    /// 3. Structural checks via [`validate_block_structure`]: non-empty, no duplicate
-    ///    transactions, timestamp not in future, results count, reward consistency, PoW
-    ///    difficulty, transactions root, reward root.
+    /// 3. Structural checks via [`validate_block_structure`].
     /// 4. Height is exactly parent height + 1.
     /// 5. Timestamp is strictly greater than parent timestamp.
     /// 6. All transaction signatures are valid.
@@ -260,7 +259,6 @@ impl ChainState {
             return Err(ChainError::UnknownParent);
         }
 
-        // Structural checks: non-empty, timestamp, PoW, transactions root.
         validate_block_structure(&block, self.difficulty)?;
 
         // Height must be exactly parent + 1.
@@ -412,6 +410,24 @@ impl ChainState {
         Ok(false)
     }
 
+    /// Look up a known block by hash. Returns `None` if the block is unknown
+    /// or has been pruned past the `snapshot_depth` horizon.
+    pub fn get_block(&self, digest: &Digest) -> Option<&Block> {
+        self.blocks.get(digest)
+    }
+
+    /// Return a full state snapshot at the given block hash. Returns `None`
+    /// if the block is unknown or has been pruned past the `snapshot_depth` horizon.
+    pub fn get_block_snapshot(&self, digest: &Digest) -> Option<StateSnapshot> {
+        let block = self.blocks.get(digest)?;
+        let store = self.snapshots.get(digest)?;
+
+        Some(StateSnapshot {
+            head: block.clone(),
+            objects: store.objects().cloned().collect(),
+        })
+    }
+
     /// Returns all blocks at or above the given height.
     /// Order is not guaranteed — callers must sort if height order is required.
     pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
@@ -428,18 +444,33 @@ impl ChainState {
 ///
 /// Checks in order (cheapest first):
 /// 1. Block has at least one transaction.
-/// 2. No duplicate transaction digests.
-/// 3. Timestamp is not too far in the future.
-/// 4. Results count matches transaction count.
-/// 5. `reward_transaction` and `reward_transaction_result` are both present or both absent.
-/// 6. Block meets PoW difficulty (skipped at height 0).
-/// 7. Transactions root matches the transaction list.
-/// 8. Reward root matches the reward transaction (or both absent).
+/// 2. Block has at most [`MAX_TRANSACTIONS_PER_BLOCK`] transactions.
+/// 3. No duplicate transaction digests.
+/// 4. Timestamp is not too far in the future.
+/// 5. Results count matches transaction count.
+/// 6. `reward_transaction` and `reward_transaction_result` are both present or both absent.
+/// 7. Block meets PoW difficulty (skipped at height 0).
+/// 8. Transactions root matches the transaction list.
+/// 9. Reward root matches the reward transaction (or both absent).
 fn validate_block_structure(block: &Block, difficulty: u32) -> Result<()> {
     let height = block.header.height;
     if block.transactions.is_empty() {
         tracing::warn!(height, block_hash = %block.hash(), "block has no transactions");
         return Err(ChainError::EmptyBlock);
+    }
+    let tx_count = block.transactions.len();
+    if tx_count > MAX_TRANSACTIONS_PER_BLOCK {
+        tracing::warn!(
+            height,
+            block_hash = %block.hash(),
+            tx_count,
+            MAX_TRANSACTIONS_PER_BLOCK,
+            "block contains too many transactions"
+        );
+        return Err(ChainError::TooManyTransactions {
+            max: MAX_TRANSACTIONS_PER_BLOCK,
+            got: tx_count,
+        });
     }
     let mut seen = BTreeSet::new();
     for tx in &block.transactions {

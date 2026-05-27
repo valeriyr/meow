@@ -60,17 +60,19 @@ If the chain advances while grinding (another block arrives), the work-in-progre
 1. **No duplicate** — if the block hash is already known, skip (idempotent).
 2. **Parent known** — `parent_hash` must refer to a block already in the chain.
 3. **Non-empty** — block must contain at least one transaction.
-4. **No duplicate transactions** — all transaction digests in the block must be unique.
-5. **Timestamp future drift** — `timestamp <= local_clock + 120_000` ms (2-minute limit).
-6. **PoW** — for `height > 0`, `mining_hash` must have at least `difficulty` leading zero bits. Genesis (`height == 0`) is exempt.
-7. **Transactions root** — `transactions_root` must match the hash computed from the block's transaction list.
-8. **Reward root** — `reward_root` in the header must equal the reward transaction's digest; `None` when there is no reward transaction. `reward_transaction` and `reward_transaction_result` must both be present or both absent.
-9. **Height continuity** — `height` must equal `parent_height + 1`.
-10. **Timestamp monotonicity** — `timestamp > parent_timestamp`.
-11. **Signature validity** — every transaction must carry a valid signature.
-12. **Re-execution match** — transactions are re-executed against the parent store using `mining_hash` as the randomness seed and `timestamp` as the block time; the resulting `Vec<ExecutionResult>` must equal the results included in the block exactly.
-13. **Reward** — if the total gas across all user transactions is greater than zero, the block must include a valid `meow_coin::mint` reward transaction signed by the miner, with amount equal to the total gas. The reward is re-executed and the result must match the one included in the block.
-14. **State root** — the `state_root` in the header must match the hash of the object store produced by re-execution (including the reward transaction, if any).
+4. **Transaction count** — block must contain at most 256 transactions (`MAX_TRANSACTIONS_PER_BLOCK`).
+5. **No duplicate transactions** — all transaction digests in the block must be unique.
+6. **Timestamp future drift** — `timestamp <= local_clock + 120_000` ms (2-minute limit).
+7. **Consistent reward** — `reward_transaction` and `reward_transaction_result` must both be present or both absent.
+8. **PoW** — for `height > 0`, `mining_hash` must have at least `difficulty` leading zero bits. Genesis (`height == 0`) is exempt.
+9. **Transactions root** — `transactions_root` must match the hash computed from the block's transaction list.
+10. **Reward root** — `reward_root` in the header must equal the reward transaction's digest; `None` when there is no reward transaction.
+11. **Height continuity** — `height` must equal `parent_height + 1`.
+12. **Timestamp monotonicity** — `timestamp > parent_timestamp`.
+13. **Signature validity** — every transaction must carry a valid signature.
+14. **Re-execution match** — transactions are re-executed against the parent store using `mining_hash` as the randomness seed and `timestamp` as the block time; the resulting `Vec<ExecutionResult>` must equal the results included in the block exactly.
+15. **Reward** — if the total gas across all user transactions is greater than zero, the block must include a valid `meow_coin::mint` reward transaction signed by the miner, with amount equal to the total gas. The reward is re-executed and the result must match the one included in the block.
+16. **State root** — the `state_root` in the header must match the hash of the object store produced by re-execution (including the reward transaction, if any).
 
 ---
 

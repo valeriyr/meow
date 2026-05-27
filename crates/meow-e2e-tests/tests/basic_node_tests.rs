@@ -1,7 +1,10 @@
 use meow_e2e_tests::{test_node::TestNode, test_utils};
+use meow_nakamoto_types::block::Block;
 use meow_types::{
     address::Address,
+    digest::Digest,
     identifier::Identifier,
+    object::object_version::ObjectVersion,
     transaction::{
         Transaction, call::Call, execution_result::ExecutionStatus, input::Input,
         transaction_type::TransactionType,
@@ -315,5 +318,146 @@ async fn get_state_snapshot_returns_head_and_all_live_objects() {
     assert!(
         snapshot.objects.iter().any(|o| o.address() == &coin_addr),
         "genesis coin must be present in the snapshot"
+    );
+}
+
+//
+// ─── get_block ───
+//
+
+/// `GET /block/{digest}` must return `None` for an unknown digest.
+#[tokio::test]
+#[serial]
+async fn get_unknown_block_returns_none() {
+    let node = TestNode::start_minimal().await;
+
+    let result = node.client().get_block(&Digest::ZERO).await.unwrap();
+
+    assert!(result.is_none());
+}
+
+/// A block committed to the chain must be queryable by its digest.
+#[tokio::test]
+#[serial]
+async fn committed_block_is_queryable_by_digest() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let transaction = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_noop()),
+    );
+    test_utils::sign_and_execute(client, &keypair, transaction).await;
+
+    let head = client.get_chain_head().await.unwrap();
+    let block = client
+        .get_block(&head)
+        .await
+        .unwrap()
+        .expect("head block must be queryable by digest");
+
+    assert_eq!(block.hash(), head);
+    assert_eq!(block.header.height, 1);
+}
+
+//
+// ─── get_block_snapshot ───
+//
+
+/// `GET /block-snapshot/{digest}` must return `None` for an unknown digest.
+#[tokio::test]
+#[serial]
+async fn get_unknown_block_snapshot_returns_none() {
+    let node = TestNode::start_minimal().await;
+
+    let result = node
+        .client()
+        .get_block_snapshot(&Digest::ZERO)
+        .await
+        .unwrap();
+
+    assert!(result.is_none());
+}
+
+/// The snapshot for the head block must include its block and live objects.
+#[tokio::test]
+#[serial]
+async fn block_snapshot_contains_committed_state() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let transaction = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_noop()),
+    );
+    test_utils::sign_and_execute(client, &keypair, transaction).await;
+
+    let head = client.get_chain_head().await.unwrap();
+    let snapshot = client
+        .get_block_snapshot(&head)
+        .await
+        .unwrap()
+        .expect("snapshot for head block must be available");
+
+    assert_eq!(snapshot.head.hash(), head);
+    assert_eq!(snapshot.head.header.height, 1);
+    assert!(
+        !snapshot.head.transactions.is_empty(),
+        "block snapshot must contain the submitted transaction"
+    );
+    let coin = snapshot
+        .objects
+        .iter()
+        .find(|o| o.address() == &coin_addr)
+        .expect("genesis coin must be present in the block snapshot");
+    assert!(
+        coin.version() == &ObjectVersion::ONE.next().unwrap(),
+        "gas coin version must be 2 after one transaction (objects start at version 1)"
+    );
+}
+
+//
+// ─── get_chain_head ───
+//
+
+/// On a fresh node the chain head must be the genesis block.
+#[tokio::test]
+#[serial]
+async fn get_chain_head_returns_genesis_digest_on_new_node() {
+    let node = TestNode::start_minimal().await;
+
+    let head = node.client().get_chain_head().await.unwrap();
+
+    assert_eq!(head, Block::genesis().hash());
+}
+
+/// After a block is mined the chain head must advance past the genesis digest.
+#[tokio::test]
+#[serial]
+async fn get_chain_head_advances_after_block_is_mined() {
+    let (keypair, sender, genesis, coin_addr) = test_utils::single_account_genesis(10_000);
+    let node = TestNode::start_with_genesis(&genesis).await;
+    let client = node.client();
+
+    let head_before = client.get_chain_head().await.unwrap();
+
+    let gas_coin_ref = test_utils::get_object_ref(client, &coin_addr).await;
+    let transaction = Transaction::new(
+        sender,
+        gas_coin_ref,
+        TransactionType::MeowModulePublish(test_utils::module_noop()),
+    );
+    test_utils::sign_and_execute(client, &keypair, transaction).await;
+
+    let head_after = client.get_chain_head().await.unwrap();
+    assert_ne!(
+        head_before, head_after,
+        "chain head must advance after a block is mined"
     );
 }

@@ -1,22 +1,125 @@
+# CI workflow for the meow workspace.
+#
+# GitHub Actions runs this file automatically on the events listed under `on:`.
+# Each job gets a fresh virtual machine (ubuntu-latest), checks out the repository,
+# and runs a sequence of steps. Jobs defined at the same level run in parallel
+# unless you add `needs:` dependencies between them.
+#
+# Three jobs run in parallel:
+#
+#   fmt     — verifies that all code is formatted with `rustfmt` (no compilation needed)
+#   clippy  — lints the full workspace with all features and test code enabled;
+#             any warning is treated as an error (-D warnings)
+#   test    — builds the workspace and runs the full test suite
+#
+# fmt intentionally has no cache because it never compiles anything.
+# clippy and test share the same cache key so they can reuse each other's artifacts
+# across runs. The restore-key prefix (`<os>-cargo-`) allows a partial cache hit
+# when Cargo.lock changes: an older cache is still far faster than a cold build.
+
 name: Rust
 
+# Trigger conditions: run this workflow on every push to main and on every pull
+# request that targets main. Pull request runs use the merged commit so CI always
+# tests the result of merging, not just the branch tip.
 on:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
 
+# Environment variables available to every step in every job.
+# CARGO_TERM_COLOR forces coloured Cargo output even when stdout is not a TTY
+# (which is always the case in CI), making build logs easier to read.
 env:
   CARGO_TERM_COLOR: always
 
+# ─── Jobs ────────────────────────────────────────────────────────────────────
+# Each job runs on its own fresh VM. Jobs at the same indentation level start
+# at the same time (parallel). A job fails if any of its steps exits non-zero.
 jobs:
-  build:
 
+  # ── fmt ────────────────────────────────────────────────────────────────────
+  # Checks that every source file matches the output of `rustfmt`. Fails with a
+  # diff if any file would be reformatted. We skip caching here because `fmt`
+  # never compiles code, so there is nothing worth caching.
+  fmt:
+    name: Format
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+      # Check out the repository contents into the working directory.
+      # actions/checkout is an official GitHub Action maintained at
+      # https://github.com/actions/checkout.
+      - uses: actions/checkout@v4
+
+      # `--` separates Cargo flags from rustfmt flags.
+      # `--check` makes rustfmt exit non-zero if it would change any file
+      # instead of actually rewriting it.
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # ── clippy ─────────────────────────────────────────────────────────────────
+  # Runs the Rust linter across the entire workspace. We enable all features
+  # and include test code so that lints apply everywhere. `-D warnings` turns
+  # every warning into a hard error, keeping the lint bar strict.
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Restore the Cargo cache from a previous run so we don't redownload and
+      # recompile dependencies from scratch every time.
+      #
+      # `key` is the exact cache identifier for this run. Including the hash of
+      # all Cargo.lock files means the cache is invalidated whenever any
+      # dependency version changes.
+      #
+      # `restore-keys` is a fallback prefix. When no cache entry matches the
+      # exact key (e.g. after a dependency update), GitHub Actions looks for the
+      # most-recent entry whose key starts with this prefix. The trailing `-`
+      # makes it match `<os>-cargo-<any-hash>`, so you still get a warm cache
+      # that contains most of the unchanged dependencies.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # --workspace   — lint every crate in the workspace, not just the root
+      # --all-features — enable all optional Cargo features while linting
+      # --tests        — also lint code inside #[cfg(test)] blocks
+      # -- -D warnings — promote all clippy warnings to errors
+      - name: Clippy
+        run: cargo clippy --workspace --all-features --tests --locked -- -D warnings
+
+  # ── test ───────────────────────────────────────────────────────────────────
+  # Compiles the workspace and then runs every test. Build and test are kept as
+  # separate steps so that a compilation failure is reported distinctly from a
+  # test failure in the GitHub Actions UI.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same caching strategy as the clippy job. Both jobs use an identical key,
+      # so whichever finishes first populates the cache and the other job can
+      # reuse it on the next run.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build
+        run: cargo build --workspace --all-features --locked
+
+      - name: Test
+        run: cargo test --workspace --all-features --locked

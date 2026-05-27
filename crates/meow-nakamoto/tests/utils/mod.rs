@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use std::{slice, sync::Arc};
+use std::sync::Arc;
 
 use meow_genesis::Genesis;
 use meow_nakamoto::{
@@ -194,19 +194,34 @@ pub fn make_block(
     state_root: Digest,
     signed: SignedTransaction,
 ) -> Block {
-    let tx_digest = signed.transaction().digest();
+    make_block_with_transactions(height, parent_hash, timestamp, state_root, vec![signed])
+}
+
+/// Build a structurally valid block with an arbitrary transaction list. Each transaction
+/// gets a placeholder failure result. `transactions_root` is computed from the full list.
+pub fn make_block_with_transactions(
+    height: u64,
+    parent_hash: Digest,
+    timestamp: u64,
+    state_root: Digest,
+    transactions: Vec<SignedTransaction>,
+) -> Block {
+    let results = transactions
+        .iter()
+        .map(|tx| ExecutionResult::failure("", tx.transaction().digest()))
+        .collect();
     Block {
         header: BlockHeader {
             height,
             parent_hash,
-            transactions_root: roots::compute_transactions_root(slice::from_ref(&signed)),
+            transactions_root: roots::compute_transactions_root(&transactions),
             reward_root: None,
             state_root,
             timestamp,
             nonce: 0,
         },
-        transactions: vec![signed],
-        results: vec![ExecutionResult::failure("", tx_digest)],
+        transactions,
+        results,
         reward_transaction: None,
         reward_transaction_result: None,
     }

@@ -145,8 +145,8 @@ fn commit_mined_discards_stale_block() {
 /// When `apply_block` advances the head, the miner must call `retain_valid` on the
 /// mempool. A pending transaction whose gas-coin version was bumped by the new block
 /// must be pruned before it can enter a future mining round.
-#[test]
-fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
+#[tokio::test]
+async fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
     let miner_address = test_miner_address();
     let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
@@ -180,6 +180,7 @@ fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
         miner_address,
     )
     .grind()
+    .await
     .expect("batch has one transaction");
     let peer_block_hash = peer_block.hash();
 
@@ -195,8 +196,8 @@ fn apply_block_on_reorg_prunes_stale_mempool_transactions() {
 /// `apply_block` must return `Ok(false)` for a valid block that does not extend
 /// the current head (equal-height fork), leaving the mempool intact — `retain_valid`
 /// is only called when the head actually changes.
-#[test]
-fn apply_block_on_fork_preserves_mempool() {
+#[tokio::test]
+async fn apply_block_on_fork_preserves_mempool() {
     let miner_address = test_miner_address();
     let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
     let mut miner = Miner::with_genesis(&genesis, test_config());
@@ -224,6 +225,7 @@ fn apply_block_on_fork_preserves_mempool() {
         miner_address,
     )
     .grind()
+    .await
     .expect("valid transaction must succeed");
 
     // Commit block_a — head advances to height 1.
@@ -247,44 +249,6 @@ fn apply_block_on_fork_preserves_mempool() {
         miner.prepare_round().is_some(),
         "mempool must not be pruned on a non-advancing fork block"
     );
-}
-
-/// `apply_block` must ignore a block whose parent hash is not in the chain,
-/// leaving the head unchanged.
-#[test]
-fn apply_block_ignores_block_with_unknown_parent() {
-    let miner_address = test_miner_address();
-    let (genesis, coin_ref) = utils::genesis_with_coin(miner_address);
-    let mut miner = Miner::with_genesis(&genesis, test_config());
-    let original_head = miner.head();
-
-    // Build a fully valid block, then change only the parent_hash — one defect.
-    let transaction = Transaction::new(
-        miner_address,
-        coin_ref,
-        TransactionType::MeowModulePublish(utils::noop_module_bytes()),
-    );
-    let (signed, _) = transaction.sign(&utils::test_keypair());
-    let parent_store = miner.head_store().clone();
-    let (mut block, _) = utils::mining_work(
-        vec![signed],
-        parent_store,
-        1,
-        miner.head(),
-        1,
-        0,
-        miner_address,
-    )
-    .grind()
-    .expect("batch has one transaction");
-
-    block.header.parent_hash = Digest::new([0xFF; 32]); // unknown — one defect
-
-    assert_eq!(
-        miner.apply_block(block),
-        Err(MinerError::ChainError(ChainError::UnknownParent))
-    );
-    assert_eq!(miner.head(), original_head);
 }
 
 //

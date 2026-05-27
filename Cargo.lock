@@ -2242,6 +2242,7 @@ dependencies = [
  "clap",
  "json_to_table",
  "meow-genesis",
+ "meow-nakamoto-types",
  "meow-node-client",
  "meow-types",
  "meow-vm-adapter",
@@ -2327,6 +2328,7 @@ dependencies = [
  "rand 0.8.6",
  "serde",
  "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

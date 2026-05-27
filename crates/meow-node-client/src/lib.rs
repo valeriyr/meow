@@ -114,6 +114,31 @@ impl NodeClient {
         self.get_optional(url).await
     }
 
+    /// GET /block/{digest} — fetch a block by its hash.
+    pub async fn get_block(&self, digest: &Digest) -> Result<Option<Block>> {
+        let url = self.base_url.join(&format!("block/{digest}"))?;
+        self.get_optional(url).await
+    }
+
+    /// GET /block-snapshot/{digest} — fetch the state snapshot at the given block hash.
+    pub async fn get_block_snapshot(&self, digest: &Digest) -> Result<Option<StateSnapshot>> {
+        let url = self.base_url.join(&format!("block-snapshot/{digest}"))?;
+        self.get_optional(url).await
+    }
+
+    /// GET /chain-head — fetch the current chain head digest.
+    pub async fn get_chain_head(&self) -> Result<Digest> {
+        let url = self.base_url.join("chain-head")?;
+
+        let response = self.inner.get(url).send().await?;
+
+        if response.status().is_success() {
+            return Ok(response.json().await?);
+        }
+
+        Err(Self::node_error(response).await)
+    }
+
     /// GET /blocks-since/{height} — fetch committed blocks from the given height onwards.
     pub async fn get_blocks_since(&self, height: u64) -> Result<Vec<Block>> {
         let url = self.base_url.join(&format!("blocks-since/{height}"))?;

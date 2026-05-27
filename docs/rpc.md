@@ -21,6 +21,9 @@ The `meow client` CLI commands and the `meow-node-client` library crate are both
 | `GET` | [`/objects_owned/{owner}`](#get-objects_ownedowner) | Fetch all objects owned by an address |
 | `GET` | [`/transaction/{digest}`](#get-transactiondigest) | Fetch a committed transaction |
 | `GET` | [`/transaction-result/{digest}`](#get-transaction-resultdigest) | Fetch a transaction's execution result |
+| `GET` | [`/block/{digest}`](#get-blockdigest) | Fetch a committed block by its hash |
+| `GET` | [`/block-snapshot/{digest}`](#get-block-snapshotdigest) | Fetch the state snapshot at a given block |
+| `GET` | [`/chain-head`](#get-chain-head) | Fetch the current chain head digest |
 | `GET` | [`/blocks-since/{height}`](#get-blocks-sinceheight) | Fetch all blocks from a given height |
 | `GET` | [`/state-snapshot`](#get-state-snapshot) | Fetch the full chain state at the current head |
 
@@ -71,7 +74,7 @@ Each entry in `arguments` is also a tagged union:
 | `Object` | `{ "Object": <ObjectRef> }` | Pass an on-chain object by reference |
 | `Raw` | `{ "Raw": [<bytes>] }` | Pass a BCS-serialised primitive value |
 
-**Success:** `202 Accepted` — empty body.
+**Success (`202 Accepted`):** empty body.
 
 **Errors:**
 
@@ -113,6 +116,7 @@ Simulate an unsigned transaction against the node's current state without commit
 | `400` | `invalid_transaction` | Transaction failed structural validation |
 | `400` | `invalid_object_reference` | Referenced object not found, wrong version, or wrong digest |
 | `400` | `simulation_error` | Transaction failed during execution (VM error, abort, etc.) |
+| `500` | `internal_error` | Unexpected error |
 
 ## GET /object/{addr}
 
@@ -223,7 +227,59 @@ Fetch the execution result of a committed transaction.
 `gas_used` is the number of gas units consumed by the transaction.  
 Each objects array contains `Object` entries (same shape as `/object/{addr}`).
 
-**Errors:** same codes as `GET /transaction/{digest}`. Returns `200` with a `null` body when no result exists for that digest.
+**Errors:** same codes as `GET /transaction/{digest}`.
+
+> **Not found:** returns `200` with a `null` body when no result exists for that digest.
+
+## GET /block/{digest}
+
+Fetch a committed block by its hash.
+
+**Path parameter:** `digest` — base58 `Digest`
+
+**Success (`200`):** `Block` (same shape as entries in [`/blocks-since/{height}`](#get-blocks-sinceheight)).
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `400` | `invalid_digest` | Not a valid base58 digest |
+| `500` | `internal_error` | Unexpected error |
+
+> **Not found:** returns `200` with a `null` body when the block is unknown (never seen by this node) or has been pruned (fell more than `snapshot_depth` blocks behind the chain head).
+
+## GET /block-snapshot/{digest}
+
+Fetch the full state snapshot at a specific block: the block itself and all live objects in the store at that point.
+
+**Path parameter:** `digest` — base58 `Digest`
+
+**Success (`200`):** `StateSnapshot` (same shape as [`/state-snapshot`](#get-state-snapshot)).
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `400` | `invalid_digest` | Not a valid base58 digest |
+| `500` | `internal_error` | Unexpected error |
+
+> **Not found:** returns `200` with a `null` body when the block is unknown or has been pruned. Blocks and their snapshots are pruned together once they fall more than [`snapshot_depth`](consensus.md#fork-choice-and-reorgs) blocks behind the chain head.
+
+## GET /chain-head
+
+Fetch the digest of the current best block (chain head).
+
+**Success (`200`):** base58 `Digest` string:
+
+```json
+"5TT8P9mPy7Dk..."
+```
+
+**Errors:**
+
+| Status | `code` | Cause |
+|--------|--------|-------|
+| `500` | `internal_error` | Unexpected error |
 
 ## GET /blocks-since/{height}
 

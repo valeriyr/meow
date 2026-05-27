@@ -57,22 +57,21 @@ impl MinerService {
                         }
                     }
                 }
-                maybe_work = async {
-                    match self.miner.lock().await.prepare_round() {
-                        Some(work) => Some(work),
+                maybe_result = async {
+                    let work = match self.miner.lock().await.prepare_round() {
+                        Some(work) => work,
                         None => {
                             // Mempool empty — wait before polling again.
                             tokio::time::sleep(MEMPOOL_EMPTY_POLL_INTERVAL).await;
-                            None
+                            return None;
                         }
-                    }
+                    };
+                    // Grind nonce without holding the lock.
+                    // grind() yields every YIELD_EVERY_N_NONCES nonces so select! can
+                    // cancel this future promptly on shutdown.
+                    work.grind().await
                 } => {
-                    if let Some(work) = maybe_work {
-                        // Grind nonce without holding the lock.
-                        let Some((block, new_store)) = work.grind() else {
-                            continue;
-                        };
-
+                    if let Some((block, new_store)) = maybe_result {
                         let committed = self
                             .miner
                             .lock()
@@ -92,8 +91,6 @@ impl MinerService {
                                 tracing::warn!(height = block.header.height, block_hash = %block.hash(), error = %e, "failed to publish block");
                             }
                         }
-                        // Yield between rounds so other tasks can run.
-                        tokio::task::yield_now().await;
                     }
                 }
             }

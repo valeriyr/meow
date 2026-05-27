@@ -64,7 +64,7 @@ meow-node run --genesis genesis.bin
 | `--miner-address` | _(none)_ | Address of the signing key to load from the keystore; if omitted, an ephemeral random keypair is used and rewards are lost on restart |
 | `--miner-reward-address` | _(miner address)_ | Address that receives block reward coins; defaults to the miner's own address |
 | `--keystore-path` | _(default path)_ | Path to the keystore file; requires `--miner-address` |
-| `--batch-size` | `1` | Minimum transactions to queue before starting a mining round; each round drains exactly this many. Must be ≥ 1. |
+| `--batch-size` | `1` | Minimum transactions to queue before starting a mining round; each round drains exactly this many. Must be ≥ 1 and ≤ 256. |
 | `--snapshot-depth` | `64` | Block snapshots retained behind the chain head. Sets the maximum safe reorg depth and the threshold above which state sync replaces block sync. Must be ≥ 1. |
 
 </details>
@@ -120,6 +120,15 @@ meow client get-transaction <TRANSACTION_DIGEST>
 
 # Transaction result (execution effects)
 meow client get-transaction-result <TRANSACTION_DIGEST>
+
+# Block by digest
+meow client get-block <BLOCK_DIGEST>
+
+# State snapshot at a given block
+meow client get-block-snapshot <BLOCK_DIGEST>
+
+# Current chain head digest
+meow client get-chain-head
 ```
 
 ## 6. Build, Sign and Submit a Transaction

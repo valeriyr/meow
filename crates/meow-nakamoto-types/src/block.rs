@@ -8,6 +8,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::block_header::BlockHeader;
 
+/// Maximum number of user transactions allowed in a single block.
+/// Enforced to prevent a malicious miner from producing blocks
+/// that are prohibitively expensive to validate.
+pub const MAX_TRANSACTIONS_PER_BLOCK: usize = 256;
+
 /// A fully validated, committed block that advances the chain by one height.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Block {

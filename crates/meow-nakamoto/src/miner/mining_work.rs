@@ -8,6 +8,10 @@ use meow_vm_adapter::{executor, external_context::ExternalContext, inputs_resolv
 
 use crate::{roots, store::Store, system_transactions};
 
+/// Yield to the async runtime every this many nonces so the executor stays
+/// responsive and an outer `select!` can cancel the grind promptly.
+const YIELD_EVERY_N_NONCES: u64 = 1024;
+
 /// Work produced by [`Miner::prepare_round`]. Grind the nonce outside the
 /// `Miner` lock so that RPC and gossip handlers can run concurrently.
 pub struct MiningWork {
@@ -41,17 +45,36 @@ impl MiningWork {
     ///    reward transaction (`meow_coin::mint`) and apply it to the store.
     /// 5. Fill in `state_root` and return the completed block and resulting store state.
     ///
-    /// Returns `None` when all transactions in the batch are dropped during execution
-    /// (e.g. every gas coin was already spent). The caller should discard the round
-    /// and wait for the next `prepare_round` call.
-    pub fn grind(mut self) -> Option<(Block, Store)> {
+    /// Returns `None` when:
+    /// - All transactions in the batch are dropped during execution (e.g. every gas coin was
+    ///   already spent). The caller should discard the round and wait for the next
+    ///   `prepare_round` call.
+    /// - The entire u64 nonce space is exhausted without finding a valid nonce (only possible
+    ///   with a difficulty setting that requires more than 64 leading zero bits, which is
+    ///   never used in practice). The caller should discard the round.
+    pub async fn grind(mut self) -> Option<(Block, Store)> {
         let mut surviving_batch = self.batch;
 
         loop {
             // Grind nonce for the current transactions_root.
+            // Yield every YIELD_EVERY_N_NONCES nonces so the async runtime stays responsive
+            // and the future can be cancelled promptly by an outer select!.
             self.header.nonce = 0;
             while !self.header.meets_difficulty(self.difficulty) {
-                self.header.nonce += 1;
+                self.header.nonce = match self.header.nonce.checked_add(1) {
+                    Some(n) => n,
+                    None => {
+                        tracing::debug!(
+                            height = self.header.height,
+                            "nonce space exhausted — discarding round"
+                        );
+                        return None;
+                    }
+                };
+
+                if self.header.nonce.is_multiple_of(YIELD_EVERY_N_NONCES) {
+                    tokio::task::yield_now().await;
+                }
             }
 
             tracing::debug!(

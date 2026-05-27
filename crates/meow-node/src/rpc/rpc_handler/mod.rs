@@ -113,6 +113,24 @@ impl RpcHandler {
         miner.get_transaction_result(digest).cloned()
     }
 
+    /// Returns a block by hash.
+    pub async fn get_block(&self, digest: &Digest) -> Option<Block> {
+        let miner = self.miner.lock().await;
+        miner.get_block(digest).cloned()
+    }
+
+    /// Returns a full state snapshot at the given block hash.
+    pub async fn get_block_snapshot(&self, digest: &Digest) -> Option<StateSnapshot> {
+        let miner = self.miner.lock().await;
+        miner.get_block_snapshot(digest)
+    }
+
+    /// Returns the digest of the current chain head.
+    pub async fn get_chain_head(&self) -> Digest {
+        let miner = self.miner.lock().await;
+        miner.head()
+    }
+
     /// Returns all blocks from the given height onwards (for chain synchronization).
     pub async fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         let miner = self.miner.lock().await;

@@ -48,6 +48,18 @@ pub enum ClientCommand {
         /// Base64-encoded signed transaction (produced by `meow transaction sign`).
         transaction: String,
     },
+    /// Fetch a block from the node by its digest.
+    GetBlock {
+        /// Block digest (base58).
+        digest: Digest,
+    },
+    /// Fetch the state snapshot at a given block digest.
+    GetBlockSnapshot {
+        /// Block digest (base58).
+        digest: Digest,
+    },
+    /// Fetch the current chain head digest.
+    GetChainHead,
 }
 
 impl ClientCommand {
@@ -102,6 +114,24 @@ impl ClientCommand {
                 client.submit_transaction(&signed_transaction).await?;
 
                 Ok(ClientCommandOutput::submit_transaction(digest))
+            }
+            ClientCommand::GetBlock { digest } => {
+                let block = client.get_block(&digest).await?;
+
+                Ok(ClientCommandOutput::get_block(block, with_object_content))
+            }
+            ClientCommand::GetBlockSnapshot { digest } => {
+                let snapshot = client.get_block_snapshot(&digest).await?;
+
+                Ok(ClientCommandOutput::get_block_snapshot(
+                    snapshot,
+                    with_object_content,
+                ))
+            }
+            ClientCommand::GetChainHead => {
+                let digest = client.get_chain_head().await?;
+
+                Ok(ClientCommandOutput::get_chain_head(digest))
             }
         }
     }

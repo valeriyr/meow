@@ -11,6 +11,7 @@ bcs.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
+tokio.workspace = true
 
 meow-genesis.workspace = true
 meow-nakamoto-types.workspace = true

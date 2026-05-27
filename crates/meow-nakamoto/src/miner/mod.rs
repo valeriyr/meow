@@ -133,6 +133,16 @@ impl Miner {
         self.chain.get_transaction(digest)
     }
 
+    /// Look up a known block by hash.
+    pub fn get_block(&self, digest: &Digest) -> Option<&Block> {
+        self.chain.get_block(digest)
+    }
+
+    /// Return a full state snapshot at the given block hash.
+    pub fn get_block_snapshot(&self, digest: &Digest) -> Option<StateSnapshot> {
+        self.chain.get_block_snapshot(digest)
+    }
+
     /// Get all blocks from the given height onwards.
     pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         self.chain.get_blocks_since(height)

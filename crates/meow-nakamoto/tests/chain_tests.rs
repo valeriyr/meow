@@ -6,7 +6,10 @@ use meow_nakamoto::{
     store::Store,
     system_transactions,
 };
-use meow_nakamoto_types::{block::Block, block_header::BlockHeader};
+use meow_nakamoto_types::{
+    block::{Block, MAX_TRANSACTIONS_PER_BLOCK},
+    block_header::BlockHeader,
+};
 
 use meow_types::{
     address::Address,
@@ -35,6 +38,15 @@ fn valid_block_advances_chain() {
     assert_eq!(chain.apply_block(block), Ok(true));
 
     assert_eq!(chain.head_height(), 1);
+    assert_eq!(
+        chain
+            .head_store()
+            .get_object(cs[0].1.address())
+            .unwrap()
+            .version(),
+        &ObjectVersion::ONE.next().unwrap(),
+        "gas coin version must be 2 after one transaction"
+    );
 }
 
 /// Submitting the same block a second time must be silently ignored.
@@ -188,18 +200,6 @@ fn deep_fork_resolves_when_ancestor_blocks_applied_before_tip() {
 // ─── apply_block — rejected blocks ───
 //
 
-/// A block whose `results` field does not match deterministic re-execution must
-/// be rejected.
-#[test]
-fn block_with_forged_results_is_rejected() {
-    let (mut chain, mut block) = chain_and_valid_gas_block();
-    block.results = vec![ExecutionResult::failure("forged", Digest::ZERO)];
-
-    assert_eq!(chain.apply_block(block), Err(ChainError::ResultsMismatch));
-
-    assert_eq!(chain.head_height(), 0);
-}
-
 /// A block whose `parent_hash` is not in the chain must be rejected.
 #[test]
 fn block_with_unknown_parent_is_rejected() {
@@ -208,6 +208,127 @@ fn block_with_unknown_parent_is_rejected() {
     block.header.parent_hash = Digest::from([0xDE; 32]); // unknown — one defect
 
     assert_eq!(chain.apply_block(block), Err(ChainError::UnknownParent));
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block with no transactions must be rejected — empty blocks carry no value
+/// and are never produced by the local miner.
+#[test]
+fn empty_block_is_rejected() {
+    let store = Store::default();
+    let mut chain = utils::new_chain(store.clone());
+
+    // make_empty_block is intentionally empty — this is the one test where that is the defect.
+    let block = make_empty_block(chain.head(), &store, 1, 1);
+
+    assert_eq!(chain.apply_block(block), Err(ChainError::EmptyBlock));
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block with more than `MAX_TRANSACTIONS_PER_BLOCK` transactions must be rejected
+/// before the duplicate scan or execution — the count check is O(1) and comes first.
+#[test]
+fn block_exceeding_max_transaction_count_is_rejected() {
+    let store = Store::default();
+    let mut chain = utils::new_chain(store.clone());
+
+    // Identical transactions are fine here: count is checked before the duplicate scan.
+    let (signed, _) = utils::dummy_signed_transaction();
+    let transactions: Vec<_> =
+        std::iter::repeat_n(signed, MAX_TRANSACTIONS_PER_BLOCK + 1).collect();
+    let block = utils::make_block_with_transactions(
+        1,
+        chain.head(),
+        1,
+        roots::compute_state_root(&store),
+        transactions,
+    );
+
+    assert_eq!(
+        chain.apply_block(block),
+        Err(ChainError::TooManyTransactions {
+            max: MAX_TRANSACTIONS_PER_BLOCK,
+            got: MAX_TRANSACTIONS_PER_BLOCK + 1,
+        })
+    );
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block that lists the same transaction twice must be rejected before execution —
+/// including duplicates is a structural defect, not a runtime failure.
+#[test]
+fn block_with_duplicate_transaction_is_rejected() {
+    let (mut chain, mut block) = chain_and_valid_gas_block();
+    let dup = block.transactions[0].clone();
+    block.transactions.push(dup);
+    block.header.transactions_root = roots::compute_transactions_root(&block.transactions);
+
+    assert_eq!(
+        chain.apply_block(block),
+        Err(ChainError::DuplicateTransaction)
+    );
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block whose timestamp is beyond `MAX_BLOCK_FUTURE_DRIFT_MS` ahead of the
+/// local clock must be rejected to prevent miners from manipulating the clock.
+#[test]
+fn block_with_future_timestamp_is_rejected() {
+    let (mut chain, mut block) = chain_and_valid_gas_block();
+
+    block.header.timestamp = u64::MAX; // far in the future — one defect
+
+    assert_eq!(
+        chain.apply_block(block),
+        Err(ChainError::TimestampTooFarInFuture)
+    );
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block where `reward_transaction` is present but `reward_transaction_result` is absent
+/// (or vice versa) must be rejected by the structural consistency check before any execution.
+#[test]
+fn block_with_inconsistent_reward_fields_is_rejected() {
+    let (mut chain, mut block) = chain_and_valid_gas_block();
+    block.reward_transaction_result = None; // present + absent → inconsistent
+
+    assert_eq!(
+        chain.apply_block(block),
+        Err(ChainError::InconsistentReward)
+    );
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block that does not meet the configured PoW difficulty must be rejected.
+#[test]
+fn block_failing_pow_difficulty_is_rejected() {
+    // make_valid_gas_block uses difficulty=0 so the block's nonce=0. Apply it to a
+    // chain that requires 32 leading zero bits — the hash won't meet that bar.
+    let (block, parent_store) = make_valid_gas_block();
+    let mut chain = ChainState::new(parent_store, utils::POW_DIFFICULTY, utils::SNAPSHOT_DEPTH);
+
+    assert_eq!(chain.apply_block(block), Err(ChainError::PowCheckFailed));
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block whose `transactions_root` field does not hash to the actual transaction
+/// list must be rejected.
+#[test]
+fn block_with_wrong_transactions_root_is_rejected() {
+    let (mut chain, mut block) = chain_and_valid_gas_block();
+
+    block.header.transactions_root = Digest::ZERO; // wrong — does not match actual transactions
+
+    assert_eq!(
+        chain.apply_block(block),
+        Err(ChainError::TransactionsRootMismatch)
+    );
 
     assert_eq!(chain.head_height(), 0);
 }
@@ -248,50 +369,17 @@ fn block_with_non_monotonic_timestamp_is_rejected() {
     assert_eq!(chain.head_height(), 0);
 }
 
-/// A block whose timestamp is beyond `MAX_BLOCK_FUTURE_DRIFT_MS` ahead of the
-/// local clock must be rejected to prevent miners from manipulating the clock.
+/// A block containing a transaction whose signature does not match its declared
+/// sender must be rejected before any execution happens.
 #[test]
-fn block_with_future_timestamp_is_rejected() {
+fn block_with_invalid_transaction_signature_is_rejected() {
     let (mut chain, mut block) = chain_and_valid_gas_block();
 
-    block.header.timestamp = u64::MAX; // far in the future — one defect
-
-    assert_eq!(
-        chain.apply_block(block),
-        Err(ChainError::TimestampTooFarInFuture)
-    );
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block with no transactions must be rejected — empty blocks carry no value
-/// and are never produced by the local miner.
-#[test]
-fn empty_block_is_rejected() {
-    let store = Store::default();
-    let mut chain = utils::new_chain(store.clone());
-
-    // make_empty_block is intentionally empty — this is the one test where that is the defect.
-    let block = make_empty_block(chain.head(), &store, 1, 1);
-
-    assert_eq!(chain.apply_block(block), Err(ChainError::EmptyBlock));
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block that lists the same transaction twice must be rejected before execution —
-/// including duplicates is a structural defect, not a runtime failure.
-#[test]
-fn block_with_duplicate_transaction_is_rejected() {
-    let (mut chain, mut block) = chain_and_valid_gas_block();
-    let dup = block.transactions[0].clone();
-    block.transactions.push(dup);
+    // Replace the transaction with one whose signer does not match the declared sender — one defect.
+    block.transactions = vec![make_mismatched_signature_transaction()];
     block.header.transactions_root = roots::compute_transactions_root(&block.transactions);
 
-    assert_eq!(
-        chain.apply_block(block),
-        Err(ChainError::DuplicateTransaction)
-    );
+    assert_eq!(chain.apply_block(block), Err(ChainError::InvalidSignature));
 
     assert_eq!(chain.head_height(), 0);
 }
@@ -323,58 +411,14 @@ fn block_with_missing_gas_coin_is_rejected_with_execution_failed() {
     assert_eq!(chain.head_height(), 0);
 }
 
-/// A block whose `transactions_root` field does not hash to the actual transaction
-/// list must be rejected.
+/// A block whose `results` field does not match deterministic re-execution must
+/// be rejected.
 #[test]
-fn block_with_wrong_transactions_root_is_rejected() {
+fn block_with_forged_results_is_rejected() {
     let (mut chain, mut block) = chain_and_valid_gas_block();
+    block.results = vec![ExecutionResult::failure("forged", Digest::ZERO)];
 
-    block.header.transactions_root = Digest::ZERO; // wrong — does not match actual transactions
-
-    assert_eq!(
-        chain.apply_block(block),
-        Err(ChainError::TransactionsRootMismatch)
-    );
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block containing a transaction whose signature does not match its declared
-/// sender must be rejected before any execution happens.
-#[test]
-fn block_with_invalid_transaction_signature_is_rejected() {
-    let (mut chain, mut block) = chain_and_valid_gas_block();
-
-    // Replace the transaction with one whose signer does not match the declared sender — one defect.
-    block.transactions = vec![make_mismatched_signature_transaction()];
-    block.header.transactions_root = roots::compute_transactions_root(&block.transactions);
-
-    assert_eq!(chain.apply_block(block), Err(ChainError::InvalidSignature));
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block whose `state_root` does not match the store produced by re-executing
-/// its transactions must be rejected.
-#[test]
-fn block_with_wrong_state_root_is_rejected() {
-    let (mut chain, mut block) = chain_and_valid_gas_block();
-    block.header.state_root = Digest::from([0xFF; 32]);
-
-    assert_eq!(chain.apply_block(block), Err(ChainError::StateRootMismatch));
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block that does not meet the configured PoW difficulty must be rejected.
-#[test]
-fn block_failing_pow_difficulty_is_rejected() {
-    // make_valid_gas_block uses difficulty=0 so the block's nonce=0. Apply it to a
-    // chain that requires 32 leading zero bits — the hash won't meet that bar.
-    let (block, parent_store) = make_valid_gas_block();
-    let mut chain = ChainState::new(parent_store, utils::POW_DIFFICULTY, utils::SNAPSHOT_DEPTH);
-
-    assert_eq!(chain.apply_block(block), Err(ChainError::PowCheckFailed));
+    assert_eq!(chain.apply_block(block), Err(ChainError::ResultsMismatch));
 
     assert_eq!(chain.head_height(), 0);
 }
@@ -389,21 +433,6 @@ fn block_with_missing_reward_on_nonzero_gas_block_is_rejected() {
     block.reward_transaction_result = None;
 
     assert_eq!(chain.apply_block(block), Err(ChainError::InvalidReward));
-
-    assert_eq!(chain.head_height(), 0);
-}
-
-/// A block where `reward_transaction` is present but `reward_transaction_result` is absent
-/// (or vice versa) must be rejected by the structural consistency check before any execution.
-#[test]
-fn block_with_inconsistent_reward_fields_is_rejected() {
-    let (mut chain, mut block) = chain_and_valid_gas_block();
-    block.reward_transaction_result = None; // present + absent → inconsistent
-
-    assert_eq!(
-        chain.apply_block(block),
-        Err(ChainError::InconsistentReward)
-    );
 
     assert_eq!(chain.head_height(), 0);
 }
@@ -458,6 +487,18 @@ fn block_with_tampered_reward_result_is_rejected() {
     block.reward_transaction_result = Some(ExecutionResult::failure("forged", reward_digest));
 
     assert_eq!(chain.apply_block(block), Err(ChainError::InvalidReward));
+
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// A block whose `state_root` does not match the store produced by re-executing
+/// its transactions must be rejected.
+#[test]
+fn block_with_wrong_state_root_is_rejected() {
+    let (mut chain, mut block) = chain_and_valid_gas_block();
+    block.header.state_root = Digest::from([0xFF; 32]);
+
+    assert_eq!(chain.apply_block(block), Err(ChainError::StateRootMismatch));
 
     assert_eq!(chain.head_height(), 0);
 }
@@ -520,6 +561,161 @@ fn get_blocks_since_returns_blocks_from_height() {
 }
 
 //
+// ─── get_block ───
+//
+
+/// The genesis block (height 0) must be retrievable by its hash on a fresh chain.
+#[test]
+fn get_block_returns_genesis_block() {
+    let store = Store::default();
+    let chain = utils::new_chain(store);
+    let genesis_hash = chain.head();
+
+    let genesis = chain
+        .get_block(&genesis_hash)
+        .expect("genesis block must always be retrievable on a fresh chain");
+    assert_eq!(genesis.header.height, 0);
+}
+
+/// `get_block` must return a block that has been applied to the chain.
+#[test]
+fn get_block_returns_applied_block() {
+    let (store, cs) = utils::coins(1);
+    let mut chain = utils::new_chain(store.clone());
+
+    let (block, _) = make_valid_block(chain.head(), &store, 1, 1, cs[0].0, &cs[0].1);
+    let block_hash = block.hash();
+    assert!(chain.apply_block(block).is_ok());
+
+    let fetched = chain
+        .get_block(&block_hash)
+        .expect("applied block must be retrievable");
+    assert_eq!(fetched.hash(), block_hash);
+    assert_eq!(fetched.header.height, 1);
+}
+
+/// `get_block` must return `None` for an unknown digest.
+#[test]
+fn get_block_returns_none_for_unknown_digest() {
+    let store = Store::default();
+    let chain = utils::new_chain(store);
+
+    assert!(chain.get_block(&Digest::from([0xAA; 32])).is_none());
+}
+
+/// Once a block falls past the pruning horizon it must not be retrievable.
+#[test]
+fn get_block_returns_none_after_pruning() {
+    let store = Store::default();
+    let mut chain = utils::new_chain(store.clone());
+    let genesis_hash = chain.head(); // height 0 — pruned once head > SNAPSHOT_DEPTH
+
+    advance_head_via_commit(&mut chain, &store, utils::SNAPSHOT_DEPTH + 1);
+
+    assert!(
+        chain.get_block(&genesis_hash).is_none(),
+        "pruned block must not be retrievable"
+    );
+}
+
+//
+// ─── get_block_snapshot ───
+//
+
+/// `get_block_snapshot` must return a snapshot whose head matches the queried block.
+#[test]
+fn get_block_snapshot_returns_snapshot_for_applied_block() {
+    let (store, cs) = utils::coins(1);
+    let mut chain = utils::new_chain(store.clone());
+
+    let (block, _) = make_valid_block(chain.head(), &store, 1, 1, cs[0].0, &cs[0].1);
+    let block_hash = block.hash();
+    assert!(chain.apply_block(block).is_ok());
+
+    let snapshot = chain
+        .get_block_snapshot(&block_hash)
+        .expect("applied block must have a snapshot");
+    assert_eq!(snapshot.head.hash(), block_hash);
+    assert_eq!(snapshot.head.header.height, 1);
+    assert!(
+        !snapshot.objects.is_empty(),
+        "snapshot must include the live objects committed with the block"
+    );
+    assert_eq!(
+        snapshot
+            .objects
+            .iter()
+            .find(|o| o.address() == cs[0].1.address())
+            .expect("gas coin must be in the snapshot")
+            .version(),
+        &ObjectVersion::ONE.next().unwrap(),
+        "gas coin version must be 2 after one transaction"
+    );
+}
+
+/// `get_block_snapshot` must return `None` for an unknown digest.
+#[test]
+fn get_block_snapshot_returns_none_for_unknown_digest() {
+    let store = Store::default();
+    let chain = utils::new_chain(store);
+
+    assert!(
+        chain
+            .get_block_snapshot(&Digest::from([0xAA; 32]))
+            .is_none()
+    );
+}
+
+/// Once a block is pruned from the chain its snapshot must also be gone.
+#[test]
+fn get_block_snapshot_returns_none_after_pruning() {
+    let store = Store::default();
+    let mut chain = utils::new_chain(store.clone());
+    let genesis_hash = chain.head();
+
+    advance_head_via_commit(&mut chain, &store, utils::SNAPSHOT_DEPTH + 1);
+
+    assert!(
+        chain.get_block_snapshot(&genesis_hash).is_none(),
+        "snapshot for pruned block must not be retrievable"
+    );
+}
+
+//
+// ─── head ───
+//
+
+/// On a fresh chain the head must point to the genesis block at height 0.
+#[test]
+fn head_returns_genesis_hash_on_fresh_chain() {
+    let chain = utils::new_chain(Store::default());
+
+    assert_eq!(chain.head(), Block::genesis().hash());
+    assert_eq!(chain.head_height(), 0);
+}
+
+/// After committing a block the head hash and height must advance.
+#[test]
+fn head_advances_after_commit() {
+    let store = Store::default();
+    let mut chain = utils::new_chain(store.clone());
+
+    let (signed, _) = utils::dummy_signed_transaction();
+    let block = utils::make_block(
+        1,
+        chain.head(),
+        1,
+        roots::compute_state_root(&store),
+        signed,
+    );
+    let block_hash = block.hash();
+    chain.commit(block, store.clone());
+
+    assert_eq!(chain.head(), block_hash);
+    assert_eq!(chain.head_height(), 1);
+}
+
+//
 // ─── prune_finalized_blocks ───
 //
 
@@ -542,6 +738,44 @@ fn finalized_blocks_are_absent_from_get_blocks_since() {
         blocks.iter().all(|b| b.header.height >= 1),
         "no block below the finality horizon must appear in get_blocks_since"
     );
+}
+
+/// `prune_finalized_blocks` must use the configured `snapshot_depth` as the pruning
+/// horizon — a chain constructed with `snapshot_depth=2` must prune heights 0 and 1
+/// once the head reaches height 4 (cutoff = 4 - 2 = 2).
+#[test]
+fn prune_finalized_blocks_respects_custom_snapshot_depth() {
+    let store = Store::default();
+    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 2);
+
+    advance_head_via_commit(&mut chain, &store, 4);
+
+    let blocks = chain.get_blocks_since(0);
+    // Heights 0 and 1 are pruned; heights 2, 3, 4 remain.
+    assert_eq!(blocks.len(), 3);
+    assert!(
+        blocks.iter().all(|b| b.header.height >= 2),
+        "blocks below the custom snapshot depth horizon must be pruned"
+    );
+}
+
+/// With `snapshot_depth=1` every block except the head and its immediate parent must be
+/// pruned after each commit — the most aggressive pruning configuration.
+#[test]
+fn prune_finalized_blocks_with_snapshot_depth_one() {
+    let store = Store::default();
+    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 1);
+
+    // Advance to height 4: cutoff = 4 - 1 = 3 → heights 0, 1, 2 are pruned; 3 and 4 remain.
+    advance_head_via_commit(&mut chain, &store, 4);
+
+    let blocks = chain.get_blocks_since(0);
+    assert_eq!(
+        blocks.len(),
+        2,
+        "only the head and its parent must survive with snapshot_depth=1"
+    );
+    assert!(blocks.iter().all(|b| b.header.height >= 3));
 }
 
 //
@@ -673,6 +907,32 @@ fn from_snapshot_rejects_empty_block() {
     );
 }
 
+/// `from_snapshot` must reject a snapshot whose head block exceeds `MAX_TRANSACTIONS_PER_BLOCK`.
+#[test]
+fn from_snapshot_rejects_block_with_too_many_transactions() {
+    let store = Store::default();
+    let (signed, _) = utils::dummy_signed_transaction();
+    let transactions: Vec<_> =
+        std::iter::repeat_n(signed, MAX_TRANSACTIONS_PER_BLOCK + 1).collect();
+    let block = utils::make_block_with_transactions(
+        1,
+        Block::genesis().hash(),
+        1,
+        roots::compute_state_root(&store),
+        transactions,
+    );
+
+    assert_eq!(
+        utils::chain_from_snapshot(block, store)
+            .err()
+            .expect("expected rejection"),
+        ChainError::TooManyTransactions {
+            max: MAX_TRANSACTIONS_PER_BLOCK,
+            got: MAX_TRANSACTIONS_PER_BLOCK + 1,
+        }
+    );
+}
+
 /// `from_snapshot` must reject a snapshot whose head block contains duplicate transactions.
 #[test]
 fn from_snapshot_rejects_duplicate_transaction() {
@@ -698,7 +958,7 @@ fn from_snapshot_rejects_duplicate_transaction() {
     );
 }
 
-/// `from_snapshot` must reject a snapshot whose head block timestamp is too far in the future.
+/// `from_snapshot` must reject a snapshot whose block timestamp is too far in the future.
 #[test]
 fn from_snapshot_rejects_future_timestamp() {
     let store = Store::default();
@@ -765,50 +1025,6 @@ fn from_snapshot_rejects_inconsistent_reward() {
     );
 }
 
-/// `from_snapshot` must reject a snapshot whose `reward_root` does not match the reward transaction.
-#[test]
-fn from_snapshot_rejects_reward_root_mismatch() {
-    let store = Store::default();
-    let (signed, _) = utils::dummy_signed_transaction();
-    let mut block = utils::make_block(
-        1,
-        Block::genesis().hash(),
-        1,
-        roots::compute_state_root(&store),
-        signed,
-    );
-    block.header.reward_root = Some(Digest::from([0xFF; 32])); // wrong: body has no reward transaction
-
-    assert_eq!(
-        utils::chain_from_snapshot(block, store)
-            .err()
-            .expect("expected rejection"),
-        ChainError::RewardRootMismatch
-    );
-}
-
-/// `from_snapshot` must reject a snapshot whose transactions root does not match its transaction list.
-#[test]
-fn from_snapshot_rejects_transactions_root_mismatch() {
-    let store = Store::default();
-    let (signed, _) = utils::dummy_signed_transaction();
-    let mut block = utils::make_block(
-        1,
-        Block::genesis().hash(),
-        1,
-        roots::compute_state_root(&store),
-        signed,
-    );
-    block.header.transactions_root = Digest::ZERO; // wrong: does not match `transactions`
-
-    assert_eq!(
-        utils::chain_from_snapshot(block, store)
-            .err()
-            .expect("expected rejection"),
-        ChainError::TransactionsRootMismatch
-    );
-}
-
 /// `from_snapshot` must reject a snapshot whose head block does not meet PoW difficulty.
 #[test]
 fn from_snapshot_rejects_pow_failure() {
@@ -834,6 +1050,50 @@ fn from_snapshot_rejects_pow_failure() {
         .err()
         .expect("expected rejection"),
         ChainError::PowCheckFailed
+    );
+}
+
+/// `from_snapshot` must reject a snapshot whose transactions root does not match its transaction list.
+#[test]
+fn from_snapshot_rejects_transactions_root_mismatch() {
+    let store = Store::default();
+    let (signed, _) = utils::dummy_signed_transaction();
+    let mut block = utils::make_block(
+        1,
+        Block::genesis().hash(),
+        1,
+        roots::compute_state_root(&store),
+        signed,
+    );
+    block.header.transactions_root = Digest::ZERO; // wrong: does not match `transactions`
+
+    assert_eq!(
+        utils::chain_from_snapshot(block, store)
+            .err()
+            .expect("expected rejection"),
+        ChainError::TransactionsRootMismatch
+    );
+}
+
+/// `from_snapshot` must reject a snapshot whose `reward_root` does not match the reward transaction.
+#[test]
+fn from_snapshot_rejects_reward_root_mismatch() {
+    let store = Store::default();
+    let (signed, _) = utils::dummy_signed_transaction();
+    let mut block = utils::make_block(
+        1,
+        Block::genesis().hash(),
+        1,
+        roots::compute_state_root(&store),
+        signed,
+    );
+    block.header.reward_root = Some(Digest::from([0xFF; 32])); // wrong: body has no reward transaction
+
+    assert_eq!(
+        utils::chain_from_snapshot(block, store)
+            .err()
+            .expect("expected rejection"),
+        ChainError::RewardRootMismatch
     );
 }
 
@@ -893,25 +1153,6 @@ fn sync_from_height_is_head_minus_snapshot_depth_when_beyond() {
     assert_eq!(chain.sync_from_height(), 10);
 }
 
-/// `prune_finalized_blocks` must use the configured `snapshot_depth` as the pruning
-/// horizon — a chain constructed with `snapshot_depth=2` must prune heights 0 and 1
-/// once the head reaches height 4 (cutoff = 4 - 2 = 2).
-#[test]
-fn prune_finalized_blocks_respects_custom_snapshot_depth() {
-    let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 2);
-
-    advance_head_via_commit(&mut chain, &store, 4);
-
-    let blocks = chain.get_blocks_since(0);
-    // Heights 0 and 1 are pruned; heights 2, 3, 4 remain.
-    assert_eq!(blocks.len(), 3);
-    assert!(
-        blocks.iter().all(|b| b.header.height >= 2),
-        "blocks below the custom snapshot depth horizon must be pruned"
-    );
-}
-
 /// `sync_from_height` must reflect a custom `snapshot_depth` — a chain anchored at
 /// height 10 with `snapshot_depth=5` must return `5` (= 10 - 5), not the default 64.
 #[test]
@@ -941,31 +1182,17 @@ fn sync_from_height_is_correct_on_freshly_anchored_snapshot_chain() {
     assert_eq!(chain.sync_from_height(), 15);
 }
 
-/// With `snapshot_depth=1` every block except the head and its immediate parent must be
-/// pruned after each commit — the most aggressive pruning configuration.
-#[test]
-fn prune_finalized_blocks_with_snapshot_depth_one() {
-    let store = Store::default();
-    let mut chain = ChainState::new(store.clone(), utils::DIFFICULTY, 1);
-
-    // Advance to height 4: cutoff = 4 - 1 = 3 → heights 0, 1, 2 are pruned; 3 and 4 remain.
-    advance_head_via_commit(&mut chain, &store, 4);
-
-    let blocks = chain.get_blocks_since(0);
-    assert_eq!(
-        blocks.len(),
-        2,
-        "only the head and its parent must survive with snapshot_depth=1"
-    );
-    assert!(blocks.iter().all(|b| b.header.height >= 3));
-}
-
 //
 // ─── Utility functions ───
 //
 
 /// Build a block with one `MeowModulePublish` transaction using the given coin,
 /// grind nonce (difficulty 0 so nonce = 0), and return the block and new store.
+///
+/// # Note
+/// Creates a temporary single-threaded tokio runtime internally. Must only be
+/// called from synchronous `#[test]` functions — calling from `#[tokio::test]`
+/// will panic with "Cannot start a runtime from within a runtime".
 fn make_valid_block(
     parent_hash: Digest,
     parent_store: &Store,
@@ -982,7 +1209,7 @@ fn make_valid_block(
         TransactionType::MeowModulePublish(utils::noop_module_bytes()),
     );
     let (signed, _) = transaction.sign(&keypair);
-    utils::mining_work(
+    let work = utils::mining_work(
         vec![signed],
         parent_store.clone(),
         height,
@@ -990,9 +1217,12 @@ fn make_valid_block(
         timestamp,
         0,
         miner_address,
-    )
-    .grind()
-    .expect("valid transaction must succeed")
+    );
+    tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(work.grind())
+        .expect("valid transaction must succeed")
 }
 
 /// Build a block with no transactions. Intentionally invalid — used only in tests that
@@ -1040,6 +1270,11 @@ fn make_mismatched_signature_transaction() -> SignedTransaction {
 ///
 /// The block uses difficulty=0 so nonce=0. Tests that need a specific chain difficulty
 /// can pass the returned store to `ChainState::new(store, difficulty)`.
+///
+/// # Note
+/// Creates a temporary single-threaded tokio runtime internally. Must only be
+/// called from synchronous `#[test]` functions — calling from `#[tokio::test]`
+/// will panic with "Cannot start a runtime from within a runtime".
 fn make_valid_gas_block() -> (Block, Store) {
     let keypair = utils::test_keypair();
     let miner_address = Address::from(&keypair);
@@ -1050,7 +1285,7 @@ fn make_valid_gas_block() -> (Block, Store) {
         TransactionType::MeowModulePublish(utils::noop_module_bytes()),
     );
     let (signed, _) = transaction.sign(&keypair);
-    let (block, _) = utils::mining_work(
+    let work = utils::mining_work(
         vec![signed],
         parent_store.clone(),
         1,
@@ -1058,9 +1293,12 @@ fn make_valid_gas_block() -> (Block, Store) {
         1,
         0,
         miner_address,
-    )
-    .grind()
-    .expect("batch has one transaction");
+    );
+    let (block, _) = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap()
+        .block_on(work.grind())
+        .expect("batch has one transaction");
     (block, parent_store)
 }
 

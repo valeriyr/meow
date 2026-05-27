@@ -83,6 +83,9 @@ pub async fn run(
 /// - `GET /objects_owned/{owner}` to fetch all the live objects owned by an address.
 /// - `GET /transaction/{digest}` to fetch a committed transaction by digest.
 /// - `GET /transaction-result/{digest}` to fetch an execution result by transaction digest.
+/// - `GET /block/{digest}` to fetch a block by its hash.
+/// - `GET /block-snapshot/{digest}` to fetch the state snapshot at a given block.
+/// - `GET /chain-head` to fetch the current chain head digest.
 /// - `GET /blocks-since/{height}` to fetch blocks from a given height onwards.
 /// - `GET /state-snapshot` to fetch a full state snapshot.
 pub fn router(state: RpcState) -> Router {
@@ -94,6 +97,9 @@ pub fn router(state: RpcState) -> Router {
         .route("/objects_owned/{owner}", get(get_objects_owned))
         .route("/transaction/{digest}", get(get_transaction))
         .route("/transaction-result/{digest}", get(get_transaction_result))
+        .route("/block/{digest}", get(get_block))
+        .route("/block-snapshot/{digest}", get(get_block_snapshot))
+        .route("/chain-head", get(get_chain_head))
         .route("/blocks-since/{height}", get(get_blocks_since))
         .route("/state-snapshot", get(get_state_snapshot))
         .with_state(state)
@@ -234,6 +240,37 @@ async fn get_transaction_result(
         Err(response) => return response,
     };
     Json(state.handler.get_transaction_result(&digest).await).into_response()
+}
+
+/// GET /block/{digest} — returns the `Block` by hash, or `null` if not found.
+///
+/// Returns `400` for an invalid digest.
+async fn get_block(State(state): State<RpcState>, Path(digest): Path<String>) -> impl IntoResponse {
+    let digest = match parse_digest(&digest) {
+        Ok(digest) => digest,
+        Err(response) => return response,
+    };
+    Json(state.handler.get_block(&digest).await).into_response()
+}
+
+/// GET /block-snapshot/{digest} — returns the full state snapshot at the given block hash, or
+/// `null` if not found.
+///
+/// Returns `400` for an invalid digest.
+async fn get_block_snapshot(
+    State(state): State<RpcState>,
+    Path(digest): Path<String>,
+) -> impl IntoResponse {
+    let digest = match parse_digest(&digest) {
+        Ok(digest) => digest,
+        Err(response) => return response,
+    };
+    Json(state.handler.get_block_snapshot(&digest).await).into_response()
+}
+
+/// GET /chain-head — returns the current chain head digest (base58 string).
+async fn get_chain_head(State(state): State<RpcState>) -> impl IntoResponse {
+    Json(state.handler.get_chain_head().await).into_response()
 }
 
 /// GET /blocks-since/{height} — returns all blocks from the given height onwards.
