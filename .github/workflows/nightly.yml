@@ -1,0 +1,188 @@
+# Nightly build workflow.
+#
+# Triggered when the Rust CI workflow completes successfully on main. Only publishes
+# if CI passed — so the nightly release always contains a tested, lint-clean build.
+# Deletes and recreates a fixed "nightly" pre-release so there is always one download
+# link per platform pointing at the latest main build.
+# The release is marked as pre-release so it does not appear as the latest stable release.
+#
+# Three jobs run in order:
+#
+#   prepare   — recreates the nightly GitHub release (deletes the old one first).
+#   build     — compiles release binaries on each platform and uploads the archives.
+#   checksums — downloads all uploaded archives, generates SHA256 sums, uploads the file.
+
+name: Nightly
+
+# ── Trigger ───────────────────────────────────────────────────────────────────
+# workflow_run fires after another workflow finishes. We listen for the "Rust"
+# CI workflow (rust.yml) to complete on the main branch.
+#
+# The `if:` guard on the prepare job below makes sure we only proceed when that
+# run actually succeeded — a failed CI run does not produce a new nightly build.
+on:
+  workflow_run:
+    workflows: ["Rust"] # must match the `name:` field in rust.yml exactly.
+    types: [completed]  # fire on both success and failure; the guard filters out failures.
+    branches: ["main"]  # only care about runs on the main branch.
+
+# ── Global environment ────────────────────────────────────────────────────────
+# CARGO_TERM_COLOR forces colored Cargo output in CI logs (stdout is not a TTY
+# in GitHub Actions, so color is off by default).
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+
+  # ── prepare ──────────────────────────────────────────────────────────────────
+  # Recreate the nightly GitHub release so it always points at the current commit.
+  #
+  # Why delete and recreate instead of just updating?
+  # GitHub releases store assets as a flat list. Updating a release does not remove
+  # old assets, so a fresh delete+create is the simplest way to guarantee a clean slate.
+  prepare:
+    # Only run if the upstream CI workflow actually passed.
+    # github.event.workflow_run.conclusion is the result of the triggering run:
+    # "success" | "failure" | "cancelled" | "skipped" | etc.
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    # Explicit permissions follow the principle of least privilege — this job only
+    # needs to write to repository contents (releases are stored there).
+    # Everything else stays at the default read-only level.
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the repo so the `gh` CLI can resolve the repository context.
+      - uses: actions/checkout@v4
+
+      - name: Recreate nightly release
+        run: |
+          # Delete the previous nightly release if it exists. The `|| true` prevents
+          # the step from failing on the very first run when there is nothing to delete.
+          gh release delete nightly --yes 2>/dev/null || true
+
+          # Take the first 8 characters of the commit SHA for a short human-readable link.
+          SHORT_SHA=$(echo "$HEAD_SHA" | cut -c1-8)
+
+          # Create a new pre-release tagged "nightly". Using --prerelease means GitHub
+          # will not show this as the "Latest" release on the repo's main page — it
+          # stays clearly labelled as a development build.
+          gh release create nightly \
+            --prerelease \
+            --title "Nightly ($(date -u '+%Y-%m-%d'))" \
+            --notes "Built from [\`$SHORT_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$HEAD_SHA) on \`main\`."
+        env:
+          # GITHUB_TOKEN is an automatically generated short-lived token that GitHub
+          # injects into every workflow run. No manual secret setup required.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use the SHA from the upstream CI run, not GITHUB_SHA. With workflow_run,
+          # GITHUB_SHA is the HEAD of main when this workflow fires — which can differ
+          # if two commits land in quick succession. head_sha is the exact commit that
+          # CI tested and approved.
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+
+  # ── build ─────────────────────────────────────────────────────────────────────
+  # Compile both binaries (meow CLI and meow-node) on each target platform, pack
+  # them into a .tar.gz archive, and upload the archive to the nightly release.
+  build:
+    # Wait for the release to exist before trying to upload to it.
+    needs: prepare
+
+    permissions:
+      contents: write
+
+    # Matrix strategy: each entry in `include` becomes an independent parallel job.
+    # fail-fast: false means a failure on one platform does not cancel the others.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest   # GitHub-hosted x86_64 Linux runner
+            suffix: linux-x86_64
+          - os: macos-latest    # GitHub-hosted ARM64 macOS runner (Apple Silicon)
+            suffix: macos-arm64
+
+    # ${{ matrix.os }} expands to the value from whichever matrix row this job is.
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      # Check out the exact commit that CI tested, not just the current HEAD of main.
+      # This keeps the build and the test run in sync even when commits land quickly.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      # Restore the Cargo dependency cache from a previous run. Caching the compiled
+      # dependencies (registry + git sources + target/) avoids re-downloading and
+      # recompiling them from scratch on every push.
+      #
+      # The cache key includes a hash of all Cargo.lock files: if any dependency
+      # version changes, the hash changes and the cache is invalidated automatically.
+      # restore-keys provides a prefix fallback so a stale cache is still better than none.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: nightly-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: nightly-${{ runner.os }}-cargo-
+
+      # --release    optimize for speed (opt-level 3, no debug info).
+      # --locked     fail if Cargo.lock is out of sync with Cargo.toml (reproducible builds).
+      # --bin <name> build only the named binary, not the entire workspace.
+      - name: Build
+        run: cargo build --release --locked --bin meow --bin meow-node
+
+      - name: Package
+        run: |
+          ARCHIVE="meow-${{ matrix.suffix }}.tar.gz"
+          # -C target/release changes into that directory before adding files,
+          # so the archive contains `meow` and `meow-node` at the top level (no path prefix).
+          tar -czf "$ARCHIVE" -C target/release meow meow-node
+          # Write the archive name to GITHUB_ENV so the next step can reference it
+          # without repeating the matrix suffix expansion.
+          echo "ARCHIVE=$ARCHIVE" >> $GITHUB_ENV
+
+      # --clobber replaces the asset if a previous partial run already uploaded it.
+      - name: Upload to nightly release
+        run: gh release upload nightly "$ARCHIVE" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── checksums ─────────────────────────────────────────────────────────────────
+  # Generate a SHA256 digest for every archive and publish it as checksums.txt.
+  # Users can verify their download has not been corrupted or tampered with by running:
+  #   sha256sum -c checksums.txt
+  checksums:
+    # Wait for all build jobs to finish so every archive is already in the release.
+    needs: build
+
+    permissions:
+      contents: write
+
+    runs-on: ubuntu-latest
+    steps:
+      # Download all .tar.gz assets from the nightly release into the `archives/` folder.
+      # GH_REPO tells the gh CLI which repository to target (required outside a checkout).
+      - name: Download release archives
+        run: gh release download nightly --pattern "*.tar.gz" --dir archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+      - name: Generate checksums
+        run: |
+          cd archives
+          # sha256sum writes one line per file: "<hex-digest>  <filename>"
+          # Printing to stdout as well makes the digest visible in the CI log.
+          sha256sum *.tar.gz > ../checksums.txt
+          cat ../checksums.txt
+
+      - name: Upload checksums
+        run: gh release upload nightly checksums.txt --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

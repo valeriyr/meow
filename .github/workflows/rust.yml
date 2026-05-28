@@ -29,10 +29,17 @@ on:
     branches: [ "main" ]
 
 # Environment variables available to every step in every job.
-# CARGO_TERM_COLOR forces coloured Cargo output even when stdout is not a TTY
+# CARGO_TERM_COLOR forces colored Cargo output even when stdout is not a TTY
 # (which is always the case in CI), making build logs easier to read.
 env:
   CARGO_TERM_COLOR: always
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+# This workflow only reads source code — it never writes to releases, issues, or
+# any other repository resource. Declaring read-only access here ensures the
+# GITHUB_TOKEN cannot be used for anything beyond what the jobs actually need.
+permissions:
+  contents: read
 
 # ─── Jobs ────────────────────────────────────────────────────────────────────
 # Each job runs on its own fresh VM. Jobs at the same indentation level start
