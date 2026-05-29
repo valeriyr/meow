@@ -141,11 +141,9 @@ async fn simulate_transaction(
         Ok(result) => (StatusCode::OK, Json(result)).into_response(),
         Err(RpcHandlerError::MinerError(err)) => match err {
             MinerError::MempoolError(err) => mempool_error_response(err),
-            MinerError::SimulationError(err) => error_response(
-                StatusCode::BAD_REQUEST,
-                "simulation_error",
-                format!("transaction simulation failed: {err}"),
-            ),
+            MinerError::SimulationError(err) => {
+                error_response(StatusCode::BAD_REQUEST, "simulation_error", err.to_string())
+            }
             MinerError::ChainError(_) => {
                 unreachable!("simulate_transaction never interacts with the chain")
             }
@@ -307,11 +305,11 @@ fn error_response(
 /// Parses a raw string into an `Address`, returning a `400` error response on failure.
 #[allow(clippy::result_large_err)]
 fn parse_address(raw: &str) -> std::result::Result<Address, axum::response::Response> {
-    raw.parse().map_err(|_| {
+    raw.parse().map_err(|err| {
         error_response(
             StatusCode::BAD_REQUEST,
             "invalid_address",
-            format!("invalid address: {raw} (expected 0x-prefixed hex address)"),
+            format!("invalid address '{raw}': {err}"),
         )
     })
 }
@@ -319,54 +317,30 @@ fn parse_address(raw: &str) -> std::result::Result<Address, axum::response::Resp
 /// Parses a raw string into a `Digest`, returning a `400` error response on failure.
 #[allow(clippy::result_large_err)]
 fn parse_digest(raw: &str) -> std::result::Result<Digest, axum::response::Response> {
-    raw.parse().map_err(|_| {
+    raw.parse().map_err(|err| {
         error_response(
             StatusCode::BAD_REQUEST,
             "invalid_digest",
-            format!("invalid digest: {raw} (expected base58 digest)"),
+            format!("invalid digest '{raw}': {err}"),
         )
     })
 }
 
 /// Maps a `MempoolError` to a structured HTTP error response.
 fn mempool_error_response(err: MempoolError) -> axum::response::Response {
-    match err {
-        MempoolError::TransactionValidationError(err) => error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_transaction",
-            format!("invalid transaction: {err}"),
-        ),
-        MempoolError::DuplicateTransaction { digest } => error_response(
-            StatusCode::CONFLICT,
-            "duplicate_transaction",
-            format!("duplicate transaction: {digest}"),
-        ),
-        MempoolError::ObjectNotFound { address } => error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_object_reference",
-            format!("invalid object reference: object not found: {address}"),
-        ),
-        MempoolError::InvalidObjectVersion {
-            address,
-            expected,
-            found,
-        } => error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_object_reference",
-            format!(
-                "invalid object reference: object {address} has invalid version: expected {expected}, found {found}"
-            ),
-        ),
-        MempoolError::InvalidObjectDigest {
-            address,
-            expected,
-            found,
-        } => error_response(
-            StatusCode::BAD_REQUEST,
-            "invalid_object_reference",
-            format!(
-                "invalid object reference: object {address} has invalid digest: expected {expected}, found {found}"
-            ),
-        ),
-    }
+    let (status, code) = match &err {
+        MempoolError::TransactionValidationError(_) => {
+            (StatusCode::BAD_REQUEST, "invalid_transaction")
+        }
+        MempoolError::DuplicateTransaction { .. } => {
+            (StatusCode::CONFLICT, "duplicate_transaction")
+        }
+        MempoolError::ObjectNotFound { .. }
+        | MempoolError::InvalidObjectVersion { .. }
+        | MempoolError::InvalidObjectDigest { .. } => {
+            (StatusCode::BAD_REQUEST, "invalid_object_reference")
+        }
+        MempoolError::MempoolFull { .. } => (StatusCode::SERVICE_UNAVAILABLE, "mempool_full"),
+    };
+    error_response(status, code, err.to_string())
 }

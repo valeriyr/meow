@@ -19,6 +19,8 @@ pub enum MempoolError {
         expected: ObjectVersion,
         found: ObjectVersion,
     },
+    #[error("mempool is full: capacity is {capacity} transactions")]
+    MempoolFull { capacity: usize },
     #[error("object {address} not found in store")]
     ObjectNotFound { address: Address },
     #[error("transaction validation error: {0}")]

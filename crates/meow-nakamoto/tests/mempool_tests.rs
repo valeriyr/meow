@@ -1,6 +1,9 @@
 mod utils;
 
-use meow_nakamoto::{mempool::Mempool, mempool::error::MempoolError, store::Store};
+use meow_nakamoto::{
+    mempool::{MAX_MEMPOOL_SIZE, Mempool, error::MempoolError},
+    store::Store,
+};
 use meow_types::{
     address::Address,
     digest::Digest,
@@ -44,6 +47,33 @@ fn submit_rejects_duplicate_transaction() {
     let err = submit_transaction(&mut mempool, &store, &keypair, &gas_coin).unwrap_err();
 
     assert!(matches!(err, MempoolError::DuplicateTransaction { .. }));
+}
+
+/// Once the pool holds `MAX_MEMPOOL_SIZE` transactions the next submission must be rejected
+/// with `MempoolFull`, regardless of how valid the transaction itself is.
+#[test]
+fn submit_rejects_when_mempool_is_full() {
+    let keypair = utils::test_keypair();
+
+    // Build MAX_MEMPOOL_SIZE + 1 unique coins so every submission has a distinct digest.
+    let coins: Vec<Object> = (0..=MAX_MEMPOOL_SIZE as u16)
+        .map(|i| make_object(Address::suffixed(i), ObjectVersion::ONE))
+        .collect();
+    let store = Store::with_objects(coins.clone());
+
+    let mut mempool = Mempool::empty();
+
+    for coin in &coins[..MAX_MEMPOOL_SIZE] {
+        submit_transaction(&mut mempool, &store, &keypair, coin).unwrap();
+    }
+    assert_eq!(mempool.len(), MAX_MEMPOOL_SIZE);
+
+    let err =
+        submit_transaction(&mut mempool, &store, &keypair, &coins[MAX_MEMPOOL_SIZE]).unwrap_err();
+    assert!(matches!(
+        err,
+        MempoolError::MempoolFull { capacity } if capacity == MAX_MEMPOOL_SIZE
+    ));
 }
 
 /// A `MeowCall` transaction whose object argument is absent from the store must

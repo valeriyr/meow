@@ -115,11 +115,11 @@ impl GossipService {
                 changed = shutdown_rx.changed() => {
                     match changed {
                         Ok(()) => {
-                            tracing::info!("shutdown signal received");
+                            tracing::info!("gossip shutdown signal received");
                             break;
                         }
                         Err(_) => {
-                            tracing::warn!("shutdown channel closed");
+                            tracing::warn!("gossip shutdown channel closed");
                             break;
                         }
                     }
@@ -210,8 +210,12 @@ impl GossipService {
                                     match bcs::from_bytes::<SignedTransaction>(&data) {
                                         Ok(signed_transaction) => {
                                             let digest = signed_transaction.transaction().digest();
+                                            tracing::debug!(%digest, "received transaction via gossip");
+
                                             if let Err(e) = self.miner.lock().await.submit_transaction(signed_transaction) {
-                                                tracing::debug!(%digest, error = %e, "incoming transaction rejected");
+                                                tracing::debug!(%digest, error = %e, "gossip transaction rejected");
+                                            } else {
+                                                tracing::debug!(%digest, "accepted gossip transaction into mempool");
                                             }
                                         }
                                         Err(e) => tracing::debug!(error = %e, "failed to decode transaction"),
@@ -220,16 +224,18 @@ impl GossipService {
                                 NetworkEvent::Message { topic, data, from, .. } if topic == TOPIC_BLOCKS => {
                                     match bcs::from_bytes::<Block>(&data) {
                                         Ok(block) => {
+                                            let block_hash = block.hash();
+                                            let height = block.header.height;
+                                            tracing::debug!(height, %block_hash, "received block via gossip");
+
                                             if let GossipServiceState::Syncing { buffered_blocks, buffered_hashes }
                                                 | GossipServiceState::StateSyncing { buffered_blocks, buffered_hashes } = &mut service_state
                                             {
-                                                let hash = block.hash();
-                                                if buffered_hashes.insert(hash) {
+                                                if buffered_hashes.insert(block_hash) {
+                                                    tracing::debug!(height, %block_hash, "buffering block during sync");
                                                     buffered_blocks.push(block);
                                                 }
                                             } else {
-                                                let height = block.header.height;
-                                                let block_hash = block.hash();
                                                 let (local_height, sync_start, snapshot_depth) = {
                                                     let miner = self.miner.lock().await;
                                                     (miner.head_height(), miner.sync_from_height(), miner.snapshot_depth())
@@ -273,10 +279,13 @@ impl GossipService {
                                                         // Next block — try the fast path first.
                                                         match self.miner.lock().await.apply_block(block.clone()) {
                                                             Ok(true) => {
-                                                                tracing::info!(height, %block_hash, "reorged to peer's longer chain");
+                                                                tracing::info!(height, %block_hash, "chain head advanced via gossip");
                                                                 false
                                                             }
-                                                            Ok(false) => false,
+                                                            Ok(false) => {
+                                                                tracing::debug!(height, %block_hash, "gossip block stored on fork branch, head unchanged");
+                                                                false
+                                                            }
                                                             Err(e) => {
                                                                 // Block rejected — peer may be on a fork that
                                                                 // diverged before our head; pull back far enough
@@ -288,7 +297,11 @@ impl GossipService {
                                                     } else {
                                                         // Block at or below our height — apply opportunistically
                                                         // (builds fork branches that taller blocks can extend).
-                                                        let _ = self.miner.lock().await.apply_block(block.clone());
+                                                        match self.miner.lock().await.apply_block(block.clone()) {
+                                                            Ok(true) => tracing::debug!(height, %block_hash, local_height, "past block applied, head updated"),
+                                                            Ok(false) => tracing::debug!(height, %block_hash, local_height, "past block stored on fork branch"),
+                                                            Err(e) => tracing::debug!(height, %block_hash, local_height, error = %e, "past block rejected"),
+                                                        }
                                                         false
                                                     };
 
@@ -332,7 +345,7 @@ impl GossipService {
                                     }
                                 }
                                 NetworkEvent::Message { topic, .. } => {
-                                    tracing::debug!(name = %topic, "message on unknown topic — ignoring");
+                                    tracing::debug!(topic = %topic, "message on unknown topic — ignoring");
                                 }
                                 NetworkEvent::Listening { addr } => {
                                     tracing::info!(%addr, %local_peer_id, "gossip listening");
@@ -344,7 +357,7 @@ impl GossipService {
                                     tracing::info!(peer_id = %peer, "peer disconnected");
                                 }
                                 NetworkEvent::PeerSubscribedToTopic { peer, topic } if topic == TOPIC_PEER_INFO => {
-                                    tracing::debug!(peer_id = %peer, "peer subscribed to peer-info, broadcasting our RPC URL");
+                                    tracing::debug!(peer_id = %peer, "broadcasting RPC URL to new peer subscriber");
                                     // The peer is now ready to receive on this topic — safe to send.
                                     let data = self.node_rpc_url.as_str().as_bytes().to_vec();
                                     if let Err(e) = gossip.publish(TOPIC_PEER_INFO, data) {
@@ -352,7 +365,7 @@ impl GossipService {
                                     }
                                 }
                                 NetworkEvent::PeerSubscribedToTopic { topic, .. } => {
-                                    tracing::debug!(name = %topic, "unknown subscribed topic — ignoring");
+                                    tracing::debug!(topic = %topic, "unknown subscribed topic — ignoring");
                                 }
                             }
                         }
@@ -426,7 +439,7 @@ async fn pull_blocks_from_peer(peer_rpc_url: Url, from_height: u64) -> Vec<Block
             blocks
         }
         Err(e) => {
-            tracing::warn!(from_height, %peer_rpc_url, error = %e, "chain sync: request failed");
+            tracing::warn!(from_height, %peer_rpc_url, error = %e, "block sync request failed");
             Vec::new()
         }
     }

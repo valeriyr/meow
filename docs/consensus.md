@@ -123,7 +123,8 @@ A transaction is accepted into the mempool only if:
 
 1. The signature is valid.
 2. The transaction digest has not been seen before (deduplication).
-3. Every input object reference (including the gas coin) matches an object in the current head store by both version and digest.
+3. The pool holds fewer than `MAX_MEMPOOL_SIZE` (4 096) transactions.
+4. Every input object reference (including the gas coin) matches an object in the current head store by both version and digest.
 
 ### Ordering
 

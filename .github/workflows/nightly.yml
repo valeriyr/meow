@@ -1,36 +1,55 @@
 # Nightly build workflow.
 #
-# Triggered when the Rust CI workflow completes successfully on main. Only publishes
-# if CI passed — so the nightly release always contains a tested, lint-clean build.
+# Fires when the CI workflow finishes on main; the `if:` guard on the prepare
+# job skips everything unless CI concluded with 'success' AND the run originated
+# from this repository (not a fork). Only publishes if CI passed — so the nightly
+# release always contains a tested, lint-clean build.
 # Deletes and recreates a fixed "nightly" pre-release so there is always one download
 # link per platform pointing at the latest main build.
 # The release is marked as pre-release so it does not appear as the latest stable release.
 #
-# Three jobs run in order:
+# Job topology: prepare → build → checksums; cleanup-on-failure depends on all three.
 #
-#   prepare   — recreates the nightly GitHub release (deletes the old one first).
-#   build     — compiles release binaries on each platform and uploads the archives.
-#   checksums — downloads all uploaded archives, generates SHA256 sums, uploads the file.
+#   prepare            — recreates the nightly GitHub release (deletes the old one first).
+#   build              — compiles release binaries on each platform in parallel, uploads archives.
+#   checksums          — runs after all build matrix legs succeed; downloads archives, generates and uploads SHA256 sums.
+#   cleanup-on-failure — needs: [prepare, build, checksums]; deletes the release if build or
+#                        checksums failed, was cancelled, or was skipped.
 
 name: Nightly
 
 # ── Trigger ───────────────────────────────────────────────────────────────────
-# workflow_run fires after another workflow finishes. We listen for the "Rust"
-# CI workflow (rust.yml) to complete on the main branch.
+# workflow_run fires after another workflow finishes. We listen for the "CI"
+# workflow (ci.yml) to complete on the main branch.
 #
 # The `if:` guard on the prepare job below makes sure we only proceed when that
 # run actually succeeded — a failed CI run does not produce a new nightly build.
 on:
   workflow_run:
-    workflows: ["Rust"] # must match the `name:` field in rust.yml exactly.
-    types: [completed]  # fire on both success and failure; the guard filters out failures.
+    workflows: ["CI"] # must match the `name:` field in ci.yml exactly.
+    types: [completed]  # fire on any conclusion (success, failure, cancelled, etc.); the guard filters out non-success.
     branches: ["main"]  # only care about runs on the main branch.
+
+# ── Concurrency ───────────────────────────────────────────────────────────────
+# Only one nightly run may be active at a time. If two pushes land in quick
+# succession and both pass CI, the second run cancels the first before prepare
+# starts. Without this, prepare-B would delete and recreate the release while
+# build-A is still uploading, mixing artifacts from two different commits.
+concurrency:
+  group: nightly
+  cancel-in-progress: true
 
 # ── Global environment ────────────────────────────────────────────────────────
 # CARGO_TERM_COLOR forces colored Cargo output in CI logs (stdout is not a TTY
 # in GitHub Actions, so color is off by default).
 env:
   CARGO_TERM_COLOR: always
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+# Default to no permissions. Each job that needs to write to releases declares
+# `permissions: contents: write` explicitly, so the blast radius of a
+# compromised step is limited to what that specific job actually requires.
+permissions: {}
 
 jobs:
 
@@ -41,42 +60,63 @@ jobs:
   # GitHub releases store assets as a flat list. Updating a release does not remove
   # old assets, so a fresh delete+create is the simplest way to guarantee a clean slate.
   prepare:
-    # Only run if the upstream CI workflow actually passed.
-    # github.event.workflow_run.conclusion is the result of the triggering run:
-    # "success" | "failure" | "cancelled" | "skipped" | etc.
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    # Only run when:
+    #   1. The upstream CI run concluded with 'success' (not failure/cancelled/etc.).
+    #   2. The triggering run originated from THIS repository, not a fork.
+    #      Without the head_repository check, a fork contributor who names their
+    #      branch 'main' satisfies the branches: filter and the build job would
+    #      check out the fork's code (potentially a malicious build.rs) while
+    #      holding a contents:write token.
+    # Note: `if:` fields are evaluated as expressions by GitHub Actions — the
+    # ${{ }} wrapper is not needed and is omitted here for clarity.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
 
-    # Explicit permissions follow the principle of least privilege — this job only
-    # needs to write to repository contents (releases are stored there).
-    # Everything else stays at the default read-only level.
+    # Explicit grant: this job needs to write to repository contents (releases are
+    # stored there). The workflow-level `permissions: {}` grants nothing by default,
+    # so every job that needs access must declare it explicitly.
     permissions:
       contents: write
 
     runs-on: ubuntu-latest
     steps:
-      # Check out the repo so the `gh` CLI can resolve the repository context.
+      # Check out the tested commit so the gh CLI resolves the correct repository
+      # context. Consistent with the build job which also pins to head_sha.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Recreate nightly release
         run: |
-          # Delete the previous nightly release if it exists. The `|| true` prevents
-          # the step from failing on the very first run when there is nothing to delete.
-          gh release delete nightly --yes 2>/dev/null || true
+          # Delete the previous nightly release if it exists.
+          # --cleanup-tag also deletes the `nightly` git tag — without it the tag stays
+          # pointing at the old commit and `gh release create nightly` fails on the next
+          # run because the tag already exists.
+          # stderr is NOT suppressed here: real errors (bad token, rate-limit, network)
+          # should be visible in the log. `|| true` only suppresses the non-zero exit
+          # code that gh returns when the release does not exist yet (first run).
+          gh release delete nightly --yes --cleanup-tag || true
 
           # Take the first 8 characters of the commit SHA for a short human-readable link.
           SHORT_SHA=$(echo "$HEAD_SHA" | cut -c1-8)
 
-          # Create a new pre-release tagged "nightly". Using --prerelease means GitHub
-          # will not show this as the "Latest" release on the repo's main page — it
-          # stays clearly labelled as a development build.
+          # Create a new pre-release tagged "nightly".
+          # --target pins the git tag to HEAD_SHA — the exact commit CI tested. Without
+          # this flag gh tags the current HEAD of the default branch, which may be a
+          # different, untested commit if another push landed while this workflow ran.
+          # --prerelease means GitHub will not show this as the "Latest" release on the
+          # repo's main page — it stays clearly labelled as a development build.
           gh release create nightly \
             --prerelease \
+            --target "$HEAD_SHA" \
             --title "Nightly ($(date -u '+%Y-%m-%d'))" \
             --notes "Built from [\`$SHORT_SHA\`]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$HEAD_SHA) on \`main\`."
         env:
           # GITHUB_TOKEN is an automatically generated short-lived token that GitHub
           # injects into every workflow run. No manual secret setup required.
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           # Use the SHA from the upstream CI run, not GITHUB_SHA. With workflow_run,
           # GITHUB_SHA is the HEAD of main when this workflow fires — which can differ
           # if two commits land in quick succession. head_sha is the exact commit that
@@ -127,6 +167,11 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
+          # The `nightly-` prefix intentionally keeps this cache separate from
+          # the CI cache (which uses `${{ runner.os }}-cargo-`). CI jobs (clippy,
+          # test) build debug artifacts; nightly builds release artifacts.
+          # Sharing a cache between the two profiles would cause constant cache
+          # misses as each run overwrites the other's compiled output.
           key: nightly-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: nightly-${{ runner.os }}-cargo-
 
@@ -137,20 +182,25 @@ jobs:
         run: cargo build --release --locked --bin meow --bin meow-node
 
       - name: Package
+        # SUFFIX is passed via env: so the matrix value is never interpolated directly
+        # into the shell script body — safe even if the matrix were made dynamic.
+        env:
+          SUFFIX: ${{ matrix.suffix }}
         run: |
-          ARCHIVE="meow-${{ matrix.suffix }}.tar.gz"
+          ARCHIVE="meow-${SUFFIX}.tar.gz"
           # -C target/release changes into that directory before adding files,
           # so the archive contains `meow` and `meow-node` at the top level (no path prefix).
           tar -czf "$ARCHIVE" -C target/release meow meow-node
           # Write the archive name to GITHUB_ENV so the next step can reference it
           # without repeating the matrix suffix expansion.
-          echo "ARCHIVE=$ARCHIVE" >> $GITHUB_ENV
+          echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
 
       # --clobber replaces the asset if a previous partial run already uploaded it.
       - name: Upload to nightly release
         run: gh release upload nightly "$ARCHIVE" --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
 
   # ── checksums ─────────────────────────────────────────────────────────────────
   # Generate a SHA256 digest for every archive and publish it as checksums.txt.
@@ -166,7 +216,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Download all .tar.gz assets from the nightly release into the `archives/` folder.
-      # GH_REPO tells the gh CLI which repository to target (required outside a checkout).
+      # GH_REPO tells the gh CLI which repository to target — this job has no checkout
+      # step so the gh CLI cannot infer the repo from the git remote.
       - name: Download release archives
         run: gh release download nightly --pattern "*.tar.gz" --dir archives
         env:
@@ -183,6 +234,36 @@ jobs:
 
       - name: Upload checksums
         run: gh release upload nightly checksums.txt --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+
+  # ── cleanup-on-failure ────────────────────────────────────────────────────────
+  # Deletes the nightly release whenever build or checksums did not fully succeed
+  # (failed, cancelled, or skipped), so users never see a partial or
+  # checksum-less release.
+  #
+  # Why always() is required: without it GitHub Actions wraps the if: expression
+  # with an implicit success() check. When build fails, success() is false and
+  # the entire condition evaluates to false — the cleanup job is silently skipped,
+  # which is exactly the opposite of what we want.
+  #
+  # Why needs.prepare.result == 'success' is required: if prepare was skipped
+  # (because CI failed or the trigger came from a fork) no release was created,
+  # so there is nothing to clean up. Without this guard the job would call
+  # `gh release delete` on a release that does not exist.
+  cleanup-on-failure:
+    if: >-
+      always() &&
+      needs.prepare.result == 'success' &&
+      (needs.build.result != 'success' || needs.checksums.result != 'success')
+    needs: [prepare, build, checksums]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete partial nightly release
+        run: gh release delete nightly --yes --cleanup-tag || true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}

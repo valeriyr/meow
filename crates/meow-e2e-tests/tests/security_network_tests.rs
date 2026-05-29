@@ -126,7 +126,7 @@ async fn reusing_same_gas_coin_ref_is_forbidden() {
     let err = test_utils::sign_and_execute_expect_rejection(client, &keypair, tx2).await;
 
     assert!(
-        err.contains("invalid object reference") && err.contains("invalid version"),
+        err.contains("invalid_object_reference") && err.contains("invalid version"),
         "unexpected error: {err}"
     );
 }
@@ -185,7 +185,7 @@ async fn reusing_same_owned_object_input_ref_is_forbidden() {
     );
     let err = test_utils::sign_and_execute_expect_rejection(client, &keypair, transfer2_tx).await;
     assert!(
-        err.contains("invalid object reference") && err.contains("invalid version"),
+        err.contains("invalid_object_reference") && err.contains("invalid version"),
         "unexpected error: {err}"
     );
 }

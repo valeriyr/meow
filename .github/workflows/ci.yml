@@ -1,23 +1,26 @@
 # CI workflow for the meow workspace.
 #
 # GitHub Actions runs this file automatically on the events listed under `on:`.
-# Each job gets a fresh virtual machine (ubuntu-latest), checks out the repository,
-# and runs a sequence of steps. Jobs defined at the same level run in parallel
-# unless you add `needs:` dependencies between them.
+# Each job gets a fresh virtual machine and runs a sequence of steps. Most jobs
+# check out the repository first; the all-checks summary job is an exception —
+# it only inspects upstream job results and needs no source code. Jobs defined
+# at the same level run in parallel unless you add `needs:` dependencies.
 #
-# Three jobs run in parallel:
+# Four jobs run (some in parallel across platforms):
 #
-#   fmt     — verifies that all code is formatted with `rustfmt` (no compilation needed)
-#   clippy  — lints the full workspace with all features and test code enabled;
-#             any warning is treated as an error (-D warnings)
-#   test    — builds the workspace and runs the full test suite
+#   fmt        — verifies formatting with `rustfmt` (Linux only; output is platform-independent)
+#   clippy     — lints the full workspace on every target platform (matrix)
+#   test       — compiles and runs the full test suite on every target platform (matrix)
+#   all-checks — single summary job (display name: "All Checks") that passes only when
+#                all of the above pass; add "CI / All Checks" to branch protection rules
 #
 # fmt intentionally has no cache because it never compiles anything.
-# clippy and test share the same cache key so they can reuse each other's artifacts
-# across runs. The restore-key prefix (`<os>-cargo-`) allows a partial cache hit
-# when Cargo.lock changes: an older cache is still far faster than a cold build.
+# clippy and test share the same cache key per OS so they can reuse each other's
+# artifacts across runs. The restore-key prefix (`<os>-cargo-`) allows a partial
+# cache hit when Cargo.lock changes: an older cache is still far faster than a
+# cold build.
 
-name: Rust
+name: CI
 
 # Trigger conditions: run this workflow on every push to main and on every pull
 # request that targets main. Pull request runs use the merged commit so CI always
@@ -50,6 +53,9 @@ jobs:
   # Checks that every source file matches the output of `rustfmt`. Fails with a
   # diff if any file would be reformatted. We skip caching here because `fmt`
   # never compiles code, so there is nothing worth caching.
+  #
+  # Runs on Linux only — rustfmt output is identical across platforms, so there
+  # is no value in repeating this check on macOS.
   fmt:
     name: Format
     runs-on: ubuntu-latest
@@ -69,9 +75,18 @@ jobs:
   # Runs the Rust linter across the entire workspace. We enable all features
   # and include test code so that lints apply everywhere. `-D warnings` turns
   # every warning into a hard error, keeping the lint bar strict.
+  #
+  # The matrix runs this job on every platform we ship nightly binaries for,
+  # so platform-specific code paths are always covered by CI.
   clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
+    name: Clippy (${{ matrix.os }})
+    strategy:
+      # fail-fast: false lets the macOS job continue even if Linux fails, and
+      # vice-versa — both platforms report independently in the PR check panel.
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -87,6 +102,9 @@ jobs:
       # most-recent entry whose key starts with this prefix. The trailing `-`
       # makes it match `<os>-cargo-<any-hash>`, so you still get a warm cache
       # that contains most of the unchanged dependencies.
+      #
+      # ${{ runner.os }} expands to "Linux" or "macOS", keeping the caches
+      # separate so Linux and macOS artifacts never mix.
       - uses: actions/cache@v4
         with:
           path: |
@@ -104,12 +122,18 @@ jobs:
         run: cargo clippy --workspace --all-features --tests --locked -- -D warnings
 
   # ── test ───────────────────────────────────────────────────────────────────
-  # Compiles the workspace and then runs every test. Build and test are kept as
-  # separate steps so that a compilation failure is reported distinctly from a
-  # test failure in the GitHub Actions UI.
+  # Compiles the workspace and runs every test. `cargo test` handles compilation
+  # implicitly — a build failure surfaces as a failed test step.
+  #
+  # The matrix mirrors the clippy job: every platform we ship nightly binaries
+  # for is also tested in CI.
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,8 +149,43 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Build
-        run: cargo build --workspace --all-features --locked
-
       - name: Test
         run: cargo test --workspace --all-features --locked
+
+  # ── all-checks ────────────────────────────────────────────────────────────
+  # Summary job: passes only when every fmt, clippy, and test job passed.
+  #
+  # Why this exists: clippy and test run as a matrix, which means GitHub creates
+  # one status check per platform (e.g. "Clippy (ubuntu-latest)"). Branch
+  # protection rules would have to list every individual check and be updated
+  # whenever the platform matrix changes. This single `all-checks` job avoids that —
+  # add only "CI / All Checks" to your branch protection required checks and it
+  # covers all platforms automatically.
+  #
+  # The display name is "All Checks" (not "CI") so that GitHub shows it as
+  # "CI / All Checks" in the PR panel — avoiding the redundant "CI / CI" that
+  # would appear if the job name matched the workflow name.
+  #
+  # `if: always()` ensures this job runs even when upstream jobs are cancelled
+  # or failed — without it, a cancelled matrix job would leave `all-checks` as
+  # "skipped" rather than "failed", which branch protection treats as passing.
+  all-checks:
+    name: All Checks
+    if: always()
+    needs: [fmt, clippy, test]
+    runs-on: ubuntu-latest
+    steps:
+      # The step-level `if:` is evaluated as a native GitHub Actions expression —
+      # no shell interpolation needed. The step runs (and exits 1) when any upstream
+      # job failed, was cancelled, or was skipped; when all jobs succeed the step is
+      # skipped and the all-checks job exits 0. Note: a skipped upstream job also triggers
+      # exit 1 — this prevents a silently-skipped matrix leg from producing a
+      # false-green branch protection result.
+      - name: Check all jobs passed
+        if: >-
+          contains(needs.*.result, 'failure') ||
+          contains(needs.*.result, 'cancelled') ||
+          contains(needs.*.result, 'skipped')
+        run: |
+          echo "One or more jobs failed, were cancelled, or were skipped."
+          exit 1

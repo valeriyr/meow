@@ -65,14 +65,14 @@ The `type_` field is a tagged union. The two variants are:
 | Variant | Shape | Use |
 |---------|-------|-----|
 | `MeowCall` | `{ module, function, arguments }` | Call a function in a published module |
-| `MeowModulePublish` | `[<bytes>]` | Publish a new module (BCS-serialised bytes) |
+| `MeowModulePublish` | `[<bytes>]` | Publish a new module (BCS-serialized bytes) |
 
 Each entry in `arguments` is also a tagged union:
 
 | Variant | Shape | Use |
 |---------|-------|-----|
 | `Object` | `{ "Object": <ObjectRef> }` | Pass an on-chain object by reference |
-| `Raw` | `{ "Raw": [<bytes>] }` | Pass a BCS-serialised primitive value |
+| `Raw` | `{ "Raw": [<bytes>] }` | Pass a BCS-serialized primitive value |
 
 **Success (`202 Accepted`):** empty body.
 
@@ -84,6 +84,7 @@ Each entry in `arguments` is also a tagged union:
 | `400` | `invalid_object_reference` | Referenced object not found, wrong version, or wrong digest |
 | `409` | `duplicate_transaction` | Digest already in mempool |
 | `500` | `internal_error` | Unexpected error |
+| `503` | `mempool_full` | Mempool is at capacity (`MAX_MEMPOOL_SIZE` = 4 096 transactions) |
 
 ## POST /simulate-transaction
 

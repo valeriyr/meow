@@ -17,6 +17,12 @@ use crate::{mempool::error::MempoolError, store::Store};
 /// The result type related to the mempool.
 pub type Result<T> = std::result::Result<T, MempoolError>;
 
+/// Maximum number of transactions the mempool will hold at once.
+///
+/// Set to 16× [`MAX_TRANSACTIONS_PER_BLOCK`] so the pool can buffer roughly
+/// 16 blocks of pending work before it starts rejecting new submissions.
+pub const MAX_MEMPOOL_SIZE: usize = 4096;
+
 /// Pending transaction pool.
 ///
 /// Transactions are validated on submission and drained in FIFO order
@@ -63,6 +69,12 @@ impl Mempool {
 
         if self.seen.contains(&digest) {
             return Err(MempoolError::DuplicateTransaction { digest });
+        }
+
+        if self.pending.len() >= MAX_MEMPOOL_SIZE {
+            return Err(MempoolError::MempoolFull {
+                capacity: MAX_MEMPOOL_SIZE,
+            });
         }
 
         validate_against_store(signed_transaction.transaction(), store)?;

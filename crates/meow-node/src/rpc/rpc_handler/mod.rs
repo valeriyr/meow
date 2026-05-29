@@ -45,18 +45,21 @@ impl RpcHandler {
         let digest = signed_transaction.transaction().digest();
         let mut miner = self.miner.lock().await;
 
-        miner.submit_transaction(signed_transaction.clone())?;
-        tracing::debug!(%digest, "accepted transaction in local mempool");
+        if let Err(e) = miner.submit_transaction(signed_transaction.clone()) {
+            tracing::warn!(%digest, error = %e, "RPC transaction rejected");
+            return Err(e.into());
+        }
+        tracing::debug!(%digest, "RPC transaction accepted into mempool");
 
         // Serialize for gossip; local submission has already succeeded.
         match bcs::to_bytes(&signed_transaction) {
             Ok(data) => {
                 if let Err(e) = self.publish_transactions_tx.send(data) {
-                    tracing::warn!(%digest, error = %e, "failed to publish accepted transaction to gossip");
+                    tracing::warn!(%digest, error = %e, "failed to publish transaction to gossip");
                 }
             }
             Err(e) => {
-                tracing::warn!(%digest, error = %e, "failed to serialize accepted transaction for gossip");
+                tracing::warn!(%digest, error = %e, "failed to serialize transaction for gossip");
             }
         }
 

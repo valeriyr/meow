@@ -8,7 +8,7 @@
 
 A compact blockchain playground written in Rust.
 
-[![CI](https://github.com/valeriyr/meow/actions/workflows/rust.yml/badge.svg?branch=main&event=push)](https://github.com/valeriyr/meow/actions/workflows/rust.yml)
+[![CI](https://github.com/valeriyr/meow/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/valeriyr/meow/actions/workflows/ci.yml)
 [![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange?logo=rust)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 

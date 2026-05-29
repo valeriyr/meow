@@ -105,7 +105,7 @@ impl MiningWork {
                         executed_txs.push(signed_transaction.clone());
                     }
                     Err(e) => {
-                        tracing::warn!(tx_digest = %signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
+                        tracing::warn!(digest = %signed_transaction.transaction().digest(), error = %e, "transaction dropped during execution");
                     }
                 }
             }
