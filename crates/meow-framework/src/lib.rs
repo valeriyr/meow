@@ -11,16 +11,21 @@ use meow_types::{
 use meow_vm_adapter::builder;
 use meow_vm_types::module::Module;
 
-pub const MEOW_OBJECT_MODULE_PATH: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/modules/meow_object.meow");
+/// Source code of the `meow_object` system framework module, embedded at compile time.
+pub const MEOW_OBJECT_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/modules/meow_object.meow"
+));
 
-pub const MEOW_COIN_MODULE_PATH: &str =
-    concat!(env!("CARGO_MANIFEST_DIR"), "/modules/meow_coin.meow");
+/// Source code of the `meow_coin` system framework module, embedded at compile time.
+pub const MEOW_COIN_SOURCE: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/modules/meow_coin.meow"
+));
 
 /// Builds and returns the compiled `meow_object` framework module.
 pub fn meow_object_module() -> Module {
-    builder::build_from_file(MEOW_OBJECT_MODULE_PATH, &[])
-        .unwrap_or_else(|_| panic!("{MEOW_OBJECT_MODULE_PATH} must compile"))
+    builder::build(MEOW_OBJECT_SOURCE, &[]).expect("meow_object source must compile")
 }
 
 /// Builds and returns the compiled `meow_coin` framework module.
@@ -84,11 +89,11 @@ pub fn framework_module_objects() -> Vec<Object> {
 
 /// Builds the `meow_coin` module with the given `meow_object` module as a dependency.
 fn build_meow_coin(meow_object: &Module) -> Module {
-    builder::build_from_file(
-        MEOW_COIN_MODULE_PATH,
+    builder::build(
+        MEOW_COIN_SOURCE,
         &[(MEOW_OBJECT_MODULE_ADDRESS, meow_object)],
     )
-    .unwrap_or_else(|_| panic!("{MEOW_COIN_MODULE_PATH} must compile"))
+    .expect("meow_coin source must compile")
 }
 
 /// Wraps a compiled module as an on-chain module Object at the given address.

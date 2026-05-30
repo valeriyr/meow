@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use meow_framework::{MEOW_COIN_MODULE_PATH, MEOW_OBJECT_MODULE_PATH};
 use meow_types::{
     address::Address, config::NATIVE_FUNCTION_NAMES,
     system_framework::meow_object::MEOW_OBJECT_MODULE_ADDRESS,
@@ -385,3 +384,17 @@ fn defining_adapter_native_function_name_is_rejected() {
         );
     }
 }
+
+//
+// ─── Helpers ───
+//
+
+const MEOW_OBJECT_MODULE_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../meow-framework/modules/meow_object.meow"
+);
+
+const MEOW_COIN_MODULE_PATH: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../meow-framework/modules/meow_coin.meow"
+);
