@@ -13,8 +13,10 @@ pub enum KeyPairError {
     Ed25519ConsensusError(#[from] ed25519_consensus::Error),
     #[error("invalid derivation path: {path}")]
     InvalidDerivationPath { path: DerivationPath },
-    #[error("invalid signature scheme flag: {flag}")]
-    InvalidSignatureSchemeFlag { flag: u8 },
     #[error("invalid keypair bytes: {bytes:?}")]
     InvalidKeyPairBytes { bytes: Vec<u8> },
+    #[error("invalid mnemonic phrase: {0}")]
+    InvalidMnemonic(String),
+    #[error("invalid signature scheme flag: {flag}")]
+    InvalidSignatureSchemeFlag { flag: u8 },
 }

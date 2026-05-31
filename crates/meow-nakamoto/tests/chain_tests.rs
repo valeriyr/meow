@@ -804,8 +804,44 @@ fn get_transaction_returns_committed_transaction() {
     assert!(chain.get_transaction(&Digest::from([0xAA; 32])).is_none());
 }
 
+/// A transaction that was mined on an orphaned fork branch must not be
+/// returned by `get_transaction` after a reorg to a longer chain.
+#[test]
+fn get_transaction_returns_none_for_orphaned_fork_transaction() {
+    let (genesis_store, cs) = utils::coins(3);
+    let mut chain = utils::new_chain(genesis_store.clone());
+    let genesis_hash = chain.head();
+
+    // B1 at height 1 — becomes initial head.
+    let (b1, _) = make_valid_block(genesis_hash, &genesis_store, 1, 1, cs[0].0, &cs[0].1);
+    let b1_tx_digest = b1.transactions[0].transaction().digest();
+    assert_eq!(chain.apply_block(b1), Ok(true));
+
+    // A1 at height 1 — fork branch, does not displace B1.
+    let (a1, store_a1) = make_valid_block(genesis_hash, &genesis_store, 1, 2, cs[1].0, &cs[1].1);
+    let a1_tx_digest = a1.transactions[0].transaction().digest();
+    let a1_hash = a1.hash();
+    assert_eq!(chain.apply_block(a1), Ok(false));
+
+    // A2 at height 2 extending A1 — reorg: B1 becomes orphaned.
+    let (a2, _) = make_valid_block(a1_hash, &store_a1, 2, 3, cs[2].0, &cs[2].1);
+    let a2_tx_digest = a2.transactions[0].transaction().digest();
+    assert_eq!(chain.apply_block(a2), Ok(true));
+    assert_eq!(chain.head_height(), 2);
+
+    // B1's transaction is now on an orphaned branch — must not be found.
+    assert!(
+        chain.get_transaction(&b1_tx_digest).is_none(),
+        "orphaned fork transaction must not be returned after reorg"
+    );
+
+    // A1 and A2 are on the canonical chain — both must be found.
+    assert!(chain.get_transaction(&a1_tx_digest).is_some());
+    assert!(chain.get_transaction(&a2_tx_digest).is_some());
+}
+
 //
-// ─── commit ───
+// ─── get_transaction_result ───
 //
 
 /// Results recorded in a committed block must be retrievable by transaction digest.
@@ -826,6 +862,45 @@ fn committed_transaction_result_is_queryable() {
 
     assert!(chain.get_transaction_result(&tx_digest).is_some());
 }
+
+/// An execution result from an orphaned fork branch must not be returned
+/// by `get_transaction_result` after a reorg to a longer chain.
+#[test]
+fn get_transaction_result_returns_none_for_orphaned_fork_result() {
+    let (genesis_store, cs) = utils::coins(3);
+    let mut chain = utils::new_chain(genesis_store.clone());
+    let genesis_hash = chain.head();
+
+    // B1 at height 1 — initial head.
+    let (b1, _) = make_valid_block(genesis_hash, &genesis_store, 1, 1, cs[0].0, &cs[0].1);
+    let b1_tx_digest = b1.transactions[0].transaction().digest();
+    assert_eq!(chain.apply_block(b1), Ok(true));
+
+    // A1 at height 1 — fork.
+    let (a1, store_a1) = make_valid_block(genesis_hash, &genesis_store, 1, 2, cs[1].0, &cs[1].1);
+    let a1_tx_digest = a1.transactions[0].transaction().digest();
+    let a1_hash = a1.hash();
+    assert_eq!(chain.apply_block(a1), Ok(false));
+
+    // A2 at height 2 — triggers reorg, B1 becomes orphaned.
+    let (a2, _) = make_valid_block(a1_hash, &store_a1, 2, 3, cs[2].0, &cs[2].1);
+    let a2_tx_digest = a2.transactions[0].transaction().digest();
+    assert_eq!(chain.apply_block(a2), Ok(true));
+
+    // B1's result is on an orphaned branch — must not be found.
+    assert!(
+        chain.get_transaction_result(&b1_tx_digest).is_none(),
+        "orphaned fork result must not be returned after reorg"
+    );
+
+    // A1 and A2 are canonical — results must be found.
+    assert!(chain.get_transaction_result(&a1_tx_digest).is_some());
+    assert!(chain.get_transaction_result(&a2_tx_digest).is_some());
+}
+
+//
+// ─── commit ───
+//
 
 /// `commit` must panic when given an empty block — an empty block is a programmer error.
 #[test]

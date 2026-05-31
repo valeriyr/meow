@@ -46,6 +46,18 @@ impl KeyPair {
         }
     }
 
+    /// Recovers a keypair from a BIP-39 mnemonic phrase.
+    pub fn from_phrase(
+        phrase: &str,
+        scheme: SignatureScheme,
+        path: Option<DerivationPath>,
+    ) -> Result<Self> {
+        let mnemonic = bip39::Mnemonic::from_phrase(phrase, bip39::Language::English)
+            .map_err(|e| KeyPairError::InvalidMnemonic(e.to_string()))?;
+        let seed = bip39::Seed::new(&mnemonic, "");
+        Self::derive(seed.as_bytes(), scheme, path)
+    }
+
     /// Generates a keypair.
     pub fn generate(
         scheme: SignatureScheme,

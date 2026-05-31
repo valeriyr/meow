@@ -43,6 +43,50 @@ fn generate_multiple_keys_all_added_to_keystore() {
 }
 
 //
+// ─── Recover tests ───
+//
+
+#[test]
+fn recover_adds_key_to_keystore() {
+    let mut keystore = Keystore::in_memory();
+    let phrase = generate_phrase(&mut Keystore::in_memory());
+
+    recover(&mut keystore, phrase);
+
+    assert_eq!(keystore.iter().count(), 1);
+}
+
+#[test]
+fn recover_produces_same_address_as_generate() {
+    let mut ks1 = Keystore::in_memory();
+    let mut ks2 = Keystore::in_memory();
+
+    let phrase = generate_phrase(&mut ks1);
+    let original_addr = *ks1.iter().next().unwrap().0;
+
+    recover(&mut ks2, phrase);
+    let recovered_addr = *ks2.iter().next().unwrap().0;
+
+    assert_eq!(original_addr, recovered_addr);
+}
+
+#[test]
+fn recover_duplicate_phrase_returns_error() {
+    let mut keystore = Keystore::in_memory();
+    let phrase = generate_phrase(&mut keystore);
+
+    // Second recovery of the same phrase must fail — address already in keystore.
+    assert!(recover_result(&mut keystore, phrase).is_err());
+}
+
+#[test]
+fn recover_invalid_phrase_returns_error() {
+    let mut keystore = Keystore::in_memory();
+
+    assert!(recover_result(&mut keystore, "not a valid bip39 phrase".to_owned()).is_err());
+}
+
+//
 // ─── List tests ───
 //
 
@@ -143,4 +187,27 @@ fn generate_key(keystore: &mut Keystore) -> Address {
         }
         _ => panic!("expected Generate output"),
     }
+}
+
+fn generate_phrase(keystore: &mut Keystore) -> String {
+    match generate(keystore) {
+        KeyToolCommandOutput::Generate { phrase, .. } => phrase,
+        _ => panic!("expected Generate output"),
+    }
+}
+
+fn recover(keystore: &mut Keystore, phrase: String) -> KeyToolCommandOutput {
+    recover_result(keystore, phrase).expect("recover must succeed")
+}
+
+fn recover_result(
+    keystore: &mut Keystore,
+    phrase: String,
+) -> Result<KeyToolCommandOutput, anyhow::Error> {
+    KeyToolCommand::Recover {
+        scheme: SignatureScheme::Ed25519,
+        phrase: phrase.to_string(),
+        derivation_path: None,
+    }
+    .run(keystore)
 }

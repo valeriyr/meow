@@ -8,6 +8,50 @@ use rand::{SeedableRng, rngs::StdRng};
 const SEED: &str = "34e52ea12212a4b6ce7301eba2cbd9c089886ffb2af0c8835cd565106039a28d0319351451f493e4e9472f77d7ce4d910d552c5c4987e9600c5c436a93f59a24";
 /// A derivation path used in the tests.
 const DERIVATION_PATH: &str = "m/44'/9999'/0'/0'/0'";
+/// An invalid derivation path used in the tests.
+const INVALID_DERIVATION_PATH: &str = "m/44'/9999'/0'/0'/0";
+
+//
+// ─── Keypair generation tests ───
+//
+
+#[test]
+fn ed25519_keypair_generate() {
+    let (keypair, _phrase) = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
+}
+
+#[test]
+fn ed25519_keypair_generate_produces_unique_keypairs() {
+    let kp1 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    let kp2 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    assert_ne!(kp1, kp2);
+}
+
+#[test]
+fn ed25519_keypair_random() {
+    let keypair = KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0; 32]));
+
+    assert_eq!(
+        keypair.encode_base64(),
+        "AJv0mmoHVflTgR/OEl8mg9UEKcO7SeB0FH4AiaUurhVf"
+    );
+    assert_eq!(
+        serde_json::to_string(&keypair).unwrap(),
+        "\"AJv0mmoHVflTgR/OEl8mg9UEKcO7SeB0FH4AiaUurhVf\""
+    );
+
+    assert_eq!(
+        keypair.public().encode_base64(),
+        "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA="
+    );
+    assert_eq!(
+        keypair.public().encode_hex(),
+        "b9c6ee1630ef3e711144a648db06bbb2284f7274cfbee53ffcee503cc1a49200"
+    );
+
+    assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
+}
 
 //
 // ─── Keypair derivation tests ───
@@ -46,7 +90,7 @@ fn ed25519_keypair_derive() {
 #[test]
 fn ed25519_keypair_derive_with_invalid_derivation_path() {
     let seed = hex::decode(SEED).unwrap();
-    let path = DerivationPath::from_str("m/44'/9999'/0'/0'/0").unwrap();
+    let path = DerivationPath::from_str(INVALID_DERIVATION_PATH).unwrap();
 
     assert!(matches!(
         KeyPair::derive(&seed, SignatureScheme::Ed25519, Some(path)),
@@ -55,49 +99,45 @@ fn ed25519_keypair_derive_with_invalid_derivation_path() {
 }
 
 //
-// ─── Keypair generation tests ───
+// ─── Keypair recovery tests ───
 //
 
 #[test]
-fn ed25519_keypair_generate() {
-    let (keypair, _phrase) = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
-    assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
+fn from_phrase_recovers_matching_keypair() {
+    let (original, phrase) = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    let recovered = KeyPair::from_phrase(&phrase, SignatureScheme::Ed25519, None).unwrap();
+
+    assert_eq!(original, recovered);
 }
 
 #[test]
-fn ed25519_keypair_generate_produces_unique_keypairs() {
-    let kp1 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
-    let kp2 = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
-    assert_ne!(kp1, kp2);
+fn from_phrase_recovers_keypair_with_custom_derivation_path() {
+    let path = Some(DerivationPath::from_str(DERIVATION_PATH).unwrap());
+
+    let (original, phrase) =
+        KeyPair::generate(SignatureScheme::Ed25519, path.clone(), None).unwrap();
+    let recovered = KeyPair::from_phrase(&phrase, SignatureScheme::Ed25519, path).unwrap();
+
+    assert_eq!(original, recovered);
 }
 
-//
-// ─── Keypair random generation tests ───
-//
+#[test]
+fn from_phrase_invalid_derivation_path_returns_error() {
+    let (_, phrase) = KeyPair::generate(SignatureScheme::Ed25519, None, None).unwrap();
+    let path = Some(DerivationPath::from_str(INVALID_DERIVATION_PATH).unwrap());
+
+    assert!(matches!(
+        KeyPair::from_phrase(&phrase, SignatureScheme::Ed25519, path),
+        Err(KeyPairError::InvalidDerivationPath { .. })
+    ));
+}
 
 #[test]
-fn ed25519_keypair_random() {
-    let keypair = KeyPair::random(SignatureScheme::Ed25519, StdRng::from_seed([0; 32]));
-
-    assert_eq!(
-        keypair.encode_base64(),
-        "AJv0mmoHVflTgR/OEl8mg9UEKcO7SeB0FH4AiaUurhVf"
-    );
-    assert_eq!(
-        serde_json::to_string(&keypair).unwrap(),
-        "\"AJv0mmoHVflTgR/OEl8mg9UEKcO7SeB0FH4AiaUurhVf\""
-    );
-
-    assert_eq!(
-        keypair.public().encode_base64(),
-        "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA="
-    );
-    assert_eq!(
-        keypair.public().encode_hex(),
-        "b9c6ee1630ef3e711144a648db06bbb2284f7274cfbee53ffcee503cc1a49200"
-    );
-
-    assert_eq!(keypair.public().scheme(), SignatureScheme::Ed25519);
+fn from_phrase_invalid_phrase_returns_error() {
+    assert!(matches!(
+        KeyPair::from_phrase("not a valid mnemonic", SignatureScheme::Ed25519, None),
+        Err(KeyPairError::InvalidMnemonic(_))
+    ));
 }
 
 //

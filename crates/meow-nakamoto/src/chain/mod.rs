@@ -31,8 +31,6 @@ pub struct ChainState {
     blocks: BTreeMap<Digest, Block>,
     /// Object store state after applying each block (snapshot per block).
     snapshots: BTreeMap<Digest, Store>,
-    /// Fast lookup: transaction digest → execution result across all committed blocks.
-    results: BTreeMap<Digest, ExecutionResult>,
     /// Current best tip (block with the most accumulated PoW).
     head: Digest,
     /// PoW difficulty: minimum number of leading zero bits required in a block hash.
@@ -64,7 +62,6 @@ impl ChainState {
         Self {
             blocks,
             snapshots,
-            results: BTreeMap::new(),
             head: genesis_hash,
             difficulty,
             snapshot_depth,
@@ -121,7 +118,6 @@ impl ChainState {
         Ok(Self {
             blocks,
             snapshots,
-            results: BTreeMap::new(),
             head: block_hash,
             difficulty,
             snapshot_depth,
@@ -169,15 +165,23 @@ impl ChainState {
             .expect("head snapshot always exists")
     }
 
-    /// Look up an execution result by transaction digest.
+    /// Look up an execution result by transaction digest on the canonical chain only.
+    ///
+    /// Searching only the canonical chain prevents returning results from orphaned
+    /// fork branches, which may have different execution outcomes for the same digest.
     pub fn get_transaction_result(&self, digest: &Digest) -> Option<&ExecutionResult> {
-        self.results.get(digest)
+        self.canonical_chain()
+            .flat_map(|block| block.results.iter())
+            .find(|r| r.transaction_digest() == digest)
     }
 
-    /// Look up a committed transaction by digest, searching across all known blocks.
+    /// Look up a committed transaction by digest on the canonical chain only.
+    ///
+    /// Searching only the canonical chain prevents returning transactions from orphaned
+    /// fork branches, which would incorrectly signal to callers that the transaction
+    /// is confirmed when it has been reorged out.
     pub fn get_transaction(&self, digest: &Digest) -> Option<&SignedTransaction> {
-        self.blocks
-            .values()
+        self.canonical_chain()
             .flat_map(|block| block.transactions.iter())
             .find(|tx| tx.transaction().digest() == *digest)
     }
@@ -191,11 +195,6 @@ impl ChainState {
             .expect("commit called with structurally invalid block");
 
         let hash = block.hash();
-
-        for result in &block.results {
-            self.results
-                .insert(*result.transaction_digest(), result.clone());
-        }
 
         self.blocks.insert(hash, block);
         self.snapshots.insert(hash, new_store);
@@ -391,11 +390,6 @@ impl ChainState {
             return Err(ChainError::StateRootMismatch);
         }
 
-        for result in &recomputed_results {
-            self.results
-                .insert(*result.transaction_digest(), result.clone());
-        }
-
         self.blocks.insert(block_hash, block);
         self.snapshots.insert(block_hash, new_store);
 
@@ -430,12 +424,25 @@ impl ChainState {
 
     /// Returns all blocks at or above the given height.
     /// Order is not guaranteed — callers must sort if height order is required.
+    ///
+    /// Includes blocks on fork branches so that a syncing peer receives the full picture
+    /// and can apply them in order, letting chain-selection logic determine the canonical head.
     pub fn get_blocks_since(&self, height: u64) -> Vec<Block> {
         self.blocks
             .values()
             .filter(|b| b.header.height >= height)
             .cloned()
             .collect()
+    }
+
+    /// Iterator over blocks on the canonical chain from head to genesis (descending height).
+    fn canonical_chain(&self) -> impl Iterator<Item = &Block> {
+        let mut current = self.head();
+        std::iter::from_fn(move || {
+            let block = self.blocks.get(&current)?;
+            current = block.header.parent_hash;
+            Some(block)
+        })
     }
 }
 

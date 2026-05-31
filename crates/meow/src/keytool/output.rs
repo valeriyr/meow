@@ -21,6 +21,8 @@ pub struct KeyOutput {
 pub enum KeyToolCommandOutput {
     /// The generate command output.
     Generate { key: KeyOutput, phrase: String },
+    /// The recover command output.
+    Recover(KeyOutput),
     /// The list command output.
     List(Vec<KeyOutput>),
     /// The remove command output.

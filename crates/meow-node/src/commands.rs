@@ -26,7 +26,7 @@ pub const DEFAULT_NODE_URL: &str = "127.0.0.1:8600";
 /// The default gossip listen address.
 pub const DEFAULT_GOSSIP_LISTEN_ADDRESS: &str = "/ip4/0.0.0.0/tcp/0";
 /// The default PoW difficulty.
-const DEFAULT_DIFFICULTY: u32 = 8;
+const DEFAULT_DIFFICULTY: u32 = 20;
 /// The default batch size for mining rounds.
 const DEFAULT_BATCH_SIZE: u64 = 1;
 /// The default number of block snapshots to retain behind the chain head.

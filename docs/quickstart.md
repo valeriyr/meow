@@ -18,6 +18,12 @@ meow keytool generate ed25519
 
 The command prints the new address, public key, and a **mnemonic seed phrase**. Back up the seed phrase now — it is the only way to recover the key if the keystore file is lost. It will not be shown again.
 
+To restore a key from its seed phrase (12, 15, 18, 21, or 24 words):
+
+```bash
+meow keytool recover ed25519 "word1 word2 ... wordN"
+```
+
 Inspect the keystore:
 
 ```bash
@@ -60,7 +66,7 @@ meow-node run --genesis genesis.bin
 | `--bootstrap-peers` | _(none)_ | Multiaddr of an existing peer (repeatable) |
 | `--mdns-query-interval` | `300` | Seconds between mDNS re-query broadcasts |
 | `--check-explicit-peers-ticks` | `300` | Heartbeat ticks between reconnection attempts to explicit bootstrap peers |
-| `--difficulty` | `8` | Proof-of-work leading zero bits |
+| `--difficulty` | `20` | Proof-of-work leading zero bits |
 | `--miner-address` | _(none)_ | Address of the signing key to load from the keystore; if omitted, an ephemeral random keypair is used and rewards are lost on restart |
 | `--miner-reward-address` | _(miner address)_ | Address that receives block reward coins; defaults to the miner's own address |
 | `--keystore-path` | _(default path)_ | Path to the keystore file; requires `--miner-address` |
@@ -101,6 +107,24 @@ meow-node run --genesis genesis.bin \
 
 Once connected, node 2 detects any block height gap automatically and initiates a catch-up sync — pulling missing blocks for small gaps or fetching a full state snapshot for large ones. See [Networking — Catch-up sync](networking.md#catch-up-sync) for details.
 
+### Log verbosity
+
+The node logs `info` and above for meow crates and `warn` for everything else by default. Override this with the `RUST_LOG` environment variable:
+
+```bash
+# Default
+meow-node run --genesis genesis.bin
+
+# Debug level for all meow crates
+RUST_LOG=meow_node=debug,meow_nakamoto=debug,meow_gossip_network=debug \
+  meow-node run --genesis genesis.bin
+
+# Everything at debug level (very verbose)
+RUST_LOG=debug meow-node run --genesis genesis.bin
+```
+
+`RUST_LOG` accepts a comma-separated list of `target=level` directives. Valid levels are `error`, `warn`, `info`, `debug`, `trace`.
+
 ## 5. Query the Node
 
 See [RPC API](rpc.md) for the full response shapes and all available endpoints.
@@ -127,7 +151,7 @@ meow client get-block <BLOCK_DIGEST>
 # State snapshot at a given block
 meow client get-block-snapshot <BLOCK_DIGEST>
 
-# Current chain head digest
+# Digest of the current best block (use with get-block to inspect it)
 meow client get-chain-head
 ```
 

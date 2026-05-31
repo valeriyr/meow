@@ -1,4 +1,4 @@
-//! `meow keytool` commands: generate, derive, and inspect key pairs and addresses.
+//! `meow keytool` subcommands for managing key pairs in the keystore.
 
 pub mod output;
 
@@ -26,6 +26,16 @@ pub enum KeyToolCommand {
         #[arg(long)]
         word_length: Option<MnemonicType>,
     },
+    /// Recover a key from a BIP-39 mnemonic seed phrase.
+    Recover {
+        /// Key scheme to use (e.g. `ed25519`).
+        scheme: SignatureScheme,
+        /// BIP-39 mnemonic seed phrase (12, 15, 18, 21, or 24 words).
+        phrase: String,
+        /// BIP-32 derivation path (e.g. `m/44'/784'/0'/0'/0'`).
+        #[arg(long)]
+        derivation_path: Option<DerivationPath>,
+    },
     /// List all keys in the keystore (address, public key, and scheme).
     List,
     /// Remove a key from the keystore by address.
@@ -45,12 +55,23 @@ impl KeyToolCommand {
                 word_length,
             } => {
                 let (keypair, phrase) = KeyPair::generate(scheme, derivation_path, word_length)?;
-
                 let key = KeyOutput::from(&keypair);
 
                 keystore.add_key(keypair)?;
 
                 KeyToolCommandOutput::Generate { key, phrase }
+            }
+            KeyToolCommand::Recover {
+                scheme,
+                phrase,
+                derivation_path,
+            } => {
+                let keypair = KeyPair::from_phrase(&phrase, scheme, derivation_path)?;
+                let key = KeyOutput::from(&keypair);
+
+                keystore.add_key(keypair)?;
+
+                KeyToolCommandOutput::Recover(key)
             }
             KeyToolCommand::List => {
                 let keys = keystore
