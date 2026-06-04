@@ -10,7 +10,7 @@ A compact blockchain playground written in Rust.
 
 [![CI](https://github.com/valeriyr/meow/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/valeriyr/meow/actions/workflows/ci.yml)
 [![Rust 1.94+](https://img.shields.io/badge/rust-1.94%2B-orange?logo=rust)](https://www.rust-lang.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 </div>
 
@@ -82,4 +82,9 @@ crates/
 
 ## License
 
-[MIT](LICENSE)
+MEOW is free and open source. All code in this repository is dual-licensed under your choice of:
+
+- [MIT License](LICENSE-MIT)
+- [Apache License, Version 2.0](LICENSE-APACHE)
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this project shall be dual-licensed as above, without any additional terms or conditions.

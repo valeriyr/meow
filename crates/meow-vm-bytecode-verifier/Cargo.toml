@@ -1,9 +1,9 @@
 [package]
 name = "meow-vm-bytecode-verifier"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 description = "Bytecode verifier for MEOW VM modules — abstract interpretation before publish"
 
 [dependencies]

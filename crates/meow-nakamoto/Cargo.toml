@@ -1,9 +1,9 @@
 [package]
 name = "meow-nakamoto"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 description = "Nakamoto-consensus chain — block mining and chain management"
 
 [dependencies]

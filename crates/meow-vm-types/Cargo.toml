@@ -1,9 +1,9 @@
 [package]
 name = "meow-vm-types"
-version = "0.1.0"
-edition = "2024"
-license = "MIT"
-authors = ["Valerii Reutov <valeriy.reutov@gmail.com>"]
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
 description = "Shared types for the MEOW VM — values, types, config, and BCS utilities"
 
 [dependencies]
