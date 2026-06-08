@@ -1,8 +1,11 @@
 use std::str::FromStr;
 
 use meow_types::{
-    address::Address, config::NATIVE_FUNCTION_NAMES,
-    system_framework::meow_object::MEOW_OBJECT_MODULE_ADDRESS,
+    address::Address,
+    config::NATIVE_FUNCTION_NAMES,
+    system_framework::{
+        meow_coin::MEOW_COIN_MODULE_ADDRESS, meow_object::MEOW_OBJECT_MODULE_ADDRESS,
+    },
 };
 use meow_vm_adapter::builder::{self, MAX_SOURCE_SIZE, error::BuilderError};
 use meow_vm_types::identifier::RESERVED_FUNCTION_NAMES;
@@ -356,6 +359,41 @@ fn build_with_extra_undeclared_dep_is_accepted() {
     .unwrap();
 
     assert!(module.imports.is_empty());
+}
+
+#[test]
+fn meow_vm_transfer_on_cross_module_struct_rejected() {
+    // meow_vm_transfer only accepts structs defined in the calling module.
+    // Passing a meow_coin::MeowCoin (defined in meow_coin, not in this module) must
+    // be rejected at compile time with a clear error message.
+    let meow_object_mod = builder::build_from_file(MEOW_OBJECT_MODULE_PATH, &[]).unwrap();
+    let meow_coin_mod = builder::build_from_file(
+        MEOW_COIN_MODULE_PATH,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_mod)],
+    )
+    .unwrap();
+    let err = builder::build(
+        &format!(
+            r#"
+                mod test;
+
+                use meow_coin@{MEOW_COIN_MODULE_ADDRESS};
+
+                pub fn touch(coin: meow_coin::MeowCoin) {{
+                    meow_vm_transfer(coin, meow_vm_sender());
+                }}
+            "#
+        ),
+        &[
+            (MEOW_OBJECT_MODULE_ADDRESS, &meow_object_mod),
+            (MEOW_COIN_MODULE_ADDRESS, &meow_coin_mod),
+        ],
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, BuilderError::CompileError(e) if e.to_string().contains("expected a struct defined in this module")),
+        "unexpected error: {err}"
+    );
 }
 
 //

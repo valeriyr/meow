@@ -95,83 +95,6 @@ fn struct_literal_unknown_field_rejected() {
 }
 
 //
-// ─── Equality ───
-//
-
-#[test]
-fn equality_on_structs_compiles() {
-    utils::compile(
-        r#"
-            mod test;
-
-            struct Point { x: u64, y: u64 }
-
-            fn same(a: Point, b: Point) -> bool {
-                a == b
-            }
-        "#,
-    )
-    .expect("struct equality must compile");
-}
-
-#[test]
-fn equality_struct_vs_primitive_rejected() {
-    let cases = [
-        (
-            r#"
-                mod test;
-                
-                struct Point { x: u64 }
-                
-                fn bad(p: Point, n: u64) -> bool { p == n }
-            "#,
-            "Point",
-            "u64",
-        ),
-        (
-            r#"
-                mod test;
-                
-                struct Point { x: u64 }
-                
-                fn bad(p: Point, b: bool) -> bool { p == b }
-            "#,
-            "Point",
-            "bool",
-        ),
-    ];
-    for (src, expected_ty, found_ty) in cases {
-        let err = utils::compile(src).unwrap_err();
-        assert!(
-            matches!(&err, CompilerError::Message(msg)
-                if msg.contains("expected") && msg.contains(expected_ty) && msg.contains(found_ty)),
-            "expected type mismatch mentioning '{expected_ty}' and '{found_ty}', got: {err:?}"
-        );
-    }
-}
-
-#[test]
-fn equality_different_struct_types_rejected() {
-    let err = utils::compile(
-        r#"
-            mod test;
-
-            struct Point { x: u64, y: u64 }
-            struct Color { r: u64, g: u64, b: u64 }
-
-            fn bad(p: Point, c: Color) -> bool {
-                p == c
-            }
-        "#,
-    )
-    .unwrap_err();
-    assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("expected") && msg.contains("Point") && msg.contains("Color")),
-        "expected type mismatch error, got: {err:?}"
-    );
-}
-
-//
 // ─── Expressions ───
 //
 
@@ -228,6 +151,84 @@ fn unary_not_on_non_bool_rejected() {
         matches!(&err, CompilerError::Message(msg)
             if msg.contains("expected bool") && msg.contains("found u64")),
         "expected unary not type error, got: {err:?}"
+    );
+}
+
+//
+// ─── Equality ───
+//
+
+#[test]
+fn equality_on_structs_compiles() {
+    utils::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64, y: u64 }
+
+            fn same(a: Point, b: Point) -> bool {
+                a == b
+            }
+        "#,
+    )
+    .expect("struct equality must compile");
+}
+
+#[test]
+fn equality_struct_vs_primitive_rejected() {
+    let cases = [
+        (
+            r#"
+                mod test;
+
+                struct Point { x: u64 }
+
+                fn bad(p: Point, n: u64) -> bool { p == n }
+            "#,
+            "Point",
+            "u64",
+        ),
+        (
+            r#"
+                mod test;
+
+                struct Point { x: u64 }
+
+                fn bad(p: Point, b: bool) -> bool { p == b }
+            "#,
+            "Point",
+            "bool",
+        ),
+    ];
+    for (src, expected_ty, found_ty) in cases {
+        let err = utils::compile(src).unwrap_err();
+        assert!(
+            matches!(&err, CompilerError::Message(msg)
+                if msg.contains("expected") && msg.contains(expected_ty) && msg.contains(found_ty)),
+            "expected type mismatch mentioning '{expected_ty}' and '{found_ty}', got: {err:?}"
+        );
+    }
+}
+
+#[test]
+fn equality_different_struct_types_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64, y: u64 }
+            struct Color { r: u64, g: u64, b: u64 }
+
+            fn bad(p: Point, c: Color) -> bool {
+                p == c
+            }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("expected") && msg.contains("Point") && msg.contains("Color")),
+        "expected type mismatch error, got: {err:?}"
     );
 }
 
@@ -459,6 +460,83 @@ fn native_any_struct_param_with_primitive_rejected() {
             if msg.contains("expected a struct") && msg.contains("found u64")),
         "expected any-struct param type error, got: {err:?}"
     );
+}
+
+#[test]
+fn native_local_struct_param_with_primitive_rejected() {
+    let sig = NativeSig {
+        name: "consume".to_string(),
+        params: vec![NativeParam::LocalStruct],
+        return_type: None,
+    };
+    let err = Compiler::compile(
+        r#"
+            mod test;
+
+            fn bad() { consume(42); }
+        "#,
+        &[],
+        &[sig],
+        CompilerConfig::default(),
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("expected a struct defined in this module") && msg.contains("u64")),
+        "expected local-struct param type error, got: {err:?}"
+    );
+}
+
+#[test]
+fn native_local_struct_param_with_cross_module_struct_rejected() {
+    let sig = NativeSig {
+        name: "consume".to_string(),
+        params: vec![NativeParam::LocalStruct],
+        return_type: None,
+    };
+    let err = with_dep_and_sigs(
+        r#"
+            mod foreign;
+            
+            pub struct Token { value: u64 }
+        "#,
+        r#"
+            mod test;
+
+            use foreign@0xFD;
+
+            fn bad(t: foreign::Token) { consume(t); }
+        "#,
+        &[sig],
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("expected a struct defined in this module")),
+        "expected local-struct param rejection for cross-module struct, got: {err:?}"
+    );
+}
+
+#[test]
+fn native_local_struct_param_with_local_struct_accepted() {
+    let sig = NativeSig {
+        name: "consume".to_string(),
+        params: vec![NativeParam::LocalStruct],
+        return_type: None,
+    };
+    Compiler::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64, y: u64 }
+
+            fn f(p: Point) { consume(p); }
+        "#,
+        &[],
+        &[sig],
+        CompilerConfig::default(),
+    )
+    .expect("local struct must be accepted by LocalStruct param");
 }
 
 //

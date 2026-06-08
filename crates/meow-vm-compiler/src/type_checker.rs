@@ -287,7 +287,7 @@ impl<'m> TypeChecker<'m> {
                         }
                     },
                     NativeParam::LocalStruct => match actual {
-                        Type::Struct(n) if module_ref::parse_module_ref(n).is_none() => {}
+                        Type::Struct(n) if !module_ref::is_qualified(n) => {}
                         other => {
                             return Err(self.type_err(format!(
                                 "argument {} of '{name}': expected a struct defined in this module, found {}",

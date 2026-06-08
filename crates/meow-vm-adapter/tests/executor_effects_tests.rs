@@ -77,7 +77,7 @@ fn transferred_input_object_appears_in_changed_objects() {
                 use meow_coin@{MEOW_COIN_MODULE_ADDRESS};
 
                 pub fn touch(coin: meow_coin::MeowCoin) {{
-                    meow_vm_transfer(coin, meow_vm_sender());
+                    meow_coin::transfer(coin, meow_vm_sender());
                 }}
             "#
         ),
@@ -172,7 +172,7 @@ fn aborted_transaction_input_objects_not_in_effects() {
                 use meow_coin@{MEOW_COIN_MODULE_ADDRESS};
 
                 pub fn transfer_then_abort(coin: meow_coin::MeowCoin) {{
-                    meow_vm_transfer(coin, meow_vm_sender());
+                    meow_coin::transfer(coin, meow_vm_sender());
                     meow_vm_abort(false, 1, "abort");
                 }}
             "#

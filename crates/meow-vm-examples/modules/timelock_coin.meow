@@ -41,7 +41,7 @@ pub fn claim(lock: TimelockCoin) {
     meow_vm_abort(meow_vm_timestamp() >= unlock_time, 1, "Coin is still locked");
 
     let coin = meow_coin::from_balance(balance);
-    meow_vm_transfer(coin, meow_vm_sender());
+    meow_coin::transfer(coin, meow_vm_sender());
 }
 
 /// Transfers `lock` to a new owner.
