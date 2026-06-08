@@ -87,10 +87,12 @@ fn stack_merge_conflict_rejected() {
         Instruction::Return,          // 5
     ];
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::StackMergeConflict { .. }))
-    );
+    // JumpIfNot(3) at pc=1 → target=4; Jump(2) at pc=3 → target=5. Both branches merge at pc=5.
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::StackMergeConflict { function, join_pc }
+        if function == "f" && *join_pc == 5
+    )));
 }
 
 //
@@ -138,9 +140,13 @@ fn liveness_merge_conflict_rejected() {
         Instruction::Return, // ← join point
     ];
     let errs = utils::verify_errors(&module);
+    // JumpIfNot(4) at pc=1 → target=5 (Return). Coin in slot 0 consumed on true branch, not on false.
     assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::LivenessMergeConflict { slot: 0, .. })),
-        "expected LivenessMergeConflict, got: {errs:?}"
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::LivenessMergeConflict { function, slot: 0, join_pc }
+            if function == "dummy" && *join_pc == 5
+        )),
+        "expected LivenessMergeConflict(dummy, slot=0, join_pc=5), got: {errs:?}"
     );
 }

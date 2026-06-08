@@ -11,6 +11,60 @@ use meow_vm_types::{
 };
 
 //
+// ─── max_call_depth ───
+//
+
+#[test]
+fn call_depth_at_limit_succeeds() {
+    // Same module, limit = 2 — a (depth 0) → b (depth 1) fits within the limit.
+    let module = utils::compile(
+        r#"
+        mod depth_test;
+
+        fn b() -> u64 { 1 }
+
+        pub fn a() -> u64 { b() }
+    "#,
+    );
+
+    let vm = utils::vm_with_deps_and_config(
+        module,
+        HashMap::new(),
+        VmConfig::default().with_max_call_depth(2),
+    );
+    let mut gas = GasMeter::unlimited();
+    assert!(vm.call("a", vec![], &mut gas).is_ok());
+}
+
+#[test]
+fn call_depth_exceeding_limit_returns_error() {
+    // fn a calls fn b — depth-2 chain. With max_call_depth = 1, the call to b
+    // (depth 1) must fail since 1 >= limit of 1.
+    let module = utils::compile(
+        r#"
+        mod depth_test;
+
+        fn b() -> u64 { 1 }
+
+        pub fn a() -> u64 { b() }
+    "#,
+    );
+
+    let vm = utils::vm_with_deps_and_config(
+        module,
+        HashMap::new(),
+        VmConfig::default().with_max_call_depth(1),
+    );
+    let mut gas = GasMeter::unlimited();
+    let err = vm.call("a", vec![], &mut gas).unwrap_err();
+
+    assert!(
+        matches!(err, VmError::CallStackOverflow(1)),
+        "expected CallStackOverflow(1), got: {err:?}"
+    );
+}
+
+//
 // ─── max_dep_modules ───
 //
 
@@ -132,59 +186,5 @@ fn dep_count_exceeding_limit_returns_error() {
     assert!(
         matches!(err, VmError::TooManyDepModules(1)),
         "expected TooManyDepModules(1), got: {err:?}"
-    );
-}
-
-//
-// ─── max_call_depth ───
-//
-
-#[test]
-fn call_depth_at_limit_succeeds() {
-    // Same module, limit = 2 — a (depth 0) → b (depth 1) fits within the limit.
-    let module = utils::compile(
-        r#"
-        mod depth_test;
-
-        fn b() -> u64 { 1 }
-
-        pub fn a() -> u64 { b() }
-    "#,
-    );
-
-    let vm = utils::vm_with_deps_and_config(
-        module,
-        HashMap::new(),
-        VmConfig::default().with_max_call_depth(2),
-    );
-    let mut gas = GasMeter::unlimited();
-    assert!(vm.call("a", vec![], &mut gas).is_ok());
-}
-
-#[test]
-fn call_depth_exceeding_limit_returns_error() {
-    // fn a calls fn b — depth-2 chain. With max_call_depth = 1, the call to b
-    // (depth 1) must fail since 1 >= limit of 1.
-    let module = utils::compile(
-        r#"
-        mod depth_test;
-
-        fn b() -> u64 { 1 }
-
-        pub fn a() -> u64 { b() }
-    "#,
-    );
-
-    let vm = utils::vm_with_deps_and_config(
-        module,
-        HashMap::new(),
-        VmConfig::default().with_max_call_depth(1),
-    );
-    let mut gas = GasMeter::unlimited();
-    let err = vm.call("a", vec![], &mut gas).unwrap_err();
-
-    assert!(
-        matches!(err, VmError::CallStackOverflow(1)),
-        "expected CallStackOverflow(1), got: {err:?}"
     );
 }

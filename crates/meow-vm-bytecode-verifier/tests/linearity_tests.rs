@@ -64,9 +64,12 @@ fn param_struct_moved_to_local_slot_at_return_rejected() {
     ];
     let errs = utils::verify_errors(&module);
     assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
-        "expected UnconsumedStruct, got: {errs:?}"
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::UnconsumedStruct { function, slot }
+            if function == "dummy" && *slot == 1
+        )),
+        "expected UnconsumedStruct(dummy, slot=1), got: {errs:?}"
     );
 }
 
@@ -95,9 +98,12 @@ fn compiled_lose_function_rejected() {
     ];
     let errs = utils::verify_errors(&module);
     assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
-        "expected UnconsumedStruct, got: {errs:?}"
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::UnconsumedStruct { function, slot }
+            if function == "dummy" && *slot == 1
+        )),
+        "expected UnconsumedStruct(dummy, slot=1), got: {errs:?}"
     );
 }
 
@@ -122,9 +128,12 @@ fn struct_from_unpacked_tuple_unconsumed_at_return_rejected() {
     );
     let errs = utils::verify_errors(&module);
     assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::UnconsumedStruct { .. })),
-        "expected UnconsumedStruct when struct from unpacked tuple is not consumed, got: {errs:?}"
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::UnconsumedStruct { function, .. }
+            if function == "lose_from_tuple"
+        )),
+        "expected UnconsumedStruct(lose_from_tuple), got: {errs:?}"
     );
 }
 
@@ -205,10 +214,10 @@ fn pop_on_struct_rejected() {
         Instruction::Return,
     ];
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::PopOnStruct { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::PopOnStruct { function, .. } if function == "dummy"
+    )));
 }
 
 #[test]
@@ -232,10 +241,10 @@ fn dup_on_struct_rejected() {
         Instruction::Return,
     ];
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::DupOnStruct { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::DupOnStruct { function, .. } if function == "dummy"
+    )));
 }
 
 #[test]

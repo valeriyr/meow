@@ -58,7 +58,10 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
         let c = ctx.clone();
         NativeFnEntry {
             name: "meow_vm_transfer".to_string(),
-            params: vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
+            params: vec![
+                NativeParam::LocalStruct,
+                NativeParam::Concrete(Type::Address),
+            ],
             return_type: None,
             gas_cost: 20, // 20 gas — object ownership change writes to the execution context
             func: Box::new(move |mut args| {
@@ -165,7 +168,10 @@ fn native_sigs_with_id_type(id_type_name: &str) -> Vec<NativeSig> {
         },
         NativeSig {
             name: "meow_vm_transfer".to_string(),
-            params: vec![NativeParam::AnyStruct, NativeParam::Concrete(Type::Address)],
+            params: vec![
+                NativeParam::LocalStruct,
+                NativeParam::Concrete(Type::Address),
+            ],
             return_type: None,
         },
         NativeSig {

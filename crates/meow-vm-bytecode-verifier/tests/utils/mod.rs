@@ -85,5 +85,10 @@ fn test_natives() -> Vec<NativeSig> {
             params: vec![NativeParam::AnyStruct],
             return_type: None,
         },
+        NativeSig {
+            name: "consume_local_native".to_string(),
+            params: vec![NativeParam::LocalStruct],
+            return_type: None,
+        },
     ]
 }

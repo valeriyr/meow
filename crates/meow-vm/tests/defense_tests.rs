@@ -13,8 +13,36 @@ use meow_vm_types::{
     bytecode::Instruction,
     module::{Function, Module},
     module_ref,
-    types::{Type, Value},
+    types::{FieldDef, StructDef, Type, Value},
 };
+
+//
+// ─── SlotOverwrite ───
+//
+
+#[test]
+fn store_overwrites_live_struct_returns_slot_overwrite() {
+    // Slot 0 holds a live struct param; storing any value there without
+    // consuming it first is a resource leak. The verifier catches this statically.
+    let m = module_with_function(make_function(
+        "run",
+        vec![("s".to_string(), Type::Struct("S".to_string()))],
+        1,
+        vec![
+            Instruction::PushU64(42),
+            Instruction::Store(0), // slot 0 still holds the live struct
+        ],
+    ));
+    let s = Value::Struct {
+        type_name: module_ref::qualify(&Address::ZERO, "S"),
+        fields: vec![("x".to_string(), Value::U64(1))],
+    };
+    let err = utils::try_run(m, "run", vec![s]).unwrap_err();
+    assert!(
+        matches!(err, VmError::SlotOverwrite(0)),
+        "expected SlotOverwrite(0), got: {err:?}"
+    );
+}
 
 //
 // ─── StackUnderflow ───
@@ -76,18 +104,74 @@ fn store_field_empty_path_returns_type_error() {
 }
 
 //
-// ─── UndefinedVariable ───
+// ─── UndefinedField ───
 //
 
 #[test]
-fn load_out_of_range_slot_returns_undefined_variable() {
-    // local_count=0 allocates no slots; Load(5) is outside that range.
-    // The verifier's slot-bounds check would normally catch this.
-    let m = module_with_function(make_function("run", vec![], 0, vec![Instruction::Load(5)]));
-    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+fn get_field_missing_field_returns_undefined_field() {
+    // GetField("missing") on a struct that only has field "x".
+    // The verifier's field-access check would catch this statically.
+    let m = module_with_function(make_function(
+        "run",
+        vec![("s".to_string(), Type::Struct("S".to_string()))],
+        1,
+        vec![
+            Instruction::Load(0),
+            Instruction::GetField("missing".to_string()),
+        ],
+    ));
+    let struct_val = Value::Struct {
+        type_name: module_ref::qualify(&Address::ZERO, "S"),
+        fields: vec![("x".to_string(), Value::U64(1))],
+    };
+    let err = utils::try_run(m, "run", vec![struct_val]).unwrap_err();
     assert!(
-        matches!(err, VmError::UndefinedVariable(5)),
-        "expected UndefinedVariable(5), got: {err:?}"
+        matches!(err, VmError::UndefinedField { ref field, .. } if field == "missing"),
+        "expected UndefinedField {{ field: \"missing\", .. }}, got: {err:?}"
+    );
+}
+
+#[test]
+fn unpack_struct_with_mismatched_fields_returns_error() {
+    // Module defines Token { value: u64, extra: u64 }.
+    // The runtime value carries { amount: u64 } — different field name, fewer fields.
+    // The VM must return UndefinedField rather than panic.
+    let mut m = Module::new("defense_test");
+    m.structs.push(StructDef {
+        name: "Token".to_string(),
+        is_public: false,
+        fields: vec![
+            FieldDef {
+                name: "value".to_string(),
+                ty: Type::U64,
+            },
+            FieldDef {
+                name: "extra".to_string(),
+                ty: Type::U64,
+            },
+        ],
+    });
+    m.functions.push(make_function(
+        "run",
+        vec![("t".to_string(), Type::Struct("Token".to_string()))],
+        1,
+        vec![
+            Instruction::Load(0),
+            Instruction::UnpackStruct {
+                type_name: "Token".to_string(),
+                field_names: vec!["value".to_string(), "extra".to_string()],
+            },
+        ],
+    ));
+    // Values passed to the VM must carry the qualified type name; the module is at Address::ZERO.
+    let wrong_token = Value::Struct {
+        type_name: module_ref::qualify(&Address::ZERO, "Token"),
+        fields: vec![("amount".to_string(), Value::U64(100))],
+    };
+    let err = utils::try_run(m, "run", vec![wrong_token]).unwrap_err();
+    assert!(
+        matches!(err, VmError::UndefinedField { ref field, .. } if field == "extra"),
+        "expected UndefinedField {{ field: \"extra\", .. }}, got: {err:?}"
     );
 }
 
@@ -116,30 +200,93 @@ fn new_struct_unknown_type_returns_undefined_struct() {
 }
 
 //
-// ─── UndefinedField ───
+// ─── UndefinedVariable ───
 //
 
 #[test]
-fn get_field_missing_field_returns_undefined_field() {
-    // GetField("missing") on a struct that only has field "x".
-    // The verifier's field-access check would catch this statically.
+fn load_out_of_range_slot_returns_undefined_variable() {
+    // local_count=0 allocates no slots; Load(5) is outside that range.
+    // The verifier's slot-bounds check would normally catch this.
+    let m = module_with_function(make_function("run", vec![], 0, vec![Instruction::Load(5)]));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::UndefinedVariable(5)),
+        "expected UndefinedVariable(5), got: {err:?}"
+    );
+}
+
+//
+// ─── UseAfterMove ───
+//
+
+#[test]
+fn load_after_move_returns_use_after_move() {
+    // Load a struct param (consuming it), then Load the same slot again.
+    // The verifier's UseAfterMove check would catch this statically.
+    let m = module_with_function(make_function(
+        "run",
+        vec![("s".to_string(), Type::Struct("S".to_string()))],
+        1,
+        vec![
+            Instruction::Load(0), // moves s out of slot 0
+            Instruction::Load(0), // slot 0 is now None
+        ],
+    ));
+    let s = Value::Struct {
+        type_name: module_ref::qualify(&Address::ZERO, "S"),
+        fields: vec![("x".to_string(), Value::U64(1))],
+    };
+    let err = utils::try_run(m, "run", vec![s]).unwrap_err();
+    assert!(
+        matches!(err, VmError::UseAfterMove(ref msg) if msg.contains("slot 0")),
+        "expected UseAfterMove for slot 0, got: {err:?}"
+    );
+}
+
+#[test]
+fn load_field_after_move_returns_use_after_move() {
+    // Load a struct param (consuming it), then try LoadField on the now-dead slot.
     let m = module_with_function(make_function(
         "run",
         vec![("s".to_string(), Type::Struct("S".to_string()))],
         1,
         vec![
             Instruction::Load(0),
-            Instruction::GetField("missing".to_string()),
+            Instruction::LoadField(0, vec!["x".to_string()]),
         ],
     ));
-    let struct_val = Value::Struct {
+    let s = Value::Struct {
         type_name: module_ref::qualify(&Address::ZERO, "S"),
         fields: vec![("x".to_string(), Value::U64(1))],
     };
-    let err = utils::try_run(m, "run", vec![struct_val]).unwrap_err();
+    let err = utils::try_run(m, "run", vec![s]).unwrap_err();
     assert!(
-        matches!(err, VmError::UndefinedField { ref field, .. } if field == "missing"),
-        "expected UndefinedField {{ field: \"missing\", .. }}, got: {err:?}"
+        matches!(err, VmError::UseAfterMove(ref msg) if msg.contains("slot 0")),
+        "expected UseAfterMove for slot 0, got: {err:?}"
+    );
+}
+
+#[test]
+fn store_field_after_move_returns_use_after_move() {
+    // Load a struct param (consuming it), then try StoreField on the now-dead slot.
+    let m = module_with_function(make_function(
+        "run",
+        vec![("s".to_string(), Type::Struct("S".to_string()))],
+        1,
+        vec![
+            Instruction::Load(0),
+            Instruction::PushU64(42),
+            Instruction::StoreField(0, vec!["x".to_string()]),
+        ],
+    ));
+    let s = Value::Struct {
+        type_name: module_ref::qualify(&Address::ZERO, "S"),
+        fields: vec![("x".to_string(), Value::U64(1))],
+    };
+    let err = utils::try_run(m, "run", vec![s]).unwrap_err();
+    assert!(
+        matches!(err, VmError::UseAfterMove(ref msg) if msg.contains("slot 0")),
+        "expected UseAfterMove for slot 0, got: {err:?}"
     );
 }
 

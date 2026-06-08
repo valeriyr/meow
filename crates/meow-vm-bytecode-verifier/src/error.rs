@@ -39,6 +39,17 @@ pub enum VerificationError {
         limit: usize,
     },
 
+    #[error("struct '{struct_name}' is part of a cyclic field type definition")]
+    CyclicStructDefinition { struct_name: String },
+
+    #[error(
+        "field '{field_name}' in struct '{struct_name}' has a tuple type — only primitives and struct types are allowed as field types"
+    )]
+    TupleFieldType {
+        struct_name: String,
+        field_name: String,
+    },
+
     //
     // ─── Function limits ───
     //
@@ -111,8 +122,17 @@ pub enum VerificationError {
         local_count: u8,
     },
 
+    #[error("function '{function}' at pc {pc}: field path must not be empty")]
+    EmptyFieldPath { function: String, pc: usize },
+
     //
-    // ─── Struct shape ───
+    // ─── Type declarations ───
+    //
+    #[error("unresolved type '{type_name}' in {context}")]
+    UnresolvedTypeReference { context: String, type_name: String },
+
+    //
+    // ─── NewStruct / UnpackStruct instructions ───
     //
     #[error("function '{function}' at pc {pc}: NewStruct references unknown type '{type_name}'")]
     UndefinedStructType {

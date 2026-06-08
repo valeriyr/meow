@@ -374,7 +374,7 @@ These built-ins are always available and cannot be defined by user code. See [Ad
 | Function | Signature |
 |----------|-----------|
 | `meow_vm_fresh_id()` | `() → meow_object::Id` |
-| `meow_vm_transfer(obj, owner)` | `(struct, address) → void` |
+| `meow_vm_transfer(obj, owner)` | `(local struct, address) → void` |
 | `meow_vm_destroy(id)` | `(meow_object::Id) → void` |
 | `meow_vm_sender()` | `() → address` |
 | `meow_vm_rand()` | `() → u64` |

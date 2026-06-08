@@ -17,6 +17,10 @@ pub enum NativeParam {
     Concrete(Type),
     /// Accepts any struct value — used for natives that operate on arbitrary structs.
     AnyStruct,
+    /// Accepts any struct value whose type is defined in the current module (type name has no
+    /// cross-module qualifier). Used for natives that must only operate on module-local objects,
+    /// such as `meow_vm_transfer`.
+    LocalStruct,
 }
 
 //

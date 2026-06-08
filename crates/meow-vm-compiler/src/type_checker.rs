@@ -29,7 +29,7 @@ pub struct TypeChecker<'m> {
     source_structs: HashMap<String, StructInfo>,
     /// Concrete function signatures for local fns and dep-module fns.
     source_fns: HashMap<String, (Vec<Type>, Option<Type>)>,
-    /// Native function signatures; `NativeParam::AnyStruct` means "any struct accepted".
+    /// Native function signatures; see `NativeParam` variants for accepted types.
     native_fns: HashMap<String, (Vec<NativeParam>, Option<Type>)>,
     fn_name: &'m str,
     return_type: Option<Type>,
@@ -281,6 +281,16 @@ impl<'m> TypeChecker<'m> {
                         other => {
                             return Err(self.type_err(format!(
                                 "argument {} of '{name}': expected a struct, found {}",
+                                i + 1,
+                                type_display(other)
+                            )));
+                        }
+                    },
+                    NativeParam::LocalStruct => match actual {
+                        Type::Struct(n) if module_ref::parse_module_ref(n).is_none() => {}
+                        other => {
+                            return Err(self.type_err(format!(
+                                "argument {} of '{name}': expected a struct defined in this module, found {}",
                                 i + 1,
                                 type_display(other)
                             )));

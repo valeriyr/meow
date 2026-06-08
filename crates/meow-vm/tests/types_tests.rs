@@ -10,7 +10,7 @@ use meow_vm_types::{
 };
 
 //
-// ─── Address ───
+// ─── address ───
 //
 
 #[test]
@@ -124,7 +124,48 @@ fn address_equality() {
 }
 
 //
-// ─── String ───
+// ─── bool ───
+//
+
+#[test]
+fn bool_literal_true() {
+    let src = r#"
+        mod test;
+
+        pub fn yes() -> bool { true }
+    "#;
+    assert_eq!(utils::run(src, "yes", vec![]), Some(Value::Bool(true)));
+}
+
+#[test]
+fn bool_literal_false() {
+    let src = r#"
+        mod test;
+
+        pub fn no() -> bool { false }
+    "#;
+    assert_eq!(utils::run(src, "no", vec![]), Some(Value::Bool(false)));
+}
+
+#[test]
+fn bool_round_trip() {
+    let src = r#"
+        mod test;
+
+        pub fn identity(b: bool) -> bool { b }
+    "#;
+    assert_eq!(
+        utils::run(src, "identity", vec![Value::Bool(true)]),
+        Some(Value::Bool(true))
+    );
+    assert_eq!(
+        utils::run(src, "identity", vec![Value::Bool(false)]),
+        Some(Value::Bool(false))
+    );
+}
+
+//
+// ─── string ───
 //
 
 #[test]
@@ -176,4 +217,44 @@ fn string_passed_to_native() {
     let mut gas = GasMeter::unlimited();
     vm.call("send_msg", vec![], &mut gas).unwrap();
     assert_eq!(*received_ptr.lock().unwrap(), "hello from meow");
+}
+
+//
+// ─── u64 ───
+//
+
+#[test]
+fn u64_literal_return() {
+    let src = r#"
+        mod test;
+
+        pub fn answer() -> u64 { 42 }
+    "#;
+    assert_eq!(utils::run(src, "answer", vec![]), Some(Value::U64(42)));
+}
+
+#[test]
+fn u64_round_trip() {
+    let src = r#"
+        mod test;
+
+        pub fn identity(n: u64) -> u64 { n }
+    "#;
+    assert_eq!(
+        utils::run(src, "identity", vec![Value::U64(12345)]),
+        Some(Value::U64(12345))
+    );
+}
+
+#[test]
+fn u64_max_value_round_trip() {
+    let src = r#"
+        mod test;
+
+        pub fn identity(n: u64) -> u64 { n }
+    "#;
+    assert_eq!(
+        utils::run(src, "identity", vec![Value::U64(u64::MAX)]),
+        Some(Value::U64(u64::MAX))
+    );
 }

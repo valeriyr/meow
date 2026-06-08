@@ -102,10 +102,11 @@ fn not_on_empty_stack_rejected() {
         *code = vec![Instruction::Not, Instruction::Return];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::StackUnderflow { function, expected, .. }
+        if function == "f" && expected == "bool"
+    )));
 }
 
 //
@@ -154,10 +155,12 @@ fn compare_mismatched_types_rejected() {
         ];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::TypeMismatch { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        // Eq pops RHS then LHS; stack had [Bool(bottom), U64(top)] → expected=LHS=bool, found=RHS=u64
+        VerificationError::TypeMismatch { expected, found, .. }
+        if expected == "bool" && found == "u64"
+    )));
 }
 
 //
@@ -181,10 +184,13 @@ fn stack_underflow_on_add() {
         ];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        // Add iterates ["right operand", "left operand"]; right is on top and pops OK,
+        // then left has nothing → StackUnderflow with expected = "left operand".
+        VerificationError::StackUnderflow { function, expected, .. }
+        if function == "f" && expected == "left operand"
+    )));
 }
 
 #[test]
@@ -204,10 +210,11 @@ fn stack_underflow_on_pop() {
         ];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::StackUnderflow { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::StackUnderflow { function, expected, .. }
+        if function == "f" && expected == "any"
+    )));
 }
 
 //
@@ -227,10 +234,11 @@ fn wrong_return_type_rejected() {
         *code = vec![Instruction::PushBool(true), Instruction::Return];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::ReturnTypeMismatch { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::ReturnTypeMismatch { function, declared, found }
+        if function == "f" && declared == "u64" && found == "bool"
+    )));
 }
 
 #[test]
@@ -246,10 +254,11 @@ fn missing_return_detected() {
         *code = vec![Instruction::PushU64(1)];
     });
     let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::MissingReturn { .. }))
-    );
+    assert!(errs.iter().any(|e| matches!(
+        e,
+        VerificationError::MissingReturn { function }
+        if function == "f"
+    )));
 }
 
 //
@@ -370,4 +379,33 @@ fn native_wrong_arg_type_rejected() {
         e,
         VerificationError::NativeArgTypeMismatch { callee, .. } if callee == "meow_vm_abort"
     )));
+}
+
+#[test]
+fn native_any_struct_non_struct_arg_rejected() {
+    // consume_native (declared in utils::test_natives with NativeParam::AnyStruct)
+    // takes any struct; passing a u64 must be rejected.
+    let mut module = utils::compile(
+        r#"
+        mod m;
+
+        fn f() {}
+    "#,
+    );
+    utils::tamper(&mut module, "f", |code| {
+        *code = vec![
+            Instruction::PushU64(42), // not a struct
+            Instruction::Call("consume_native".to_string()),
+            Instruction::Return,
+        ];
+    });
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::NativeArgTypeMismatch { callee, arg_index: 0, .. }
+            if callee == "consume_native"
+        )),
+        "expected NativeArgTypeMismatch for consume_native arg 0, got: {errs:?}"
+    );
 }

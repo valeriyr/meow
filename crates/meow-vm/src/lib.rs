@@ -292,6 +292,11 @@ impl Vm {
                     if idx >= frame.locals.len() {
                         frame.locals.resize(idx + 1, None);
                     }
+                    if let Some(existing) = &frame.locals[idx]
+                        && existing.uses_move_semantics()
+                    {
+                        return Err(VmError::SlotOverwrite(slot));
+                    }
                     frame.locals[idx] = Some(v);
                 }
 

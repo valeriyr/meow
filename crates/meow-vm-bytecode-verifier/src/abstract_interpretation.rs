@@ -260,6 +260,9 @@ fn native_param_matches(param: &NativeParam, ty: &AbstractType) -> bool {
     match param {
         NativeParam::Concrete(t) => from_type(t) == *ty,
         NativeParam::AnyStruct => matches!(ty, AbstractType::Struct(_)),
+        NativeParam::LocalStruct => {
+            matches!(ty, AbstractType::Struct(n) if module_ref::parse_module_ref(n).is_none())
+        }
     }
 }
 
@@ -267,6 +270,7 @@ fn native_param_display(param: &NativeParam) -> String {
     match param {
         NativeParam::Concrete(t) => from_type(t).display_name(),
         NativeParam::AnyStruct => "any struct".to_string(),
+        NativeParam::LocalStruct => "local struct".to_string(),
     }
 }
 
@@ -385,6 +389,9 @@ pub(crate) fn check_function(
                     }
                     SlotState::Live(ty) => ty.clone(),
                 };
+                if path.is_empty() {
+                    continue; // structural phase already reported EmptyFieldPath
+                }
                 // Visibility check: only the root type matters (cross-module access is
                 // always blocked at the first step; inner fields are local struct types).
                 if let Some(mut err) = check_field_read_visibility(&root_ty, &path[0]) {
@@ -440,6 +447,10 @@ pub(crate) fn check_function(
                     }
                     SlotState::Live(ty) => ty.clone(),
                 };
+                if path.is_empty() {
+                    // structural phase already reported EmptyFieldPath; skip to avoid panic
+                    continue;
+                }
                 // Cross-module write check (root type only).
                 let root_name = match &root_ty {
                     AbstractType::Struct(n) => Some(n.clone()),
@@ -970,9 +981,20 @@ fn check_call(
         if let Some(dep_mod) = deps.get(&dep_addr)
             && let Some(callee) = dep_mod.get_function(callee_name)
         {
-            let return_type = callee.return_type.clone();
-            pop_and_check_params(&callee.params, name, pc, fn_name, state, errors);
-            push_return_type(return_type.as_ref(), state);
+            // Qualify all struct type names with the dep module address so the abstract
+            // interpreter can distinguish cross-module types from local types throughout
+            // the caller's function body.
+            let qualified_params: Vec<(String, meow_vm_types::types::Type)> = callee
+                .params
+                .iter()
+                .map(|(n, t)| (n.clone(), qualify_type(t, &dep_addr)))
+                .collect();
+            let qualified_return = callee
+                .return_type
+                .as_ref()
+                .map(|t| qualify_type(t, &dep_addr));
+            pop_and_check_params(&qualified_params, name, pc, fn_name, state, errors);
+            push_return_type(qualified_return.as_ref(), state);
             return;
         }
         errors.push(VerificationError::UndefinedFunction {
@@ -1143,5 +1165,18 @@ fn check_return(func: &Function, state: &AbstractState, errors: &mut Vec<Verific
                 slot: slot as u8,
             });
         }
+    }
+}
+
+/// Qualify all unqualified struct type names in `ty` with `addr`.
+/// Applied to params and return types of cross-module calls so the caller's
+/// abstract state can distinguish cross-module struct types from local ones.
+fn qualify_type(ty: &Type, addr: &Address) -> Type {
+    match ty {
+        Type::Struct(n) if module_ref::parse_module_ref(n).is_none() => {
+            Type::Struct(module_ref::qualify(addr, n))
+        }
+        Type::Tuple(types) => Type::Tuple(types.iter().map(|t| qualify_type(t, addr)).collect()),
+        other => other.clone(),
     }
 }

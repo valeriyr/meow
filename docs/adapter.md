@@ -131,7 +131,7 @@ Native functions are built into the runtime and cannot be defined by user code. 
 | Function | Signature | Gas | Description |
 |----------|-----------|----:|-------------|
 | `meow_vm_fresh_id()` | `() → meow_object::Id` | 10 | Allocates a new unique object identity derived from the transaction digest and a per-transaction counter. The returned `Id` must eventually be consumed by `meow_vm_transfer` (via the object that holds it) or `meow_vm_destroy`. |
-| `meow_vm_transfer(obj, owner)` | `(struct, address) → void` | 20 | Transfers ownership of `obj` to `owner`. Accepts any struct. If `obj` contains an `id: meow_object::Id` first field it is saved to the object store; otherwise execution aborts. |
+| `meow_vm_transfer(obj, owner)` | `(local struct, address) → void` | 20 | Transfers ownership of `obj` to `owner`. `obj` must be a struct defined in the calling module — cross-module struct types are rejected by the bytecode verifier. If `obj` contains an `id: meow_object::Id` first field it is saved to the object store; otherwise execution aborts. |
 | `meow_vm_destroy(id)` | `(meow_object::Id) → void` | 10 | Destroys the object identified by `id`. The object is removed from the store at the end of the transaction. |
 | `meow_vm_sender()` | `() → address` | 1 | Returns the 32-byte address of the transaction sender. |
 | `meow_vm_rand()` | `() → u64` | 10 | Returns the next value from the block's pseudo-random sequence. Deterministic across re-executions; seeded from the block's mining hash and the transaction digest. |
@@ -203,6 +203,10 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 - Local variable slot indices stay within `local_count`.
 - Jump offsets are forward-only and land on a valid instruction index.
 - Structs must have at least one field — empty structs are rejected.
+- All `Type::Struct` names in struct field types, function parameter types, and return types must resolve to a struct defined in the same module or a fully-qualified type from a registered dependency — unresolved type references are rejected.
+- Struct field type definitions must be acyclic — a struct cannot directly or transitively have a field of its own type.
+- Struct fields may not have tuple types — only primitives and struct types are allowed.
+- `LoadField` and `StoreField` instructions must specify a non-empty field path — an empty path is rejected.
 - `NewStruct` and `UnpackStruct` field lists exactly match the struct definition.
 - Cross-module `Call` targets are public functions.
 - Cross-module `NewStruct` and `UnpackStruct` are forbidden.

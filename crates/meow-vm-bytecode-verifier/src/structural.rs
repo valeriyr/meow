@@ -99,8 +99,24 @@ pub(crate) fn check_module(
                     context: format!("field in struct '{}'", s.name),
                 });
             }
+            if !field.ty.is_valid_field_type() {
+                errors.push(VerificationError::TupleFieldType {
+                    struct_name: s.name.clone(),
+                    field_name: field.name.clone(),
+                });
+            }
+            validate_type_ref(
+                &field.ty,
+                module,
+                deps,
+                &format!("field '{}' in struct '{}'", field.name, s.name),
+                &mut errors,
+            );
         }
     }
+
+    // Cyclic struct field type definitions
+    check_struct_cycles(module, &mut errors);
 
     // Duplicate function names
     let mut seen_fns = HashSet::new();
@@ -118,6 +134,26 @@ pub(crate) fn check_module(
             errors.push(VerificationError::DuplicateFunctionName {
                 name: f.name.clone(),
             });
+        }
+
+        // Param and return type reference validity
+        for (param_name, param_ty) in &f.params {
+            validate_type_ref(
+                param_ty,
+                module,
+                deps,
+                &format!("param '{}' of function '{}'", param_name, f.name),
+                &mut errors,
+            );
+        }
+        if let Some(ret_ty) = &f.return_type {
+            validate_type_ref(
+                ret_ty,
+                module,
+                deps,
+                &format!("return type of function '{}'", f.name),
+                &mut errors,
+            );
         }
 
         // Tuple return type arity
@@ -188,13 +224,19 @@ pub(crate) fn check_module(
                         });
                     }
                 }
-                Instruction::LoadField(slot, _) | Instruction::StoreField(slot, _) => {
+                Instruction::LoadField(slot, path) | Instruction::StoreField(slot, path) => {
                     if *slot >= f.local_count {
                         errors.push(VerificationError::SlotOutOfRange {
                             function: f.name.clone(),
                             pc,
                             slot: *slot,
                             local_count: f.local_count,
+                        });
+                    }
+                    if path.is_empty() {
+                        errors.push(VerificationError::EmptyFieldPath {
+                            function: f.name.clone(),
+                            pc,
                         });
                     }
                 }
@@ -333,4 +375,103 @@ pub(crate) fn check_module(
     }
 
     errors
+}
+
+/// Validate that every `Type::Struct` name in `ty` resolves to either a local
+/// struct defined in `module` or a fully-qualified `@0xHEX::Name` whose address
+/// is a registered import (and, when the dep module is available, whose struct
+/// name exists there).
+fn validate_type_ref(
+    ty: &Type,
+    module: &Module,
+    deps: &HashMap<Address, &Module>,
+    context: &str,
+    errors: &mut Vec<VerificationError>,
+) {
+    match ty {
+        Type::Bool | Type::U64 | Type::Address | Type::Str => {}
+        Type::Struct(name) => {
+            if let Some((dep_addr, struct_name)) = module_ref::parse_module_ref(name) {
+                if !module.imports.contains(&dep_addr) {
+                    errors.push(VerificationError::UnresolvedTypeReference {
+                        context: context.to_string(),
+                        type_name: name.clone(),
+                    });
+                } else if let Some(dep_mod) = deps.get(&dep_addr)
+                    && dep_mod.get_struct(struct_name).is_none()
+                {
+                    errors.push(VerificationError::UnresolvedTypeReference {
+                        context: context.to_string(),
+                        type_name: name.clone(),
+                    });
+                }
+                // dep not in the provided deps map → can't verify further, assume valid
+            } else if module.get_struct(name).is_none() {
+                errors.push(VerificationError::UnresolvedTypeReference {
+                    context: context.to_string(),
+                    type_name: name.clone(),
+                });
+            }
+        }
+        Type::Tuple(types) => {
+            for t in types {
+                validate_type_ref(t, module, deps, context, errors);
+            }
+        }
+    }
+}
+
+/// Detect cycles in struct field type references using DFS.
+///
+/// A cycle like `struct A { x: B }` + `struct B { y: A }` makes it impossible
+/// to construct either struct, but a hand-crafted module could express it. We
+/// reject it here so the abstract interpreter never has to reason about it.
+fn check_struct_cycles(module: &Module, errors: &mut Vec<VerificationError>) {
+    let local_structs: HashSet<String> = module.structs.iter().map(|s| s.name.clone()).collect();
+    let mut visiting = HashSet::<String>::new();
+    let mut visited = HashSet::<String>::new();
+
+    for s in &module.structs {
+        if !visited.contains(&s.name) {
+            struct_dfs(
+                &s.name,
+                module,
+                &local_structs,
+                &mut visiting,
+                &mut visited,
+                errors,
+            );
+        }
+    }
+}
+
+fn struct_dfs(
+    name: &str,
+    module: &Module,
+    local_structs: &HashSet<String>,
+    visiting: &mut HashSet<String>,
+    visited: &mut HashSet<String>,
+    errors: &mut Vec<VerificationError>,
+) {
+    visiting.insert(name.to_string());
+    if let Some(def) = module.get_struct(name) {
+        for field in &def.fields {
+            if let Type::Struct(ty_name) = &field.ty
+                && module_ref::parse_module_ref(ty_name).is_none()
+                && local_structs.contains(ty_name)
+            {
+                if visiting.contains(ty_name) {
+                    // ty_name is the ancestor in the current path — report it as
+                    // the struct whose definition is cyclic.
+                    errors.push(VerificationError::CyclicStructDefinition {
+                        struct_name: ty_name.clone(),
+                    });
+                } else if !visited.contains(ty_name) {
+                    struct_dfs(ty_name, module, local_structs, visiting, visited, errors);
+                }
+            }
+        }
+    }
+    visiting.remove(name);
+    visited.insert(name.to_string());
 }
