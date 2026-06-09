@@ -463,85 +463,23 @@ fn struct_destructuring_then_reconstruct() {
 //
 
 #[test]
-fn struct_eq() {
+fn primitive_tuple_eq_compiles_and_runs() {
     let src = r#"
         mod test;
 
-        struct Point { x: u64, y: u64 }
+        fn pair() -> (u64, bool) { (42, true) }
 
-        pub fn same(a: Point, b: Point) -> bool { a == b }
+        pub fn same() -> bool { pair() == pair() }
+        pub fn different() -> bool { (1, false) == (2, true) }
     "#;
-    let make = |x, y| Value::Struct {
-        type_name: qualify("Point"),
-        fields: vec![
-            ("x".to_string(), Value::U64(x)),
-            ("y".to_string(), Value::U64(y)),
-        ],
-    };
-    assert_eq!(
-        utils::run(src, "same", vec![make(3, 7), make(3, 7)]),
-        Some(Value::Bool(true))
-    );
-    assert_eq!(
-        utils::run(src, "same", vec![make(3, 7), make(3, 8)]),
-        Some(Value::Bool(false))
-    );
-}
+    let vm = utils::vm(utils::compile(src));
+    let mut gas = GasMeter::unlimited();
 
-#[test]
-fn struct_ne() {
-    let src = r#"
-        mod test;
+    let r = vm.call("same", vec![], &mut gas).unwrap();
+    assert_eq!(r.return_value, Some(Value::Bool(true)));
 
-        struct Point { x: u64, y: u64 }
-
-        pub fn different(a: Point, b: Point) -> bool { a != b }
-    "#;
-    let make = |x, y| Value::Struct {
-        type_name: qualify("Point"),
-        fields: vec![
-            ("x".to_string(), Value::U64(x)),
-            ("y".to_string(), Value::U64(y)),
-        ],
-    };
-    assert_eq!(
-        utils::run(src, "different", vec![make(1, 2), make(1, 3)]),
-        Some(Value::Bool(true))
-    );
-    assert_eq!(
-        utils::run(src, "different", vec![make(1, 2), make(1, 2)]),
-        Some(Value::Bool(false))
-    );
-}
-
-#[test]
-fn struct_eq_nested_compares_recursively() {
-    let src = r#"
-        mod test;
-
-        struct Inner { v: u64 }
-        struct Outer { inner: Inner }
-
-        pub fn same(a: Outer, b: Outer) -> bool { a == b }
-    "#;
-    let make = |v| Value::Struct {
-        type_name: qualify("Outer"),
-        fields: vec![(
-            "inner".to_string(),
-            Value::Struct {
-                type_name: qualify("Inner"),
-                fields: vec![("v".to_string(), Value::U64(v))],
-            },
-        )],
-    };
-    assert_eq!(
-        utils::run(src, "same", vec![make(42), make(42)]),
-        Some(Value::Bool(true))
-    );
-    assert_eq!(
-        utils::run(src, "same", vec![make(42), make(99)]),
-        Some(Value::Bool(false))
-    );
+    let r = vm.call("different", vec![], &mut gas).unwrap();
+    assert_eq!(r.return_value, Some(Value::Bool(false)));
 }
 
 //

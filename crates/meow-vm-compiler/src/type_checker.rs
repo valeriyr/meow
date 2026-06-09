@@ -236,6 +236,12 @@ impl<'m> TypeChecker<'m> {
                 Ok(Type::Bool)
             }
             BinOp::Eq | BinOp::Ne => {
+                if lty.is_linear() || rty.is_linear() {
+                    let linear_ty = if lty.is_linear() { &lty } else { &rty };
+                    return Err(self.type_err(format!(
+                        "'{linear_ty}': struct types and tuples containing structs cannot be compared with == or != — destructure and compare fields individually"
+                    )));
+                }
                 self.expect_type(&rty, &lty, "right operand of equality")?;
                 Ok(Type::Bool)
             }

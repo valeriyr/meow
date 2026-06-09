@@ -12,6 +12,11 @@ pub enum VmError {
     #[error("division by zero")]
     DivisionByZero,
 
+    #[error(
+        "'{0}': struct types and tuples containing structs cannot be compared with == or != — destructure and compare fields individually"
+    )]
+    EqOnLinearType(String),
+
     #[error("native function error: {0}")]
     NativeError(String),
 

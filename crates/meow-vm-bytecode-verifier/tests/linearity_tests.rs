@@ -4,7 +4,7 @@ use meow_vm_bytecode_verifier::VerificationError;
 use meow_vm_types::{bytecode::Instruction, types::Type};
 
 //
-// ─── Happy path: struct consumed by a function call ───
+// ─── Happy path ───
 //
 
 #[test]
@@ -24,12 +24,8 @@ fn struct_consumed_by_call_passes() {
     utils::verify_ok(&module);
 }
 
-//
-// ─── Param struct alive at Return (must be rejected) ───
-//
-
 #[test]
-fn param_struct_alive_at_return_passes() {
+fn param_struct_consumed_before_return_passes() {
     // A param struct that is consumed by destructuring before Return — verifier must pass.
     let module = utils::compile(
         r#"
@@ -44,57 +40,76 @@ fn param_struct_alive_at_return_passes() {
 }
 
 #[test]
-fn param_struct_moved_to_local_slot_at_return_rejected() {
-    // A param struct consumed from its slot (Load) and stored in a non-param
-    // local slot without being returned is an unconsumed struct.
-    // Use a void-param function as the base and craft the bytecode manually.
+fn struct_load_consumes_slot() {
+    // Structs use move semantics — loading a slot consumes it.
     let mut module = struct_module();
     let func = module
         .functions
         .iter_mut()
         .find(|f| f.name == "dummy")
         .unwrap();
-    // Manually make the function accept a Point param and move it to slot 1.
+    func.local_count = 1;
+    func.return_type = Some(Type::Struct("Point".to_string()));
+    func.code = vec![
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::Store(0),
+        Instruction::Load(0), // moves Point — slot 0 dead
+        Instruction::Return,  // returns the Point on the stack
+    ];
+    utils::verify_ok(&module);
+}
+
+//
+// ─── UnconsumedStruct ───
+//
+
+#[test]
+fn struct_unconsumed_in_local_slot_rejected() {
+    let mut module = struct_module();
+    let func = module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap();
+    func.local_count = 1;
+    func.code = vec![
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::Store(0),
+        Instruction::Return, // slot 0 still holds a live Point — resource leak
+    ];
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter()
+            .any(|e| matches!(e, VerificationError::UnconsumedStruct { slot: 0, .. }))
+    );
+}
+
+#[test]
+fn param_struct_moved_to_local_slot_rejected() {
+    // The compiler catches this pattern (fn lose(p: Point) { let q = p; }), but the
+    // verifier must also reject it as a defence-in-depth check.
+    let mut module = struct_module();
+    let func = module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap();
     func.params = vec![("p".to_string(), Type::Struct("Point".to_string()))];
     func.local_count = 2;
     func.code = vec![
         Instruction::Load(0),  // move Point out of param slot 0
         Instruction::Store(1), // into non-param local slot 1
         Instruction::Return,   // slot 1 still live — unconsumed struct
-    ];
-    let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter().any(|e| matches!(
-            e,
-            VerificationError::UnconsumedStruct { function, slot }
-            if function == "dummy" && *slot == 1
-        )),
-        "expected UnconsumedStruct(dummy, slot=1), got: {errs:?}"
-    );
-}
-
-//
-// ─── Unconsumed struct ───
-//
-
-#[test]
-fn compiled_lose_function_rejected() {
-    // Hand-craft: fn lose(p: Point) { let q = p; }
-    // Load(0)/Store(1) for `let q = p`, leaving Point alive in slot 1 at Return.
-    // The compiler now catches this at compile time, but the bytecode verifier must
-    // also catch it as a defence-in-depth check.
-    let mut module = struct_module();
-    let func = module
-        .functions
-        .iter_mut()
-        .find(|f| f.name == "dummy")
-        .unwrap();
-    func.params = vec![("p".to_string(), Type::Struct("Point".to_string()))];
-    func.local_count = 2;
-    func.code = vec![
-        Instruction::Load(0),  // move Point out of param slot 0 (consume param)
-        Instruction::Store(1), // store in local slot 1 — still live
-        Instruction::Return,   // slot 1 still holds Point — unconsumed
     ];
     let errs = utils::verify_errors(&module);
     assert!(
@@ -138,33 +153,8 @@ fn struct_from_unpacked_tuple_unconsumed_at_return_rejected() {
 }
 
 //
-// ─── Struct: move semantics ───
+// ─── UseAfterMove ───
 //
-
-#[test]
-fn struct_load_consumes_slot() {
-    // Structs use move semantics — loading a slot consumes it.
-    let mut module = struct_module();
-    let func = module
-        .functions
-        .iter_mut()
-        .find(|f| f.name == "dummy")
-        .unwrap();
-    func.local_count = 1;
-    func.return_type = Some(Type::Struct("Point".to_string()));
-    func.code = vec![
-        Instruction::PushU64(1),
-        Instruction::PushU64(2),
-        Instruction::NewStruct {
-            type_name: "Point".to_string(),
-            field_names: vec!["x".to_string(), "y".to_string()],
-        },
-        Instruction::Store(0),
-        Instruction::Load(0), // moves Point — slot 0 dead
-        Instruction::Return,  // returns the Point on the stack
-    ];
-    utils::verify_ok(&module);
-}
 
 #[test]
 fn struct_use_after_move_rejected() {
@@ -195,6 +185,10 @@ fn struct_use_after_move_rejected() {
     );
 }
 
+//
+// ─── Pop / Dup on struct ───
+//
+
 #[test]
 fn pop_on_struct_rejected() {
     let mut module = struct_module();
@@ -210,7 +204,7 @@ fn pop_on_struct_rejected() {
             type_name: "Point".to_string(),
             field_names: vec!["x".to_string(), "y".to_string()],
         },
-        Instruction::Pop, // rejected — structs are linear
+        Instruction::Pop, // rejected — structs have move semantics
         Instruction::Return,
     ];
     let errs = utils::verify_errors(&module);
@@ -237,7 +231,7 @@ fn dup_on_struct_rejected() {
             type_name: "Point".to_string(),
             field_names: vec!["x".to_string(), "y".to_string()],
         },
-        Instruction::Dup, // rejected — structs are linear
+        Instruction::Dup, // rejected — structs have move semantics
         Instruction::Return,
     ];
     let errs = utils::verify_errors(&module);
@@ -246,6 +240,179 @@ fn dup_on_struct_rejected() {
         VerificationError::DupOnStruct { function, .. } if function == "dummy"
     )));
 }
+
+//
+// ─── Eq / Ne on linear type ───
+//
+
+#[test]
+fn eq_on_primitives_passes() {
+    let module = utils::compile(
+        r#"
+        mod m;
+
+        fn f(a: u64, b: u64) -> bool { a == b }
+    "#,
+    );
+    utils::verify_ok(&module);
+}
+
+#[test]
+fn eq_on_primitive_tuple_passes() {
+    let module = utils::compile(
+        r#"
+        mod m;
+
+        fn pair() -> (u64, bool) { (1, true) }
+
+        fn f() -> bool { pair() == pair() }
+    "#,
+    );
+    utils::verify_ok(&module);
+}
+
+#[test]
+fn eq_on_struct_rejected() {
+    let mut module = struct_module();
+    module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap()
+        .code = vec![
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::PushU64(3),
+        Instruction::PushU64(4),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::Eq, // rejected — structs have move semantics
+        Instruction::Pop,
+        Instruction::Return,
+    ];
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::EqOnLinearType { function, .. } if function == "dummy"
+        )),
+        "expected EqOnLinearType, got: {errs:?}"
+    );
+}
+
+#[test]
+fn ne_on_struct_rejected() {
+    let mut module = struct_module();
+    module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap()
+        .code = vec![
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::PushU64(3),
+        Instruction::PushU64(4),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::Ne, // rejected — structs have move semantics
+        Instruction::Pop,
+        Instruction::Return,
+    ];
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::EqOnLinearType { function, .. } if function == "dummy"
+        )),
+        "expected EqOnLinearType, got: {errs:?}"
+    );
+}
+
+#[test]
+fn eq_struct_on_right_rejected() {
+    // struct is the right operand (pushed second); primitive is on the left
+    let mut module = struct_module();
+    module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap()
+        .code = vec![
+        Instruction::PushU64(99), // left operand — primitive
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        }, // right operand — struct
+        Instruction::Eq, // rejected — right operand has move semantics
+        Instruction::Pop,
+        Instruction::Return,
+    ];
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::EqOnLinearType { function, .. } if function == "dummy"
+        )),
+        "expected EqOnLinearType, got: {errs:?}"
+    );
+}
+
+#[test]
+fn eq_on_tuple_with_struct_rejected() {
+    // Craft bytecode directly — compiler rejects this before it reaches the verifier,
+    // so we bypass it to test the verifier layer independently.
+    let mut module = struct_module();
+    module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap()
+        .code = vec![
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::PushU64(0),
+        Instruction::MakeTuple(2), // (Point, u64) — contains a linear type
+        Instruction::PushU64(3),
+        Instruction::PushU64(4),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::PushU64(0),
+        Instruction::MakeTuple(2),
+        Instruction::Eq, // rejected — tuple contains a struct
+        Instruction::Pop,
+        Instruction::Return,
+    ];
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(e, VerificationError::EqOnLinearType { function, .. } if function == "dummy")),
+        "expected EqOnLinearType, got: {errs:?}"
+    );
+}
+
+//
+// ─── SlotOverwrite ───
+//
 
 #[test]
 fn struct_slot_overwrite_rejected() {
@@ -280,34 +447,8 @@ fn struct_slot_overwrite_rejected() {
     );
 }
 
-#[test]
-fn struct_unconsumed_in_local_slot_rejected() {
-    let mut module = struct_module();
-    let func = module
-        .functions
-        .iter_mut()
-        .find(|f| f.name == "dummy")
-        .unwrap();
-    func.local_count = 1;
-    func.code = vec![
-        Instruction::PushU64(1),
-        Instruction::PushU64(2),
-        Instruction::NewStruct {
-            type_name: "Point".to_string(),
-            field_names: vec!["x".to_string(), "y".to_string()],
-        },
-        Instruction::Store(0),
-        Instruction::Return, // slot 0 still holds a live Point — resource leak
-    ];
-    let errs = utils::verify_errors(&module);
-    assert!(
-        errs.iter()
-            .any(|e| matches!(e, VerificationError::UnconsumedStruct { slot: 0, .. }))
-    );
-}
-
 //
-// ─── Struct destructuring (UnpackStruct) ───
+// ─── UnpackStruct ───
 //
 
 #[test]
@@ -367,7 +508,7 @@ fn struct_unpack_consumes_slot() {
 }
 
 //
-// ─── Struct-typed field access (move semantics) ───
+// ─── Struct-typed field access ───
 //
 // LoadField / GetField on a struct-typed field creates an alias of the field
 // value while the parent struct stays in its slot — a linearity violation.

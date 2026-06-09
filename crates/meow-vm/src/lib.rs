@@ -1,6 +1,6 @@
 //! # meow-vm
 //!
-//! A stack-based virtual machine with move semantics for objects, native
+//! A stack-based virtual machine with move semantics for structs, native
 //! function support, and per-instruction gas metering.
 //!
 //! ## Types
@@ -269,7 +269,7 @@ impl Vm {
                         return Err(VmError::UndefinedVariable(slot));
                     }
                     let value = match &frame.locals[idx] {
-                        Some(v) if v.uses_move_semantics() => {
+                        Some(v) if v.is_linear() => {
                             // Struct: move out of slot (move semantics).
                             frame.locals[idx].take().unwrap()
                         }
@@ -293,7 +293,7 @@ impl Vm {
                         frame.locals.resize(idx + 1, None);
                     }
                     if let Some(existing) = &frame.locals[idx]
-                        && existing.uses_move_semantics()
+                        && existing.is_linear()
                     {
                         return Err(VmError::SlotOverwrite(slot));
                     }
@@ -367,11 +367,17 @@ impl Vm {
                 Instruction::Eq => {
                     let r = frame.pop()?;
                     let l = frame.pop()?;
+                    if l.is_linear() || r.is_linear() {
+                        return Err(VmError::EqOnLinearType(linear_type_name(&l, &r)));
+                    }
                     frame.push(Value::Bool(l == r));
                 }
                 Instruction::Ne => {
                     let r = frame.pop()?;
                     let l = frame.pop()?;
+                    if l.is_linear() || r.is_linear() {
+                        return Err(VmError::EqOnLinearType(linear_type_name(&l, &r)));
+                    }
                     frame.push(Value::Bool(l != r));
                 }
                 Instruction::Lt => {
@@ -735,6 +741,16 @@ fn write_field_path(mut current: &mut Value, path: &[String], val: Value) -> Res
             })?;
     entry.1 = val;
     Ok(())
+}
+
+/// Returns the display name of whichever operand is linear, for use in `EqOnLinearType`.
+fn linear_type_name(l: &Value, r: &Value) -> String {
+    let linear = if l.is_linear() { l } else { r };
+    match linear {
+        Value::Struct { type_name, .. } => type_name.clone(),
+        Value::Tuple(_) => "tuple".to_string(),
+        _ => unreachable!("is_linear() is only true for Struct and Tuple"),
+    }
 }
 
 /// Returns `true` if `l < r` (unsigned comparison).

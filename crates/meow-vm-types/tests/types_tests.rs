@@ -371,20 +371,62 @@ fn tuple_is_not_cross_module() {
 }
 
 //
-// ─── Value::uses_move_semantics ───
+// ─── Type::is_linear ───
 //
 
 #[test]
-fn value_uses_move_semantics_for_struct() {
+fn type_struct_is_linear() {
+    assert!(Type::Struct("Point".to_string()).is_linear());
+}
+
+#[test]
+fn type_primitives_are_not_linear() {
+    assert!(!Type::Bool.is_linear());
+    assert!(!Type::U64.is_linear());
+    assert!(!Type::Address.is_linear());
+    assert!(!Type::Str.is_linear());
+}
+
+#[test]
+fn type_tuple_with_struct_is_linear() {
+    assert!(Type::Tuple(vec![Type::Struct("Point".to_string()), Type::U64]).is_linear());
+}
+
+#[test]
+fn type_primitive_tuple_is_not_linear() {
+    assert!(!Type::Tuple(vec![Type::U64, Type::Bool]).is_linear());
+}
+
+#[test]
+fn type_nested_tuple_with_struct_is_linear() {
+    let inner = Type::Tuple(vec![Type::Struct("Point".to_string()), Type::U64]);
+    assert!(Type::Tuple(vec![inner, Type::Bool]).is_linear());
+}
+
+//
+// ─── Value::is_linear ───
+//
+
+#[test]
+fn value_is_linear_for_struct() {
     let val = Value::Struct {
         type_name: "Foo".to_string(),
         fields: vec![],
     };
-    assert!(val.uses_move_semantics());
+    assert!(val.is_linear());
 }
 
 #[test]
-fn value_uses_move_semantics_for_tuple_containing_struct() {
+fn value_is_not_linear_for_primitives() {
+    assert!(!Value::Bool(true).is_linear());
+    assert!(!Value::U64(0).is_linear());
+    assert!(!Value::Address(Address::ZERO).is_linear());
+    assert!(!Value::Str("x".to_string()).is_linear());
+    assert!(!Value::Void.is_linear());
+}
+
+#[test]
+fn value_is_linear_for_tuple_containing_struct() {
     let val = Value::Tuple(vec![
         Value::U64(1),
         Value::Struct {
@@ -392,20 +434,24 @@ fn value_uses_move_semantics_for_tuple_containing_struct() {
             fields: vec![],
         },
     ]);
-    assert!(val.uses_move_semantics());
+    assert!(val.is_linear());
 }
 
 #[test]
-fn value_does_not_use_move_semantics_for_primitives() {
-    assert!(!Value::Bool(true).uses_move_semantics());
-    assert!(!Value::U64(0).uses_move_semantics());
-    assert!(!Value::Address(Address::ZERO).uses_move_semantics());
-    assert!(!Value::Str("x".to_string()).uses_move_semantics());
-    assert!(!Value::Void.uses_move_semantics());
-}
-
-#[test]
-fn value_does_not_use_move_semantics_for_primitive_tuple() {
+fn value_is_not_linear_for_primitive_tuple() {
     let val = Value::Tuple(vec![Value::U64(1), Value::Bool(true)]);
-    assert!(!val.uses_move_semantics());
+    assert!(!val.is_linear());
+}
+
+#[test]
+fn value_is_linear_for_nested_tuple_containing_struct() {
+    let inner = Value::Tuple(vec![
+        Value::Struct {
+            type_name: "Foo".to_string(),
+            fields: vec![],
+        },
+        Value::U64(1),
+    ]);
+    let val = Value::Tuple(vec![inner, Value::Bool(true)]);
+    assert!(val.is_linear());
 }

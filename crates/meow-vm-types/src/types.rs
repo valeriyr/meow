@@ -60,6 +60,16 @@ impl Type {
         self.is_primitive() || matches!(self, Self::Struct(_))
     }
 
+    /// Returns `true` if this type has move semantics — structs always do; tuples do if any
+    /// element does. Primitives are always `false`.
+    pub fn is_linear(&self) -> bool {
+        match self {
+            Self::Struct(_) => true,
+            Self::Tuple(types) => types.iter().any(|t| t.is_linear()),
+            _ => false,
+        }
+    }
+
     /// Returns `true` if this is a struct type declared in a different module.
     pub fn is_cross_module(&self) -> bool {
         matches!(self, Self::Struct(name) if module_ref::is_qualified(name))
@@ -193,12 +203,12 @@ impl Value {
         self.field(name)?.as_address()
     }
 
-    /// Returns true if this value uses move semantics.
-    /// Structs always use move semantics. Tuples use move semantics if any element does.
-    pub fn uses_move_semantics(&self) -> bool {
+    /// Returns true if this value is linear (has move semantics).
+    /// Structs are always linear. Tuples are linear if any element is.
+    pub fn is_linear(&self) -> bool {
         match self {
             Self::Struct { .. } => true,
-            Self::Tuple(values) => values.iter().any(|v| v.uses_move_semantics()),
+            Self::Tuple(values) => values.iter().any(|v| v.is_linear()),
             _ => false,
         }
     }

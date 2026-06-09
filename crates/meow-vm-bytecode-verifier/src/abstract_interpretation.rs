@@ -53,6 +53,7 @@ impl AbstractType {
     }
 
     /// Returns true if this type is linear (Struct — must be explicitly consumed).
+    /// Tuples are linear if any element is linear.
     fn is_linear(&self) -> bool {
         match self {
             Self::Struct(_) => true,
@@ -527,6 +528,12 @@ pub(crate) fn check_function(
                             function: fn_name.clone(),
                             pc,
                             expected: "two comparable values".to_string(),
+                        });
+                    }
+                    (Some(lt), Some(rt)) if lt.is_linear() || rt.is_linear() => {
+                        errors.push(VerificationError::EqOnLinearType {
+                            function: fn_name.clone(),
+                            pc,
                         });
                     }
                     (Some(lt), Some(rt)) if lt != rt => {

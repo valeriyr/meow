@@ -216,7 +216,7 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 - Stack types tracked through every instruction and across branch join points.
 - Return type matches the declared return type.
 - Functions without a reachable `Return` are rejected.
-- **Struct linearity**: every struct follows move semantics — use-after-move, pop/dup/overwrite on struct slots, and unconsumed structs at `Return` are all errors.
+- **Struct linearity**: every struct follows move semantics — use-after-move, pop/dup/overwrite on struct slots, comparing structs or tuples containing structs with `==`/`!=`, and unconsumed structs at `Return` are all errors.
 - `GetField` on a struct that contains other struct-typed fields is rejected — consuming the struct to extract one primitive field would silently drop any remaining linear fields.
 - `LoadField` and `StoreField` on struct-typed fields are rejected — loading would produce an untracked linear value; storing would implicitly drop the old one.
 - Native call sites are type-checked against the adapter-supplied signatures.

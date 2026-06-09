@@ -159,59 +159,60 @@ fn unary_not_on_non_bool_rejected() {
 //
 
 #[test]
-fn equality_on_structs_compiles() {
+fn comparison_on_primitive_tuple_allowed() {
     utils::compile(
+        r#"
+            mod test;
+
+            fn pair() -> (u64, bool) { (1, true) }
+
+            fn check() -> bool { pair() == pair() }
+            fn check_ne() -> bool { pair() != pair() }
+        "#,
+    )
+    .expect("all-primitive tuple comparison must compile");
+}
+
+#[test]
+fn equality_on_structs_rejected() {
+    let err = utils::compile(
         r#"
             mod test;
 
             struct Point { x: u64, y: u64 }
 
-            fn same(a: Point, b: Point) -> bool {
-                a == b
-            }
+            fn same(a: Point, b: Point) -> bool { a == b }
         "#,
     )
-    .expect("struct equality must compile");
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'Point'") && msg.contains("cannot be compared with ==")),
+        "expected struct equality rejection with type name, got: {err:?}"
+    );
 }
 
 #[test]
-fn equality_struct_vs_primitive_rejected() {
-    let cases = [
-        (
-            r#"
-                mod test;
+fn inequality_on_structs_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
 
-                struct Point { x: u64 }
+            struct Point { x: u64, y: u64 }
 
-                fn bad(p: Point, n: u64) -> bool { p == n }
-            "#,
-            "Point",
-            "u64",
-        ),
-        (
-            r#"
-                mod test;
-
-                struct Point { x: u64 }
-
-                fn bad(p: Point, b: bool) -> bool { p == b }
-            "#,
-            "Point",
-            "bool",
-        ),
-    ];
-    for (src, expected_ty, found_ty) in cases {
-        let err = utils::compile(src).unwrap_err();
-        assert!(
-            matches!(&err, CompilerError::Message(msg)
-                if msg.contains("expected") && msg.contains(expected_ty) && msg.contains(found_ty)),
-            "expected type mismatch mentioning '{expected_ty}' and '{found_ty}', got: {err:?}"
-        );
-    }
+            fn different(a: Point, b: Point) -> bool { a != b }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'Point'") && msg.contains("cannot be compared with ==")),
+        "expected struct inequality rejection with type name, got: {err:?}"
+    );
 }
 
 #[test]
-fn equality_different_struct_types_rejected() {
+fn equality_on_different_struct_types_rejected() {
+    // Two DIFFERENT struct types: without the linear check, this would give TypeMismatch
+    // (Point ≠ Color) and not EqOnLinearType. Tests that the linear check fires first.
     let err = utils::compile(
         r#"
             mod test;
@@ -219,16 +220,72 @@ fn equality_different_struct_types_rejected() {
             struct Point { x: u64, y: u64 }
             struct Color { r: u64, g: u64, b: u64 }
 
-            fn bad(p: Point, c: Color) -> bool {
-                p == c
-            }
+            fn bad(p: Point, c: Color) -> bool { p == c }
         "#,
     )
     .unwrap_err();
     assert!(
-        matches!(&err, CompilerError::Message(msg)
-            if msg.contains("expected") && msg.contains("Point") && msg.contains("Color")),
-        "expected type mismatch error, got: {err:?}"
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'Point'") && msg.contains("cannot be compared with ==")),
+        "expected EqOnLinearType for different struct types, got: {err:?}"
+    );
+}
+
+#[test]
+fn equality_struct_on_right_rejected() {
+    // struct on the right side — must give the struct-comparison error, not a type mismatch
+    let err = utils::compile(
+        r#"
+            mod test;
+
+            struct Point { x: u64 }
+
+            fn bad(n: u64, p: Point) -> bool { n == p }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'Point'") && msg.contains("cannot be compared with ==")),
+        "expected struct comparison rejection with type name, got: {err:?}"
+    );
+}
+
+#[test]
+fn equality_on_tuple_containing_struct_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+
+            struct Item { value: u64 }
+
+            fn pair(i: Item) -> (Item, u64) { (i, 1) }
+
+            fn bad(a: Item, b: Item) -> bool { pair(a) == pair(b) }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'(Item, u64)'") && msg.contains("cannot be compared with ==")),
+        "expected struct-containing tuple rejection with type name, got: {err:?}"
+    );
+}
+
+#[test]
+fn inequality_on_tuple_containing_struct_rejected() {
+    let err = utils::compile(
+        r#"
+            mod test;
+
+            struct Item { value: u64 }
+
+            fn pair(i: Item) -> (Item, u64) { (i, 1) }
+
+            fn bad(a: Item, b: Item) -> bool { pair(a) != pair(b) }
+        "#,
+    )
+    .unwrap_err();
+    assert!(
+        matches!(&err, CompilerError::Message(msg) if msg.contains("'(Item, u64)'") && msg.contains("cannot be compared with ==")),
+        "expected struct-containing tuple rejection with type name, got: {err:?}"
     );
 }
 

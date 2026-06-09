@@ -17,6 +17,158 @@ use meow_vm_types::{
 };
 
 //
+// ─── EqOnLinearType ───
+//
+
+#[test]
+fn eq_on_struct_returns_eq_on_linear_type() {
+    // Two struct values on the stack; Eq instruction fires VmError::EqOnLinearType.
+    // The bytecode verifier would normally catch this statically.
+    let m = point_module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::Eq,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::EqOnLinearType(ref name) if name.contains("Point")),
+        "expected EqOnLinearType(Point), got: {err:?}"
+    );
+}
+
+#[test]
+fn ne_on_struct_returns_eq_on_linear_type() {
+    // Same as above but with the Ne instruction.
+    let m = point_module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(3),
+            Instruction::PushU64(4),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::PushU64(3),
+            Instruction::PushU64(4),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::Ne,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::EqOnLinearType(ref name) if name.contains("Point")),
+        "expected EqOnLinearType(Point), got: {err:?}"
+    );
+}
+
+#[test]
+fn eq_on_struct_on_right_returns_eq_on_linear_type() {
+    // Left operand is a primitive, right operand is a struct; the VM must still
+    // fire EqOnLinearType and report the right operand's type name.
+    let m = point_module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(99),
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::Eq,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::EqOnLinearType(ref name) if name.contains("Point")),
+        "expected EqOnLinearType(Point), got: {err:?}"
+    );
+}
+
+#[test]
+fn ne_on_struct_on_right_returns_eq_on_linear_type() {
+    // Left operand is a primitive, right operand is a struct; Ne must also fire.
+    let m = point_module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(99),
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::Ne,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::EqOnLinearType(ref name) if name.contains("Point")),
+        "expected EqOnLinearType(Point), got: {err:?}"
+    );
+}
+
+#[test]
+fn eq_on_tuple_containing_struct_returns_eq_on_linear_type() {
+    // A tuple that wraps a struct is itself linear; Eq on it fires VmError::EqOnLinearType.
+    let m = point_module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            // (Point { x:1, y:2 }, 42)
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::PushU64(42),
+            Instruction::MakeTuple(2),
+            // identical second tuple
+            Instruction::PushU64(1),
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Point".to_string(),
+                field_names: vec!["x".to_string(), "y".to_string()],
+            },
+            Instruction::PushU64(42),
+            Instruction::MakeTuple(2),
+            Instruction::Eq,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::EqOnLinearType(ref name) if name == "tuple"),
+        "expected EqOnLinearType(tuple), got: {err:?}"
+    );
+}
+
+//
 // ─── SlotOverwrite ───
 //
 
@@ -312,6 +464,26 @@ fn make_function(
 
 fn module_with_function(function: Function) -> Module {
     let mut module = Module::new("defense_test");
+    module.functions.push(function);
+    module
+}
+
+fn point_module_with_function(function: Function) -> Module {
+    let mut module = Module::new("defense_test");
+    module.structs.push(StructDef {
+        name: "Point".to_string(),
+        is_public: true,
+        fields: vec![
+            FieldDef {
+                name: "x".to_string(),
+                ty: Type::U64,
+            },
+            FieldDef {
+                name: "y".to_string(),
+                ty: Type::U64,
+            },
+        ],
+    });
     module.functions.push(function);
     module
 }

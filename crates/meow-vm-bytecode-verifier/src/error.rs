@@ -278,6 +278,11 @@ pub enum VerificationError {
     DupOnStruct { function: String, pc: usize },
 
     #[error(
+        "function '{function}' at pc {pc}: struct types and tuples containing structs cannot be compared with == or != — destructure and compare fields individually"
+    )]
+    EqOnLinearType { function: String, pc: usize },
+
+    #[error(
         "function '{function}' at pc {pc}: Store overwrites live struct in slot {slot} — consume the existing value first"
     )]
     SlotOverwrite {
