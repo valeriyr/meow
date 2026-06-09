@@ -142,9 +142,9 @@ pub enum VerificationError {
     },
 
     #[error(
-        "function '{function}' at pc {pc}: NewStruct field list for '{type_name}' does not match definition"
+        "function '{function}' at pc {pc}: field list for '{type_name}' does not match definition"
     )]
-    NewStructFieldMismatch {
+    StructFieldMismatch {
         function: String,
         pc: usize,
         type_name: String,
@@ -161,9 +161,9 @@ pub enum VerificationError {
     },
 
     #[error(
-        "function '{function}' at pc {pc}: cross-module construction of type '{type_name}' is forbidden"
+        "function '{function}' at pc {pc}: cross-module struct access for type '{type_name}' is forbidden"
     )]
-    CrossModuleStructConstruction {
+    CrossModuleStructAccess {
         function: String,
         pc: usize,
         type_name: String,

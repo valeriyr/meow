@@ -836,9 +836,40 @@ fn new_struct_field_mismatch_rejected() {
     assert!(
         errs.iter().any(|e| matches!(
             e,
-            VerificationError::NewStructFieldMismatch { type_name, .. } if type_name == "S"
+            VerificationError::StructFieldMismatch { type_name, .. } if type_name == "S"
         )),
         "NewStruct with wrong field list must be rejected, got: {errs:?}"
+    );
+}
+
+#[test]
+fn unpack_struct_field_mismatch_rejected() {
+    let mut module = utils::compile(
+        r#"
+        mod m;
+
+        struct S { x: u64 }
+
+        fn consume(s: S) -> u64 {
+            let S { x } = s;
+            x
+        }
+    "#,
+    );
+    utils::tamper(&mut module, "consume", |code| {
+        for instr in code.iter_mut() {
+            if let Instruction::UnpackStruct { field_names, .. } = instr {
+                *field_names = vec!["wrong_field".to_string()];
+            }
+        }
+    });
+    let errs = utils::verify_errors(&module);
+    assert!(
+        errs.iter().any(|e| matches!(
+            e,
+            VerificationError::StructFieldMismatch { type_name, .. } if type_name == "S"
+        )),
+        "UnpackStruct with wrong field list must be rejected, got: {errs:?}"
     );
 }
 

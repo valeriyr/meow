@@ -31,7 +31,7 @@ The executor bridges chain-level transactions to the VM. Its three entry points 
 **`MeowCall`** — calls a named `pub fn` in a published module:
 
 1. Resolves the module and its declared dependency modules from `inputs`.
-2. Resolves call arguments — object args are matched by `ObjectRef`, raw args are BCS-decoded to their declared types.
+2. Resolves call arguments — object args are matched by `ObjectRef` and must be address-owned by the sender; raw args are BCS-decoded to their declared types.
 3. Rejects the call if the function's return type contains a struct (structs must be consumed within the call).
 4. Builds the execution context and native functions, then runs the VM.
 5. Collects object effects (created / changed / destroyed) into an `ExecutionResult`.

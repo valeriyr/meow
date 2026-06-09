@@ -125,7 +125,7 @@ let Point { x, y } = p;         // binds x and y
 let Hero { id, .. } = hero;     // binds id, discards the rest
 ```
 
-`..` discards unbound fields. After destructuring, the original binding is consumed and no longer accessible.
+`..` discards unbound fields. After destructuring, the original binding is consumed and no longer accessible. `..` cannot discard struct-typed fields — if a field's type is a struct, it must be explicitly bound. Silently dropping a struct value is a compile error.
 
 ## Functions
 
@@ -154,7 +154,7 @@ expr              // implicit return — last expression without semicolon
 
 ### Multiple return values
 
-A function can return multiple values using a tuple `(T1, T2, ...)` as the return type. This is the standard pattern for getter functions that need to return both a (possibly mutated) struct and a derived value — since fields are private cross-module, a getter must return the struct back to the caller:
+A function can return multiple values using a tuple `(T1, T2, ...)` as the return type. A tuple may contain at most 16 elements. This is the standard pattern for getter functions that need to return both a (possibly mutated) struct and a derived value — since fields are private cross-module, a getter must return the struct back to the caller:
 
 ```meow
 // shapes module
@@ -325,7 +325,12 @@ Reading a struct variable moves it out of the binding (the binding becomes dead)
 
 ### Comparison
 
-`==` `!=` — accepts two values of the same primitive type (`bool`, `u64`, `address`, `string`) or two primitive-only tuples; produces `bool`. Struct types and tuples containing structs cannot be compared with `==` or `!=` — destructure and compare fields individually.  
+`==` `!=` — equality comparison; both operands must be the same type; produces `bool`.
+- Accepts any primitive type: `bool`, `u64`, `address`, `string`.
+- Accepts primitive-only tuples; both operands must be the same tuple shape.
+- String equality is byte-level UTF-8 comparison.
+- Struct types and tuples containing structs cannot be compared — destructure and compare fields individually.
+
 `<` `<=` `>` `>=` — accepts two `u64` values; produces `bool`.
 
 ### Boolean logic

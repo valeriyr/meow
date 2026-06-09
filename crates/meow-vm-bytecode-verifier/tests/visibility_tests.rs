@@ -264,10 +264,10 @@ fn cross_module_struct_construction_rejected() {
     assert!(
         errs.iter().any(|e| matches!(
             e,
-            VerificationError::CrossModuleStructConstruction { function, type_name, .. }
+            VerificationError::CrossModuleStructAccess { function, type_name, .. }
             if function == "f" && *type_name == module_ref::qualify(&d_addr, "Point")
         )),
-        "expected CrossModuleStructConstruction(f, @0xFD::Point), got: {errs:?}"
+        "expected CrossModuleStructAccess(f, @0xFD::Point), got: {errs:?}"
     );
 }
 
@@ -306,10 +306,10 @@ fn cross_module_unpack_struct_rejected() {
     assert!(
         errs.iter().any(|e| matches!(
             e,
-            VerificationError::CrossModuleStructConstruction { function, type_name, .. }
+            VerificationError::CrossModuleStructAccess { function, type_name, .. }
             if function == "f" && *type_name == module_ref::qualify(&d_addr, "Point")
         )),
-        "expected CrossModuleStructConstruction(f, @0xFD::Point), got: {errs:?}"
+        "expected CrossModuleStructAccess(f, @0xFD::Point), got: {errs:?}"
     );
 }
 

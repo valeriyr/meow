@@ -358,6 +358,32 @@ fn execute_meow_call_transitive_dep_missing_returns_failure() {
 //
 
 #[test]
+fn execute_with_input_object_not_owned_by_sender_returns_failure() {
+    // Coin is owned by 0xE2, not by SENDER — must be rejected before the VM runs.
+    let [dep_obj, module_obj]: [Object; 2] = meow_framework::framework_module_objects()
+        .try_into()
+        .unwrap();
+    let coin_obj = utils::make_coin_object(Address::suffixed(0xF1), Address::suffixed(0xE2), 50);
+    let gas_obj = utils::make_gas_coin_object();
+    let transaction =
+        utils::make_meow_call_transaction("burn", vec![Input::Object(coin_obj.object_ref())]);
+
+    let result =
+        utils::execute(&transaction, vec![dep_obj, module_obj, coin_obj, gas_obj]).unwrap();
+
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not owned by the sender")),
+        "object not owned by sender must produce Failure, got: {:?}",
+        result.status()
+    );
+    assert_eq!(
+        result.changed_objects().len(),
+        1,
+        "gas coin must still be returned"
+    );
+}
+
+#[test]
 fn execute_with_object_arg_absent_from_inputs_returns_failure() {
     // The transaction references a coin as a call argument but the coin object
     // is not included in the inputs slice — resolve_arg must fail before the VM runs.

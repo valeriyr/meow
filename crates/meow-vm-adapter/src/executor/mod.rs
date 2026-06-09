@@ -205,7 +205,7 @@ fn execute_meow_call(
         );
     }
 
-    let (vm_args, object_args) = match resolvers::resolve_args(call, func, inputs) {
+    let (vm_args, object_args) = match resolvers::resolve_args(call, func, sender, inputs) {
         Ok(res) => res,
         Err(e) => {
             return ExecutionResult::failure(e, *tx_digest);

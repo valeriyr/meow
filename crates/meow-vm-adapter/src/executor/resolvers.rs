@@ -26,6 +26,7 @@ type ResolvedArgs<'a> = (Vec<Value>, Vec<&'a Object>);
 pub fn resolve_args<'a>(
     call: &Call,
     func: &Function,
+    sender: &Address,
     inputs: &'a [Object],
 ) -> std::result::Result<ResolvedArgs<'a>, String> {
     // Resolve call arguments to VM values.
@@ -45,7 +46,7 @@ pub fn resolve_args<'a>(
     for (i, (input, (_param_name, param_type))) in
         call_args_inputs.iter().zip(func.params.iter()).enumerate()
     {
-        match resolve_arg(input, param_type, inputs) {
+        match resolve_arg(input, param_type, sender, inputs) {
             Ok(v) => {
                 if let Input::Object(object_ref) = input
                     && let Some(obj) = inputs.iter().find(|o| o.address() == object_ref.address())
@@ -67,6 +68,7 @@ pub fn resolve_args<'a>(
 pub fn resolve_arg(
     input: &Input,
     expected_type: &Type,
+    sender: &Address,
     inputs: &[Object],
 ) -> std::result::Result<Value, String> {
     match input {
@@ -81,6 +83,9 @@ pub fn resolve_arg(
                     "object {} is a module and cannot be used as a call argument",
                     obj_address
                 ));
+            }
+            if obj.owner().address() != Some(sender) {
+                return Err(format!("object {} is not owned by the sender", obj_address));
             }
             let obj_version = obj.version();
             if obj_version == &ObjectVersion::MAX {

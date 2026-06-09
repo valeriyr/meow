@@ -267,7 +267,7 @@ pub(crate) fn check_module(
                 } => {
                     // Cross-module construction is forbidden
                     if let Some((_, _)) = module_ref::parse_module_ref(type_name) {
-                        errors.push(VerificationError::CrossModuleStructConstruction {
+                        errors.push(VerificationError::CrossModuleStructAccess {
                             function: f.name.clone(),
                             pc,
                             type_name: type_name.clone(),
@@ -288,7 +288,7 @@ pub(crate) fn check_module(
                                 let given: Vec<&str> =
                                     field_names.iter().map(|n| n.as_str()).collect();
                                 if expected != given {
-                                    errors.push(VerificationError::NewStructFieldMismatch {
+                                    errors.push(VerificationError::StructFieldMismatch {
                                         function: f.name.clone(),
                                         pc,
                                         type_name: type_name.clone(),
@@ -328,7 +328,7 @@ pub(crate) fn check_module(
                     field_names,
                 } => {
                     if module_ref::parse_module_ref(type_name).is_some() {
-                        errors.push(VerificationError::CrossModuleStructConstruction {
+                        errors.push(VerificationError::CrossModuleStructAccess {
                             function: f.name.clone(),
                             pc,
                             type_name: type_name.clone(),
@@ -348,7 +348,7 @@ pub(crate) fn check_module(
                                 let given: Vec<&str> =
                                     field_names.iter().map(|n| n.as_str()).collect();
                                 if expected != given {
-                                    errors.push(VerificationError::NewStructFieldMismatch {
+                                    errors.push(VerificationError::StructFieldMismatch {
                                         function: f.name.clone(),
                                         pc,
                                         type_name: type_name.clone(),
