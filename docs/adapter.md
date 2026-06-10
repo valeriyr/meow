@@ -131,7 +131,7 @@ Native functions are built into the runtime and cannot be defined by user code. 
 | Function | Signature | Gas | Description |
 |----------|-----------|----:|-------------|
 | `meow_vm_fresh_id()` | `() → meow_object::Id` | 10 | Allocates a new unique object identity derived from the transaction digest and a per-transaction counter. The returned `Id` must eventually be consumed by `meow_vm_transfer` (via the object that holds it) or `meow_vm_destroy`. |
-| `meow_vm_transfer(obj, owner)` | `(local struct, address) → void` | 20 | Transfers ownership of `obj` to `owner`. `obj` must be a struct defined in the calling module — cross-module struct types are rejected by the bytecode verifier. If `obj` contains an `id: meow_object::Id` first field it is saved to the object store; otherwise execution aborts. |
+| `meow_vm_transfer(obj, owner)` | `(local struct, address) → void` | 20 | Transfers ownership of `obj` to `owner` and saves it to the object store. `obj` must be an on-chain object defined in the calling module; the bytecode verifier rejects cross-module or non-object structs at publish time, and a non-object that slips through aborts at execution. |
 | `meow_vm_destroy(id)` | `(meow_object::Id) → void` | 10 | Destroys the object identified by `id`. The object is removed from the store at the end of the transaction. |
 | `meow_vm_sender()` | `() → address` | 1 | Returns the 32-byte address of the transaction sender. |
 | `meow_vm_rand()` | `() → u64` | 10 | Returns the next value from the block's pseudo-random sequence. Deterministic across re-executions; seeded from the block's mining hash and the transaction digest. |
@@ -196,6 +196,8 @@ Every module is verified by `meow-vm-bytecode-verifier` before it is stored on-c
 
 The verifier operates on raw `Module` bytecode, independent of whether the bytecode was produced by the compiler or crafted manually.
 
+Both phases below always run; their errors are accumulated and reported together (Phase 2 is not skipped when Phase 1 finds errors).
+
 ### Phase 1 — structural checks
 
 - All identifiers (module name, function names, struct names, field names) are valid.
@@ -203,7 +205,7 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 - Local variable slot indices stay within `local_count`.
 - Jump offsets are forward-only and land on a valid instruction index.
 - Structs must have at least one field — empty structs are rejected.
-- All `Type::Struct` names in struct field types, function parameter types, and return types must resolve to a struct defined in the same module or a fully-qualified type from a registered dependency — unresolved type references are rejected.
+- All `Type::Struct` names in struct field types, function parameter types, and return types must resolve to a struct defined in the same module or a fully-qualified type from a registered dependency — unresolved type references are rejected. A referenced dependency struct must also be `pub`: naming a private dependency struct as a field, parameter, or return type is rejected.
 - Struct field type definitions must be acyclic — a struct cannot directly or transitively have a field of its own type.
 - Struct fields may not have tuple types — only primitives and struct types are allowed.
 - `LoadField` and `StoreField` instructions must specify a non-empty field path — an empty path is rejected.
@@ -226,9 +228,11 @@ The verifier operates on raw `Module` bytecode, independent of whether the bytec
 
 After the language-level verifier passes, the adapter runs a second verification pass that enforces chain-specific object conventions:
 
-**Object layout** — every struct whose first field is `id: meow_object::Id` is an on-chain object. The adapter verifier rejects modules where any struct field has an object type — objects cannot be embedded inside other structs.
+**Object layout** — two rules keep the object convention (defined above) enforceable: an `id: meow_object::Id` field must be the first field, and no field may itself be an object type (objects cannot be nested inside other structs).
 
 **ID freshness** — every `NewStruct` that constructs an on-chain object must supply an `id` value that originates directly from a `meow_vm_fresh_id()` call within the same function. IDs from parameters, local variables seeded elsewhere, or cross-module calls are rejected.
+
+**Transfer type** — every `meow_vm_transfer` argument must be an on-chain object struct. The verifier tracks each value's type through the function (locals, `Dup`, returns, struct/tuple unpacking), so a non-object struct is rejected at publish time. Values whose type can't be determined statically are left to the runtime check inside `meow_vm_transfer`.
 
 ## Gas metering
 

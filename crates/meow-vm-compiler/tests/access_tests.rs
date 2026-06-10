@@ -47,7 +47,8 @@ fn private_fn_call_from_other_module_rejected() {
     .unwrap_err();
 
     assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("function 'lib::secret' is private")),
         "expected private-function error, got: {err:?}"
     );
 }
@@ -89,7 +90,8 @@ fn cross_module_struct_construction_rejected() {
     .unwrap_err();
 
     assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot construct")),
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("cannot construct 'shapes::Point' outside its declaring module")),
         "expected cross-module construction error, got: {err:?}"
     );
 }
@@ -119,8 +121,59 @@ fn private_struct_not_usable_as_field_type_cross_module() {
     .unwrap_err();
 
     assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("unknown")),
-        "expected unknown-type error for private struct field, got: {err:?}"
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("field 'inner' references unknown struct 'lib::Hidden'")),
+        "expected unknown-struct error for the field type, got: {err:?}"
+    );
+}
+
+#[test]
+fn private_struct_not_usable_as_param_type_cross_module() {
+    let err = with_dep(
+        r#"
+            mod lib;
+
+            struct Hidden { x: u64 }
+        "#,
+        r#"
+            mod user;
+
+            use lib@0xFD;
+
+            fn take(h: lib::Hidden) {}
+        "#,
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("parameter 'h' references unknown struct 'lib::Hidden'")),
+        "expected unknown-struct error for the parameter type, got: {err:?}"
+    );
+}
+
+#[test]
+fn private_struct_not_usable_as_return_type_cross_module() {
+    let err = with_dep(
+        r#"
+            mod lib;
+
+            struct Hidden { x: u64 }
+        "#,
+        r#"
+            mod user;
+
+            use lib@0xFD;
+
+            fn make() -> lib::Hidden {}
+        "#,
+    )
+    .unwrap_err();
+
+    assert!(
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("return type references unknown struct 'lib::Hidden'")),
+        "expected unknown-struct error for the return type, got: {err:?}"
     );
 }
 
@@ -183,7 +236,8 @@ fn field_read_from_other_module_rejected() {
     .unwrap_err();
 
     assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("private")),
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("are private — use a public getter")),
         "expected private-field error, got: {err:?}"
     );
 }
@@ -233,7 +287,8 @@ fn field_write_from_other_module_rejected() {
     .unwrap_err();
 
     assert!(
-        matches!(&err, CompilerError::Message(msg) if msg.contains("cannot be written")),
+        matches!(&err, CompilerError::Message(msg)
+            if msg.contains("field 'x' of 'shapes::Point' cannot be written from outside")),
         "expected cross-module write error, got: {err:?}"
     );
 }

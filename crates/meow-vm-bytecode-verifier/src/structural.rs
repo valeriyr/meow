@@ -1,7 +1,9 @@
 //! Phase 1 of bytecode verification: purely syntactic checks that need no stack state.
 //!
 //! Runs before abstract interpretation because it is cheaper and its errors are independent
-//! of type information. If Phase 1 finds errors, Phase 2 is skipped entirely.
+//! of type information. Both phases always run and their errors are accumulated together;
+//! the abstract-interpretation phase is written to tolerate structurally-invalid input
+//! (it skips individual instructions the structural phase has already flagged).
 
 use std::collections::{HashMap, HashSet};
 
@@ -397,13 +399,22 @@ fn validate_type_ref(
                         context: context.to_string(),
                         type_name: name.clone(),
                     });
-                } else if let Some(dep_mod) = deps.get(&dep_addr)
-                    && dep_mod.get_struct(struct_name).is_none()
-                {
-                    errors.push(VerificationError::UnresolvedTypeReference {
-                        context: context.to_string(),
-                        type_name: name.clone(),
-                    });
+                } else if let Some(dep_mod) = deps.get(&dep_addr) {
+                    match dep_mod.get_struct(struct_name) {
+                        None => errors.push(VerificationError::UnresolvedTypeReference {
+                            context: context.to_string(),
+                            type_name: name.clone(),
+                        }),
+                        // Only `pub` structs are visible across modules — referencing a
+                        // private dep struct as a type is rejected (mirrors the compiler).
+                        Some(def) if !def.is_public => {
+                            errors.push(VerificationError::CrossModulePrivateStructReference {
+                                context: context.to_string(),
+                                type_name: name.clone(),
+                            })
+                        }
+                        Some(_) => {}
+                    }
                 }
                 // dep not in the provided deps map → can't verify further, assume valid
             } else if module.get_struct(name).is_none() {

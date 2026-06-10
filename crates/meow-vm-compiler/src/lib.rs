@@ -21,7 +21,7 @@ use meow_vm_types::{
 };
 
 use crate::{
-    ast::AstItem,
+    ast::{AstFunction, AstItem},
     codegen::Codegen,
     parser::{parser, strip_line_comments},
 };
@@ -259,6 +259,17 @@ impl Compiler {
         // Cross-reference + cycle detection (after all local structs are collected).
         // Validation uses source-level names (e.g. "meow_object::Id") that match dep_structs.
         validator::validate_struct_refs(&module.structs, &dep_structs, &config)?;
+
+        // Function parameter/return type references must resolve to a known struct too
+        // (a private dep struct is excluded from `dep_structs`, so it is rejected here).
+        let ast_fns: Vec<&AstFunction> = items
+            .iter()
+            .filter_map(|i| match i {
+                AstItem::Fn(f) => Some(f),
+                _ => None,
+            })
+            .collect();
+        validator::validate_function_type_refs(&ast_fns, &module.structs, &dep_structs)?;
 
         // Translate cross-module field types to address-qualified form (e.g. "@0x1::Id") so
         // that the stored struct definitions match bytecode instructions and native signatures.

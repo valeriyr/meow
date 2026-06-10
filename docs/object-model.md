@@ -64,9 +64,9 @@ During execution objects follow exactly one of three paths:
 
 | Lifecycle | How it happens | Store effect |
 |-----------|----------------|--------------|
-| **Created** | `meow_vm_fresh_id()` allocates an ID; `meow_vm_transfer(obj, owner)` hands it to an owner | Added to store |
-| **Transferred** | `meow_vm_transfer(obj, new_owner)` | Updated in store with new owner |
-| **Destroyed** | destructure to extract `id`, then `meow_vm_destroy(id)` | Removed from store |
+| **Created** | a *new* object (built with a fresh `meow_vm_fresh_id()`) is passed to `meow_vm_transfer(obj, owner)` | Added to store |
+| **Transferred** | an *existing* input object is passed to `meow_vm_transfer(obj, new_owner)` | Owner updated, version bumped |
+| **Destroyed** | an object is destructured to extract its `id`, then `meow_vm_destroy(id)` | Removed from store |
 
 An object created and destroyed within the same transaction has no net effect on the store.
 
@@ -102,7 +102,7 @@ The gas coin is an ordinary [`MeowCoin`](meow-coin.md) object, not a special-cas
 
 Fee deduction runs unconditionally after execution, on success or failure:
 
-1. A base cost of **1000 gas** is charged at the start.
+1. A base cost of **1 000 gas** is charged at the start.
 2. Individual operations charge additional gas — see [Gas metering](adapter.md#gas-metering) for the full table.
 3. The gas coin's `balance` is reduced by the total spent, floored at 0.
 4. The updated coin always appears in `changed_objects` in the execution result.

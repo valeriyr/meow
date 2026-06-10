@@ -31,3 +31,38 @@ fn comment_with_slashes_in_string_not_stripped() {
     )
     .expect("slashes inside string literals must not be treated as comments");
 }
+
+//
+// ─── Integer literals ───
+//
+
+#[test]
+fn u64_max_literal_compiles() {
+    // u64::MAX must be accepted exactly (boundary).
+    utils::compile(
+        r#"
+            mod ints;
+
+            pub fn f() -> u64 { 18446744073709551615 }
+        "#,
+    )
+    .expect("u64::MAX literal must compile");
+}
+
+#[test]
+fn integer_literal_overflow_is_rejected() {
+    // A literal larger than u64::MAX must be a compile error, not silently wrap to 0.
+    let err = utils::compile(
+        r#"
+            mod ints;
+
+            pub fn f() -> u64 { 99999999999999999999999 }
+        "#,
+    )
+    .expect_err("an out-of-range integer literal must be rejected");
+    let msg = format!("{err:?}");
+    assert!(
+        msg.contains("does not fit in u64"),
+        "expected an overflow error, got: {msg}"
+    );
+}

@@ -170,6 +170,11 @@ pub enum VerificationError {
     },
 
     #[error(
+        "in {context}: type '{type_name}' refers to a private struct in another module — only `pub` structs are visible across modules"
+    )]
+    CrossModulePrivateStructReference { context: String, type_name: String },
+
+    #[error(
         "function '{function}' at pc {pc}: field '{field}' on cross-module type '{type_name}' is private"
     )]
     CrossModulePrivateFieldRead {

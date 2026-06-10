@@ -116,9 +116,13 @@ pub fn parser<'src>() -> impl Parser<'src, &'src str, Vec<AstItem>, ParseErr<'sr
         ))
         .padded();
 
-        // integer literal
+        // integer literal — reject values that do not fit in u64 (no silent wrap to 0)
         let int_lit = text::int(10)
-            .map(|s: &str| Expr::Int(s.parse::<u64>().unwrap_or(0)))
+            .try_map(|s: &str, span| {
+                s.parse::<u64>().map(Expr::Int).map_err(|_| {
+                    Rich::custom(span, format!("integer literal `{s}` does not fit in u64"))
+                })
+            })
             .padded();
 
         // string literal

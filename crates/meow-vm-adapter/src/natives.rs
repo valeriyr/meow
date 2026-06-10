@@ -5,8 +5,9 @@
 
 use std::{cell::RefCell, rc::Rc};
 
-use meow_types::system_framework::meow_object::{
-    self, MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId,
+use meow_types::{
+    config,
+    system_framework::meow_object::{self, MEOW_OBJECT_ID_BYTECODE_TYPE_NAME, MeowObjectId},
 };
 use meow_vm_types::{
     convert,
@@ -42,7 +43,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let fresh_id = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_fresh_id".to_string(),
+            name: config::NATIVE_FN_FRESH_ID.to_string(),
             params: vec![],
             return_type: Some(id_type.clone()),
             gas_cost: 10, // 10 gas — ID derivation involves a hash computation
@@ -57,7 +58,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let transfer = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_transfer".to_string(),
+            name: config::NATIVE_FN_TRANSFER.to_string(),
             params: vec![
                 NativeParam::LocalStruct,
                 NativeParam::Concrete(Type::Address),
@@ -93,7 +94,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let destroy = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_destroy".to_string(),
+            name: config::NATIVE_FN_DESTROY.to_string(),
             params: vec![NativeParam::Concrete(id_type.clone())],
             return_type: None,
             gas_cost: 10, // 10 gas — object deletion is cheaper than transfer (no owner update)
@@ -118,7 +119,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let sender = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_sender".to_string(),
+            name: config::NATIVE_FN_SENDER.to_string(),
             params: vec![],
             return_type: Some(Type::Address),
             gas_cost: 1, // 1 gas — cheap lookup of a pre-loaded context field
@@ -131,7 +132,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let rand = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_rand".to_string(),
+            name: config::NATIVE_FN_RAND.to_string(),
             params: vec![],
             return_type: Some(Type::U64),
             gas_cost: 10, // 10 gas — random generation involves a hash computation
@@ -144,7 +145,7 @@ pub fn build_natives(ctx: Rc<RefCell<Context>>) -> Vec<NativeFnEntry> {
     let timestamp = {
         let c = ctx.clone();
         NativeFnEntry {
-            name: "meow_vm_timestamp".to_string(),
+            name: config::NATIVE_FN_TIMESTAMP.to_string(),
             params: vec![],
             return_type: Some(Type::U64),
             gas_cost: 1, // 1 gas — cheap lookup of a pre-loaded context field
@@ -162,12 +163,12 @@ fn native_sigs_with_id_type(id_type_name: &str) -> Vec<NativeSig> {
     let id_type = Type::Struct(id_type_name.to_string());
     vec![
         NativeSig {
-            name: "meow_vm_fresh_id".to_string(),
+            name: config::NATIVE_FN_FRESH_ID.to_string(),
             params: vec![],
             return_type: Some(id_type.clone()),
         },
         NativeSig {
-            name: "meow_vm_transfer".to_string(),
+            name: config::NATIVE_FN_TRANSFER.to_string(),
             params: vec![
                 NativeParam::LocalStruct,
                 NativeParam::Concrete(Type::Address),
@@ -175,22 +176,22 @@ fn native_sigs_with_id_type(id_type_name: &str) -> Vec<NativeSig> {
             return_type: None,
         },
         NativeSig {
-            name: "meow_vm_destroy".to_string(),
+            name: config::NATIVE_FN_DESTROY.to_string(),
             params: vec![NativeParam::Concrete(id_type)],
             return_type: None,
         },
         NativeSig {
-            name: "meow_vm_sender".to_string(),
+            name: config::NATIVE_FN_SENDER.to_string(),
             params: vec![],
             return_type: Some(Type::Address),
         },
         NativeSig {
-            name: "meow_vm_rand".to_string(),
+            name: config::NATIVE_FN_RAND.to_string(),
             params: vec![],
             return_type: Some(Type::U64),
         },
         NativeSig {
-            name: "meow_vm_timestamp".to_string(),
+            name: config::NATIVE_FN_TIMESTAMP.to_string(),
             params: vec![],
             return_type: Some(Type::U64),
         },
@@ -213,7 +214,7 @@ mod tests {
 
         let verifier_id = verifier_sigs
             .iter()
-            .find(|s| s.name == "meow_vm_fresh_id")
+            .find(|s| s.name == config::NATIVE_FN_FRESH_ID)
             .and_then(|s| s.return_type.as_ref())
             .expect("meow_vm_fresh_id must have a return type in verifier sigs");
         assert_eq!(
@@ -224,7 +225,7 @@ mod tests {
 
         let compiler_id = compiler_sigs
             .iter()
-            .find(|s| s.name == "meow_vm_fresh_id")
+            .find(|s| s.name == config::NATIVE_FN_FRESH_ID)
             .and_then(|s| s.return_type.as_ref())
             .expect("meow_vm_fresh_id must have a return type in compiler sigs");
         assert_eq!(

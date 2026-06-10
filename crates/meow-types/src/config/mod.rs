@@ -32,16 +32,29 @@ pub const MEOW_CALL_TRANSACTION_BCS_BYTES_MAX_SIZE: usize = 32 * 1024; // 32 KiB
 pub const MEOW_PUBLISH_MODULE_TRANSACTION_BCS_BYTES_MAX_SIZE: usize =
     MAX_BCS_SERIALIZED_MODULE_SIZE + 1024; // 513 KiB (module size + overhead)
 
+/// Native function name: allocates a fresh unique object ID.
+pub const NATIVE_FN_FRESH_ID: &str = "meow_vm_fresh_id";
+/// Native function name: transfers ownership of an on-chain object.
+pub const NATIVE_FN_TRANSFER: &str = "meow_vm_transfer";
+/// Native function name: destroys an on-chain object by its ID.
+pub const NATIVE_FN_DESTROY: &str = "meow_vm_destroy";
+/// Native function name: returns the transaction sender address.
+pub const NATIVE_FN_SENDER: &str = "meow_vm_sender";
+/// Native function name: returns a pseudo-random u64.
+pub const NATIVE_FN_RAND: &str = "meow_vm_rand";
+/// Native function name: returns the current block timestamp.
+pub const NATIVE_FN_TIMESTAMP: &str = "meow_vm_timestamp";
+
 /// The names of the native functions registered by this adapter.
 /// Used to populate [`meow_vm_types::config::CompilerConfig::reserved_function_names`]
 /// so the compiler rejects user-defined functions that would shadow them.
 pub const NATIVE_FUNCTION_NAMES: &[&str] = &[
-    "meow_vm_fresh_id",
-    "meow_vm_transfer",
-    "meow_vm_destroy",
-    "meow_vm_sender",
-    "meow_vm_rand",
-    "meow_vm_timestamp",
+    NATIVE_FN_FRESH_ID,
+    NATIVE_FN_TRANSFER,
+    NATIVE_FN_DESTROY,
+    NATIVE_FN_SENDER,
+    NATIVE_FN_RAND,
+    NATIVE_FN_TIMESTAMP,
 ];
 
 /// Returns the path to the meow configuration directory.

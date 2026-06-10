@@ -12,7 +12,11 @@ use meow_vm_types::{
     types::{FieldDef, StructDef, Type},
 };
 
-use crate::{Result, ast::AstStruct, error::CompilerError};
+use crate::{
+    Result,
+    ast::{AstFunction, AstStruct},
+    error::CompilerError,
+};
 
 pub fn validate_identifier(name: &str, context: &str, config: &CompilerConfig) -> Result<()> {
     if !identifier::is_valid_identifier(name, config) {
@@ -232,6 +236,55 @@ pub fn validate_struct_refs(
     detect_struct_cycles(local_structs, dep_structs, config)?;
 
     Ok(())
+}
+
+/// Reject function parameter and return types that reference an unknown struct.
+///
+/// `dep_structs` contains only `pub` structs from dependencies, so a private dep
+/// struct (or a nonexistent type) used in a signature resolves to nothing and is
+/// rejected. This mirrors the field-type check in [`validate_struct_refs`], keeping
+/// the struct-visibility rule consistent across fields, parameters, and return types.
+/// Type names are the source-level form (e.g. `lib::Hidden`) at this stage.
+pub fn validate_function_type_refs(
+    functions: &[&AstFunction],
+    local_structs: &[StructDef],
+    dep_structs: &[StructDef],
+) -> Result<()> {
+    let known: HashSet<&str> = local_structs
+        .iter()
+        .chain(dep_structs.iter())
+        .map(|s| s.name.as_str())
+        .collect();
+
+    for f in functions {
+        for (param_name, ty) in &f.params {
+            check_type_ref_known(
+                ty,
+                &known,
+                &format!("function '{}' parameter '{param_name}'", f.name),
+            )?;
+        }
+        if let Some(ty) = &f.return_type {
+            check_type_ref_known(ty, &known, &format!("function '{}' return type", f.name))?;
+        }
+    }
+    Ok(())
+}
+
+/// Recursively verify that every struct type named in `ty` is a known struct.
+fn check_type_ref_known(ty: &Type, known: &HashSet<&str>, context: &str) -> Result<()> {
+    match ty {
+        Type::Struct(name) if !known.contains(name.as_str()) => Err(CompilerError::Message(
+            format!("{context} references unknown struct '{name}'"),
+        )),
+        Type::Tuple(types) => {
+            for t in types {
+                check_type_ref_known(t, known, context)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Detects reference cycles among struct definitions using DFS.

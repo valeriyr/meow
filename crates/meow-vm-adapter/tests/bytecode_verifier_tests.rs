@@ -1,4 +1,5 @@
-//! Tests for the adapter-level bytecode verifier (object layout + ID freshness).
+//! Tests for the adapter-level bytecode verifier (object layout, ID freshness,
+//! and transfer-argument type).
 //!
 //! These tests publish modules via `executor::execute` and verify that the adapter
 //! verifier accepts valid modules and rejects structurally tampered ones.
@@ -7,6 +8,7 @@ mod utils;
 
 use meow_types::{
     address::Address,
+    config,
     digest::Digest,
     object::Object,
     system_framework::meow_object::{MEOW_OBJECT_ID_FIELD_NAME, MEOW_OBJECT_MODULE_ADDRESS},
@@ -112,6 +114,84 @@ fn plain_struct_without_id_field_passes() {
     );
 }
 
+#[test]
+fn trivial_module_without_objects_passes() {
+    // Baseline: a module with no structs at all (hence no object types) verifies
+    // cleanly — the layout and freshness checks have nothing to act on.
+    let module = builder::build(
+        r#"
+            mod no_objects;
+
+            pub fn add(a: u64, b: u64) -> u64 { a + b }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "module without objects must pass adapter verification, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn non_object_struct_id_field_write_passes() {
+    // A plain struct with a field named `id` (but not object-shaped) may write to it freely.
+    let module = builder::build(
+        r#"
+            mod plain_id_test;
+
+            pub struct Receipt { id: u64, amount: u64 }
+
+            pub fn set_id(r: Receipt, new_id: u64) -> Receipt {
+                r.id = new_id;
+                r
+            }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "plain struct id field write must pass, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn id_field_not_first_is_rejected() {
+    // The compiler accepts `id: meow_object::Id` in any position, so the adapter is
+    // the line of defense: a struct with id in a non-first position is neither a
+    // valid object (object-ness requires id first) nor a clean plain struct, and
+    // must be rejected at publish rather than silently demoted.
+    let meow_object_module = meow_framework::meow_object_module();
+    let module = builder::build(
+        r#"
+            mod id_pos_test;
+
+            use meow_object@0x10;
+
+            pub struct Token { amount: u64, id: meow_object::Id }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_framework::meow_object_module_object()],
+    );
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not the first field")),
+        "id field in non-first position must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
 //
 // ─── Object-as-field-type checks ───
 //
@@ -206,32 +286,6 @@ fn plain_struct_as_field_type_passes() {
         result.status(),
         &ExecutionStatus::Success,
         "plain struct as field type must pass, got: {:?}",
-        result.status()
-    );
-}
-
-#[test]
-fn non_object_struct_id_field_write_passes() {
-    // A plain struct with a field named `id` (but not object-shaped) may write to it freely.
-    let module = builder::build(
-        r#"
-            mod plain_id_test;
-
-            pub struct Receipt { id: u64, amount: u64 }
-
-            pub fn set_id(r: Receipt, new_id: u64) -> Receipt {
-                r.id = new_id;
-                r
-            }
-        "#,
-        &[],
-    )
-    .expect("must compile");
-    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
-    assert_eq!(
-        result.status(),
-        &ExecutionStatus::Success,
-        "plain struct id field write must pass, got: {:?}",
         result.status()
     );
 }
@@ -378,6 +432,41 @@ fn object_created_from_tuple_unpacked_id_fails() {
 }
 
 #[test]
+fn object_created_from_local_call_id_fails() {
+    // The id comes from a local helper that wraps meow_vm_fresh_id. Only the
+    // native itself yields Fresh::Id; a function-call return is Fresh::Other, so
+    // the object construction must be rejected — freshness must be direct.
+    let meow_object_module = meow_framework::meow_object_module();
+    let module = builder::build(
+        r#"
+            mod local_call_id_test;
+
+            use meow_object@0x10;
+
+            pub struct Token { id: meow_object::Id, amount: u64 }
+
+            fn make_id() -> meow_object::Id { meow_vm_fresh_id() }
+
+            pub fn create(amount: u64) -> Token {
+                let t = Token { id: make_id(), amount: amount };
+                t
+            }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_framework::meow_object_module_object()],
+    );
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("non-fresh id")),
+        "object constructed from a local-call id must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
 fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
     // One branch calls meow_vm_fresh_id (Fresh::Id), the other calls a local helper
     // function that also produces a meow_object::Id but is Fresh::Other from the
@@ -428,7 +517,7 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
     create.code = vec![
         Instruction::Load(0),
         Instruction::JumpIfNot(3),
-        Instruction::Call("meow_vm_fresh_id".to_string()),
+        Instruction::Call(config::NATIVE_FN_FRESH_ID.to_string()),
         Instruction::Jump(2),
         Instruction::Call("make_id".to_string()),
         Instruction::Store(2),
@@ -452,23 +541,265 @@ fn object_id_freshness_not_guaranteed_on_all_branches_rejected() {
     );
 }
 
+//
+// ─── Transfer object-type checks ───
+//
+
 #[test]
-fn module_without_object_types_skips_freshness_check() {
-    // No object types → freshness check is skipped entirely → must pass.
+fn plain_struct_passed_to_transfer_fails() {
+    // Config is not an object type — meow_vm_transfer must be caught at publish
+    // time rather than aborting at runtime.
     let module = builder::build(
         r#"
-            mod no_objects;
+            mod transfer_plain;
 
-            pub fn add(a: u64, b: u64) -> u64 { a + b }
+            pub struct Config { value: u64 }
+
+            pub fn bad(c: Config, owner: address) {
+                meow_vm_transfer(c, owner);
+            }
         "#,
         &[],
     )
     .expect("must compile");
     let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not an on-chain object")),
+        "transferring a non-object struct must be rejected at publish time, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn plain_struct_from_factory_passed_to_transfer_fails() {
+    // Return-type tracking: make_config() returns Config; the verifier knows the
+    // stack top is Config (not an object type) and must reject the transfer.
+    let module = builder::build(
+        r#"
+            mod transfer_factory;
+
+            pub struct Config { value: u64 }
+
+            fn make_config(v: u64) -> Config { Config { value: v } }
+
+            pub fn bad(owner: address) {
+                let c = make_config(42);
+                meow_vm_transfer(c, owner);
+            }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not an on-chain object")),
+        "transferring a plain struct from a factory must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn object_struct_via_param_passes_transfer_check() {
+    // A function that receives an object-type struct and forwards it to
+    // meow_vm_transfer — param-type tracking must recognise Token as an object.
+    let meow_object_module = meow_framework::meow_object_module();
+    let module = builder::build(
+        r#"
+            mod transfer_param;
+
+            use meow_object@0x10;
+
+            pub struct Token { id: meow_object::Id, amount: u64 }
+
+            pub fn forward(t: Token, owner: address) {
+                meow_vm_transfer(t, owner);
+            }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_framework::meow_object_module_object()],
+    );
     assert_eq!(
         result.status(),
         &ExecutionStatus::Success,
-        "module without objects must pass adapter verification, got: {:?}",
+        "transferring an object-type struct via param must pass, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn unpacked_plain_struct_passed_to_transfer_fails() {
+    // A plain struct extracted via destructuring must still be caught at the
+    // transfer site: UnpackStruct propagates each field's type tag, so `start`
+    // (a non-object Point) is rejected rather than slipping through as untracked.
+    let module = builder::build(
+        r#"
+            mod unpack_transfer;
+
+            pub struct Point { x: u64, y: u64 }
+            pub struct Line { start: Point, end: Point }
+
+            pub fn bad(l: Line, owner: address) {
+                let Line { start, end } = l;
+                let Point { x, y } = end;
+                meow_vm_transfer(start, owner);
+            }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not an on-chain object")),
+        "transferring an unpacked plain struct must be rejected at publish, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn object_from_mixed_tuple_passes_transfer_check() {
+    // A factory returns (object, non-object). After unpacking, transferring the
+    // OBJECT element must be accepted — the object's tag must survive the tuple
+    // round-trip and land in the right slot (guards UnpackTuple element order: a
+    // mis-ordered restore would tag the transferred value NonObject and reject).
+    let meow_object_module = meow_framework::meow_object_module();
+    let module = builder::build(
+        r#"
+            mod tuple_mixed;
+
+            use meow_object@0x10;
+
+            pub struct Token { id: meow_object::Id, amount: u64 }
+            pub struct Config { value: u64 }
+
+            fn make() -> (Token, Config) {
+                let t = Token { id: meow_vm_fresh_id(), amount: 5 };
+                let c = Config { value: 1 };
+                (t, c)
+            }
+
+            pub fn run(owner: address) {
+                let (a, b) = make();
+                meow_vm_transfer(a, owner);
+                let Config { value } = b;
+            }
+        "#,
+        &[(MEOW_OBJECT_MODULE_ADDRESS, &meow_object_module)],
+    )
+    .expect("must compile");
+    let result = publish(
+        bcs::to_bytes(&module).unwrap(),
+        vec![meow_framework::meow_object_module_object()],
+    );
+    assert_eq!(
+        result.status(),
+        &ExecutionStatus::Success,
+        "transferring the object element of a mixed tuple must pass, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn tuple_unpacked_plain_struct_passed_to_transfer_fails() {
+    // A plain struct returned inside a tuple, then unpacked and transferred, must
+    // still be caught: MakeTuple records each element's tag and UnpackTuple restores
+    // it, so `p` (a non-object Point) is rejected at the transfer site.
+    let module = builder::build(
+        r#"
+            mod tuple_transfer;
+
+            pub struct Point { x: u64, y: u64 }
+
+            fn make() -> (Point, u64) { (Point { x: 1, y: 2 }, 3) }
+
+            pub fn bad(owner: address) {
+                let (p, n) = make();
+                meow_vm_transfer(p, owner);
+            }
+        "#,
+        &[],
+    )
+    .expect("must compile");
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not an on-chain object")),
+        "transferring a plain struct unpacked from a tuple must be rejected, got: {:?}",
+        result.status()
+    );
+}
+
+#[test]
+fn non_object_struct_tag_survives_branch_merge_rejected() {
+    // Both branches build the SAME non-object struct (Config) into the merge slot.
+    // The conservative merge keeps StructTag::NonObject when both paths agree, so
+    // transferring the merged value must still be rejected — a non-object cannot
+    // slip past the transfer check by being produced on multiple branches.
+    //
+    // Hand-built because a struct held live across a control-flow join can't be
+    // expressed in source (reassigning a live struct trips the language verifier's
+    // SlotOverwrite / liveness-merge rules before the adapter runs).
+    //
+    // Bytecode (slots: 0=cond, 1=owner; local_count=3, slot 2=merged Config):
+    //   pc 0: Load(0)                       push cond
+    //   pc 1: JumpIfNot(4)                  false → pc 5
+    //   pc 2: PushU64(1)                    true branch
+    //   pc 3: NewStruct { Config, [value] }
+    //   pc 4: Jump(3)                       → pc 7 (merge point)
+    //   pc 5: PushU64(2)                    false branch
+    //   pc 6: NewStruct { Config, [value] }
+    //   pc 7: Store(2)                      merged Config — NonObject on both paths
+    //   pc 8: Load(2)
+    //   pc 9: Load(1)                       owner
+    //   pc 10: Call("meow_vm_transfer")     → TransferNonObjectStruct
+    //   pc 11: Return
+    use meow_vm_types::bytecode::Instruction;
+
+    let mut module = builder::build(
+        r#"
+            mod merge_tag_test;
+
+            pub struct Config { value: u64 }
+
+            pub fn bad(cond: bool, owner: address) {}
+        "#,
+        &[],
+    )
+    .expect("must compile");
+
+    let bad = module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "bad")
+        .unwrap();
+    bad.local_count = 3;
+    bad.code = vec![
+        Instruction::Load(0),
+        Instruction::JumpIfNot(4),
+        Instruction::PushU64(1),
+        Instruction::NewStruct {
+            type_name: "Config".to_string(),
+            field_names: vec!["value".to_string()],
+        },
+        Instruction::Jump(3),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Config".to_string(),
+            field_names: vec!["value".to_string()],
+        },
+        Instruction::Store(2),
+        Instruction::Load(2),
+        Instruction::Load(1),
+        Instruction::Call(config::NATIVE_FN_TRANSFER.to_string()),
+        Instruction::Return,
+    ];
+
+    let result = publish(bcs::to_bytes(&module).unwrap(), vec![]);
+    assert!(
+        matches!(result.status(), ExecutionStatus::Failure(msg) if msg.contains("not an on-chain object")),
+        "non-object struct merged from both branches must be rejected at transfer, got: {:?}",
         result.status()
     );
 }

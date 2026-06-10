@@ -315,6 +315,8 @@ false           // bool
 "hello world"   // string
 ```
 
+Integer literals are `u64`; a literal that exceeds `u64::MAX` is a compile error.
+
 ### Variables
 
 Reading a struct variable moves it out of the binding (the binding becomes dead). Reading a primitive copies it.

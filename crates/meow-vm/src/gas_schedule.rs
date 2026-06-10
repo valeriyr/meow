@@ -39,6 +39,12 @@ pub struct GasSchedule {
     call: u64,
     /// Cost of the `Return` instruction.
     return_: u64,
+    /// Cost charged per element when packing a tuple (`MakeTuple`).
+    make_tuple_per_element: u64,
+    /// Cost charged per element when unpacking a tuple (`UnpackTuple`).
+    unpack_tuple_per_element: u64,
+    /// Cost charged per field when unpacking a struct (`UnpackStruct`).
+    unpack_struct_per_field: u64,
 }
 
 impl Default for GasSchedule {
@@ -61,6 +67,9 @@ impl Default for GasSchedule {
             jump: 2,
             call: 20,
             return_: 2,
+            make_tuple_per_element: 1,
+            unpack_tuple_per_element: 1,
+            unpack_struct_per_field: 1,
         }
     }
 }
@@ -103,9 +112,11 @@ impl GasSchedule {
             Instruction::Call(_) => self.call,
             Instruction::Return => self.return_,
 
-            Instruction::MakeTuple(n) => *n as u64,
-            Instruction::UnpackTuple(n) => *n as u64,
-            Instruction::UnpackStruct { field_names, .. } => field_names.len() as u64,
+            Instruction::MakeTuple(n) => *n as u64 * self.make_tuple_per_element,
+            Instruction::UnpackTuple(n) => *n as u64 * self.unpack_tuple_per_element,
+            Instruction::UnpackStruct { field_names, .. } => {
+                field_names.len() as u64 * self.unpack_struct_per_field
+            }
         }
     }
 }

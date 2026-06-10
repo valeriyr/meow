@@ -226,7 +226,7 @@ fn missing_dep_causes_undefined_function_error() {
 }
 
 //
-// ─── Cross-module struct construction ───
+// ─── Cross-module struct access ───
 //
 
 #[test]
@@ -310,6 +310,49 @@ fn cross_module_unpack_struct_rejected() {
             if function == "f" && *type_name == module_ref::qualify(&d_addr, "Point")
         )),
         "expected CrossModuleStructAccess(f, @0xFD::Point), got: {errs:?}"
+    );
+}
+
+#[test]
+fn cross_module_private_struct_as_type_rejected() {
+    // Referencing a *private* dep struct as a param/return type is rejected — only
+    // `pub` structs are visible across modules. The compiler forbids this too, so to
+    // exercise the verifier directly we compile with a public struct, then flip it to
+    // private (the compiler would otherwise refuse to emit such bytecode).
+    let d_addr = Address::from_str("0xFD").unwrap();
+    let mut dep = utils::compile(
+        r#"
+            mod dep;
+
+            pub struct Secret { a: u64 }
+        "#,
+    );
+    let main = utils::compile_with_deps(
+        r#"
+            mod main;
+
+            use dep@0xFD;
+
+            pub fn pass(s: dep::Secret) -> dep::Secret { s }
+        "#,
+        &[(d_addr, &dep)],
+    );
+    // Make the dep struct private after the fact.
+    dep.structs
+        .iter_mut()
+        .find(|s| s.name == "Secret")
+        .unwrap()
+        .is_public = false;
+
+    let deps: HashMap<Address, &_> = [(d_addr, &dep)].into_iter().collect();
+    let errors = utils::verify_errors_with_deps(&main, &deps);
+    assert!(
+        errors.iter().any(|e| matches!(
+            e,
+            VerificationError::CrossModulePrivateStructReference { type_name, .. }
+            if type_name.contains("Secret")
+        )),
+        "referencing a private dep struct as a type must be rejected, got: {errors:?}"
     );
 }
 
