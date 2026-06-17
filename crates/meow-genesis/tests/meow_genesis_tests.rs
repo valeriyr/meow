@@ -57,3 +57,36 @@ fn create_genesis() {
     assert_eq!(meow_coin_object::balance_from_object(meow_coin2), Some(200));
     assert_eq!(meow_coin_object::balance_from_object(meow_coin3), Some(300));
 }
+
+#[test]
+fn identical_allocations_produce_distinct_object_ids() {
+    // Two allocations with the same (address, amount) must still mint two separate
+    // coins with distinct object IDs. Without per-allocation salting their mint
+    // transactions would be identical, deriving the same object ID and silently
+    // collapsing into a single object when loaded into a store.
+    const ADDRESS: Address = Address::suffixed(0xE1);
+
+    let genesis = Genesis::build(&[(ADDRESS, 100), (ADDRESS, 100)]).unwrap();
+
+    // 2 framework modules + 2 coin objects.
+    assert_eq!(genesis.objects().len(), 4);
+
+    let meow_coin1 = &genesis.objects()[2];
+    let meow_coin2 = &genesis.objects()[3];
+
+    assert!(meow_coin::is_meow_coin_object(meow_coin1));
+    assert!(meow_coin::is_meow_coin_object(meow_coin2));
+
+    // Both belong to the same owner with the same balance...
+    assert_eq!(meow_coin1.owner(), &ObjectOwner::Address(ADDRESS));
+    assert_eq!(meow_coin2.owner(), &ObjectOwner::Address(ADDRESS));
+    assert_eq!(meow_coin_object::balance_from_object(meow_coin1), Some(100));
+    assert_eq!(meow_coin_object::balance_from_object(meow_coin2), Some(100));
+
+    // ...but their object IDs must differ — this is the collision guard.
+    assert_ne!(
+        meow_coin1.address(),
+        meow_coin2.address(),
+        "identical allocations must not collide on object ID"
+    );
+}

@@ -57,11 +57,13 @@ impl GossipNetwork {
             bootstrap_peers,
             mdns_query_interval,
             check_explicit_peers_ticks,
+            max_transmit_size,
         } = config;
 
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .heartbeat_initial_delay(std::time::Duration::from_millis(100))
             .check_explicit_peers_ticks(check_explicit_peers_ticks)
+            .max_transmit_size(max_transmit_size)
             .build()?;
 
         let mut swarm = SwarmBuilder::with_new_identity()

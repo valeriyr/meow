@@ -63,15 +63,25 @@ fn mint_meow_coins(
 
     allocations
         .iter()
-        .map(|(address, amount)| -> Result<Object> {
+        .enumerate()
+        .map(|(index, (address, amount))| -> Result<Object> {
             let inputs = vec![
                 Input::raw(amount).expect("amount BCS serialization is always valid"),
                 Input::raw(address).expect("address BCS serialization is always valid"),
             ];
 
+            // Each allocation is minted by its own transaction, and the resulting coin's
+            // object ID is derived from that transaction's digest. Two allocations with the
+            // same (address, amount) would otherwise produce identical transactions — and
+            // therefore colliding object IDs. To keep each mint transaction unique, we embed
+            // a per-allocation salt — a digest of the allocation index — in the placeholder
+            // gas-coin digest field. The genesis path bypasses all gas-coin checks, so the
+            // placeholder only affects the transaction digest.
+            let salt = Digest::compute(&index).expect("usize serialization is infallible");
+
             let transaction = Transaction::new(
                 MEOW_SYSTEM_ADDRESS,
-                ObjectRef::new(Address::ZERO, ObjectVersion::ZERO, Digest::ZERO),
+                ObjectRef::new(Address::ZERO, ObjectVersion::ZERO, salt),
                 TransactionType::MeowCall(Call::new(
                     MEOW_COIN_MODULE_ADDRESS,
                     function.clone(),

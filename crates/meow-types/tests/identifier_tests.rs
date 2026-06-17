@@ -144,6 +144,25 @@ fn identifier_serialized_value() {
 }
 
 //
+// ─── Identifier deserialization tests ───
+//
+
+#[test]
+fn deserialize_rejects_invalid_identifier() {
+    let bad = bcs::to_bytes("has spaces").unwrap();
+    assert!(matches!(
+        bcs::from_bytes::<Identifier>(&bad),
+        Err(bcs::Error::Custom(msg)) if msg.contains("invalid identifier")
+    ));
+
+    let empty = bcs::to_bytes("").unwrap();
+    assert!(matches!(
+        bcs::from_bytes::<Identifier>(&empty),
+        Err(bcs::Error::Custom(msg)) if msg.contains("invalid identifier")
+    ));
+}
+
+//
 // ─── Identifier equality and ordering tests ───
 //
 

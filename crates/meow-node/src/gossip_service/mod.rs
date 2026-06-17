@@ -34,6 +34,12 @@ const TOPIC_PEER_INFO: &str = "peer-info";
 /// All gossip topics used by this node. Useful for subscribing and logging.
 const TOPICS: [&str; 3] = [TOPIC_TRANSACTIONS, TOPIC_BLOCKS, TOPIC_PEER_INFO];
 
+/// Maximum number of blocks buffered while a sync is in progress. Without a cap, a
+/// peer could flood distinct blocks during a slow/stalled sync and exhaust memory.
+/// Sized generously above a full sync window (`snapshot_depth`) so legitimate sync
+/// is never starved; excess blocks are dropped (and will be re-gossiped or pulled).
+const MAX_BUFFERED_SYNC_BLOCKS: usize = 100_000;
+
 /// The state of the gossip service, used to coordinate chain syncing and normal operation.
 enum GossipServiceState {
     Working,
@@ -231,7 +237,9 @@ impl GossipService {
                                             if let GossipServiceState::Syncing { buffered_blocks, buffered_hashes }
                                                 | GossipServiceState::StateSyncing { buffered_blocks, buffered_hashes } = &mut service_state
                                             {
-                                                if buffered_hashes.insert(block_hash) {
+                                                if buffered_blocks.len() >= MAX_BUFFERED_SYNC_BLOCKS {
+                                                    tracing::warn!(height, %block_hash, cap = MAX_BUFFERED_SYNC_BLOCKS, "sync block buffer full — dropping block (will be re-fetched after sync)");
+                                                } else if buffered_hashes.insert(block_hash) {
                                                     tracing::debug!(height, %block_hash, "buffering block during sync");
                                                     buffered_blocks.push(block);
                                                 }

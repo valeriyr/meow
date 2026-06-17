@@ -2,7 +2,7 @@
 
 use axum::{
     Json, Router,
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -27,6 +27,8 @@ pub type Result<T> = std::result::Result<T, RpcServiceError>;
 
 /// Maximum number of addresses accepted by a single `GET /objects` request.
 pub const MAX_GET_OBJECTS_ADDRESSES: usize = 100;
+/// Maximum accepted RPC request body size, in bytes.
+const MAX_REQUEST_BODY_BYTES: usize = 4 * 1024 * 1024; // 4 MiB
 
 /// Shared application state for RPC handlers.
 ///
@@ -102,6 +104,10 @@ pub fn router(state: RpcState) -> Router {
         .route("/chain-head", get(get_chain_head))
         .route("/blocks-since/{height}", get(get_blocks_since))
         .route("/state-snapshot", get(get_state_snapshot))
+        // Bound request bodies to defend against memory-exhaustion via oversized
+        // payloads. A JSON-encoded publish transaction (a 512 KiB module serialized
+        // as a byte array) is the largest legitimate body; 4 MiB leaves ample room.
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BODY_BYTES))
         .with_state(state)
 }
 

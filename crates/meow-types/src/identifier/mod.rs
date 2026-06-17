@@ -12,7 +12,7 @@ pub mod error;
 /// The result type related to transactions.
 pub type Result<T> = std::result::Result<T, IdentifierError>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Serialize, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct Identifier(String);
 
 impl Identifier {
@@ -33,6 +33,20 @@ impl Identifier {
     fn is_valid(name: &str) -> bool {
         let config = config::compiler_config();
         meow_vm_types::identifier::is_valid_identifier(name, &config)
+    }
+}
+
+impl<'de> Deserialize<'de> for Identifier {
+    /// Deserialization routes through [`Identifier::new`] so the validity invariant
+    /// (held at construction) is preserved for values arriving over the wire. Without
+    /// this, a deserialized transaction could carry an empty, oversized, or otherwise
+    /// malformed identifier that bypassed all the construction-time checks.
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Identifier::new(raw).map_err(serde::de::Error::custom)
     }
 }
 

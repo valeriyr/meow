@@ -10,6 +10,9 @@ pub const DEFAULT_MDNS_QUERY_INTERVAL_SECS: u64 = 300; // 5 minutes
 /// and reconnected if necessary.
 pub const DEFAULT_CHECK_EXPLICIT_PEERS_TICKS: u64 = 300;
 
+/// The default maximum gossip message size in bytes.
+pub const DEFAULT_MAX_TRANSMIT_SIZE: usize = 16 * 1024 * 1024; // 16 MiB
+
 /// Configuration for the gossip network node.
 #[derive(Clone)]
 pub struct GossipNetworkConfig {
@@ -23,6 +26,9 @@ pub struct GossipNetworkConfig {
     /// The number of heartbeat ticks until the connection to explicit peers are rechecked
     /// and reconnected if necessary.
     pub check_explicit_peers_ticks: u64,
+    /// Maximum gossip message size in bytes. Must be large enough to hold the largest
+    /// block a node produces, otherwise oversized blocks silently fail to propagate.
+    pub max_transmit_size: usize,
 }
 
 impl GossipNetworkConfig {
@@ -38,6 +44,7 @@ impl GossipNetworkConfig {
             bootstrap_peers,
             mdns_query_interval,
             check_explicit_peers_ticks,
+            max_transmit_size: DEFAULT_MAX_TRANSMIT_SIZE,
         }
     }
 
