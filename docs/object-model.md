@@ -90,6 +90,8 @@ let hero = Hero { id: meow_vm_fresh_id(), level: 1, experience: 0 };
 
 Internally this computes `Blake2b-256([tag=0] ++ tx_digest ++ counter)`, where `counter` increments for each call within the same transaction. Because the transaction digest commits to the sender, gas coin reference, and call arguments — and the gas coin's `ObjectRef` is never reusable — the `(tx_digest, counter)` pair is globally unique.
 
+Genesis mint transactions are the one case where the gas coin is a zero placeholder rather than a real, non-reusable reference, so two allocations with the same address and amount would otherwise hash to the same `tx_digest` and collide. To keep them distinct, each genesis mint embeds its allocation index as a salt in the placeholder gas coin's digest field, making every mint transaction — and therefore every minted coin's ID — unique.
+
 The `id` field is not stored in the object's `content` bytes. The encoding layer strips it before serialization and re-injects it from `address` when the VM reads the object, to avoid duplicating state.
 
 ## The gas coin

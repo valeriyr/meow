@@ -18,6 +18,14 @@ fn empty_allocations_produces_only_framework_modules() {
 
     // meow_object + meow_coin — no coin objects
     assert_eq!(genesis.objects().len(), 2);
+
+    let meow_object_module = &genesis.objects()[0];
+    assert_eq!(meow_object_module.address(), &MEOW_OBJECT_MODULE_ADDRESS);
+    assert_eq!(meow_object_module.type_(), &ObjectType::Module);
+
+    let meow_coin_module = &genesis.objects()[1];
+    assert_eq!(meow_coin_module.address(), &MEOW_COIN_MODULE_ADDRESS);
+    assert_eq!(meow_coin_module.type_(), &ObjectType::Module);
 }
 
 #[test]

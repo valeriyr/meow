@@ -10,6 +10,8 @@
 
 The `meow client` CLI commands and the `meow-node-client` library crate are both built on top of this API.
 
+Request bodies are capped at **4 MiB**. A larger body is rejected with `413 Payload Too Large` before reaching a handler. This comfortably fits the largest legitimate payload — a publish transaction carrying a 512 KiB module — while bounding memory use from oversized requests.
+
 ## Endpoints
 
 | Method | Path | Description |

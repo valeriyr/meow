@@ -33,7 +33,7 @@ When a node receives a block whose height is more than one ahead of its local ti
 ### Block sync (gap ≤ `snapshot_depth`)
 
 1. Transitions to **Syncing** state.
-2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).
+2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash, up to a fixed cap — see [below](#sync-buffer-cap)).
 3. Calls [`GET /blocks-since/{local_height+1}`](rpc.md#get-blocks-sinceheight) on the peer that sent the gap block, or any other known peer if the sender's URL is not yet known.
 4. Sorts the pulled blocks by height and applies them to the chain.
 5. Applies the buffered gossip blocks in height order.
@@ -44,7 +44,7 @@ When a node receives a block whose height is more than one ahead of its local ti
 When the gap exceeds [`snapshot_depth`](consensus.md#fork-choice-and-reorgs), replaying individual blocks is no longer practical — snapshots older than the horizon have been pruned and can no longer serve as the basis for re-execution. Instead the node fetches the peer's entire current state:
 
 1. Transitions to **StateSyncing** state.
-2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash).
+2. Buffers any blocks that continue to arrive over gossip during the sync (deduplicated by hash, up to a fixed cap — see [below](#sync-buffer-cap)).
 3. Calls [`GET /state-snapshot`](rpc.md#get-state-snapshot) on a known peer.
 4. Validates the snapshot: PoW check on the head block and `compute_state_root(objects) == head.header.state_root`.
 5. Anchors the chain at the snapshot block and clears the mempool (all pending transactions reference object versions from the old chain).
@@ -52,6 +52,10 @@ When the gap exceeds [`snapshot_depth`](consensus.md#fork-choice-and-reorgs), re
 7. Returns to **Working** state.
 
 If no peer RPC URL is known yet when a gap is detected, the sync request is skipped and a warning is logged. Gossip blocks continue to buffer until a URL is available and sync completes.
+
+### Sync buffer cap
+
+The gossip buffer used during both sync modes is bounded at **100 000 blocks**. The cap sits far above a full sync window, so legitimate sync is never starved; it exists only to stop a peer from exhausting node memory by flooding distinct blocks while a sync stalls. Once the buffer is full, further blocks are dropped (and logged) — they are re-gossiped or pulled again after sync completes, so no block is permanently lost.
 
 ## Configuration
 
@@ -63,3 +67,4 @@ If no peer RPC URL is known yet when a gap is detected, the sync request is skip
 | `bootstrap_peers` | `[]` | Multiaddrs of known peers to dial on startup. Empty on a local-only node. |
 | `mdns_query_interval` | 300 s | How often mDNS re-broadcasts discovery queries. |
 | `check_explicit_peers_ticks` | 300 | Heartbeat ticks between reconnection attempts to explicit peers. |
+| `max_transmit_size` | 16 MiB | Maximum gossipsub message size. Must be large enough to hold the largest block a node produces — gossipsub's own default (64 KiB) would silently drop oversized blocks instead of propagating them. |
