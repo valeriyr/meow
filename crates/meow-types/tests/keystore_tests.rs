@@ -1,4 +1,6 @@
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::{fs, path::Path};
 
 use meow_types::{
     address::Address,
