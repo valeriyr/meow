@@ -32,12 +32,19 @@ on:
 
 # ── Concurrency ───────────────────────────────────────────────────────────────
 # Only one nightly run may be active at a time. If two pushes land in quick
-# succession and both pass CI, the second run cancels the first before prepare
-# starts. Without this, prepare-B would delete and recreate the release while
-# build-A is still uploading, mixing artifacts from two different commits.
+# succession and both pass CI, the second run waits for the first to finish.
+# Without this, prepare-B would delete and recreate the release while build-A
+# is still uploading, mixing artifacts from two different commits.
+#
+# cancel-in-progress must stay FALSE. Cancelling a run mid-flight still executes
+# its `always()` cleanup-on-failure job (that is what always() means), which
+# would then race with the next run's prepare job and can delete the release
+# that run just created — leaving no nightly at all. Queueing avoids the overlap
+# entirely; GitHub keeps only the newest pending run in the queue, so we still
+# converge on the latest commit.
 concurrency:
   group: nightly
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 # ── Global environment ────────────────────────────────────────────────────────
 # CARGO_TERM_COLOR forces colored Cargo output in CI logs (stdout is not a TTY
@@ -81,12 +88,9 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      # Check out the tested commit so the gh CLI resolves the correct repository
-      # context. Consistent with the build job which also pins to head_sha.
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-
+      # No checkout step: this job never touches the source tree. Every gh CLI
+      # call targets the repository explicitly via the GH_REPO env var, so no
+      # git context is needed.
       - name: Recreate nightly release
         run: |
           # Delete the previous nightly release if it exists.
@@ -125,7 +129,8 @@ jobs:
 
   # ── build ─────────────────────────────────────────────────────────────────────
   # Compile both binaries (meow CLI and meow-node) on each target platform, pack
-  # them into a .tar.gz archive, and upload the archive to the nightly release.
+  # them into an archive (.tar.gz on Linux/macOS, .zip on Windows), and upload
+  # the archive to the nightly release.
   build:
     # Wait for the release to exist before trying to upload to it.
     needs: prepare
@@ -143,9 +148,18 @@ jobs:
             suffix: linux-x86_64
           - os: macos-latest    # GitHub-hosted ARM64 macOS runner (Apple Silicon)
             suffix: macos-arm64
+          - os: windows-latest  # GitHub-hosted x86_64 Windows runner
+            suffix: windows-x86_64
 
     # ${{ matrix.os }} expands to the value from whichever matrix row this job is.
     runs-on: ${{ matrix.os }}
+
+    # Use bash for every run step on every platform. Windows runners default to
+    # PowerShell, where `"$ARCHIVE"`-style environment variable references would
+    # silently expand to an empty string instead of the archive name.
+    defaults:
+      run:
+        shell: bash
 
     steps:
       # Check out the exact commit that CI tested, not just the current HEAD of main.
@@ -184,13 +198,24 @@ jobs:
       - name: Package
         # SUFFIX is passed via env: so the matrix value is never interpolated directly
         # into the shell script body — safe even if the matrix were made dynamic.
+        #
+        # Windows gets a .zip (extractable from Explorer, no extra tools needed);
+        # Linux and macOS get the conventional .tar.gz. Windows binaries carry an
+        # .exe extension, hence the separate file lists.
         env:
           SUFFIX: ${{ matrix.suffix }}
         run: |
-          ARCHIVE="meow-${SUFFIX}.tar.gz"
-          # -C target/release changes into that directory before adding files,
-          # so the archive contains `meow` and `meow-node` at the top level (no path prefix).
-          tar -czf "$ARCHIVE" -C target/release meow meow-node
+          if [[ "$SUFFIX" == windows-* ]]; then
+            ARCHIVE="meow-${SUFFIX}.zip"
+            # 7z stores paths as given, so cd into target/release first to get a
+            # flat archive with the binaries at the top level (mirrors tar's -C flag).
+            (cd target/release && 7z a "../../$ARCHIVE" meow.exe meow-node.exe)
+          else
+            ARCHIVE="meow-${SUFFIX}.tar.gz"
+            # -C target/release changes into that directory before adding files,
+            # so the archive contains `meow` and `meow-node` at the top level (no path prefix).
+            tar -czf "$ARCHIVE" -C target/release meow meow-node
+          fi
           # Write the archive name to GITHUB_ENV so the next step can reference it
           # without repeating the matrix suffix expansion.
           echo "ARCHIVE=$ARCHIVE" >> "$GITHUB_ENV"
@@ -215,11 +240,12 @@ jobs:
 
     runs-on: ubuntu-latest
     steps:
-      # Download all .tar.gz assets from the nightly release into the `archives/` folder.
+      # Download all archive assets (.tar.gz for Linux/macOS, .zip for Windows)
+      # from the nightly release into the `archives/` folder.
       # GH_REPO tells the gh CLI which repository to target — this job has no checkout
       # step so the gh CLI cannot infer the repo from the git remote.
       - name: Download release archives
-        run: gh release download nightly --pattern "*.tar.gz" --dir archives
+        run: gh release download nightly --pattern "*.tar.gz" --pattern "*.zip" --dir archives
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -229,7 +255,7 @@ jobs:
           cd archives
           # sha256sum writes one line per file: "<hex-digest>  <filename>"
           # Printing to stdout as well makes the digest visible in the CI log.
-          sha256sum *.tar.gz > ../checksums.txt
+          sha256sum *.tar.gz *.zip > ../checksums.txt
           cat ../checksums.txt
 
       - name: Upload checksums
