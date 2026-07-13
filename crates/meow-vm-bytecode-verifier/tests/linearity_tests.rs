@@ -124,31 +124,41 @@ fn param_struct_moved_to_local_slot_rejected() {
 
 #[test]
 fn struct_from_unpacked_tuple_unconsumed_at_return_rejected() {
-    // `make_pair` returns (Point, u64). `lose_from_tuple` unpacks the tuple but
-    // never returns/consumes the Point — must trigger UnconsumedStruct.
-    let module = utils::compile(
-        r#"
-        mod m;
-
-        struct Point { x: u64, y: u64 }
-
-        fn make_pair(p: Point) -> (Point, u64) {
-            let v = p.x;
-            (p, v)
-        }
-        pub fn lose_from_tuple(p: Point) {
-            let (q, _v) = make_pair(p);
-        }
-    "#,
-    );
+    // Build a (Point, u64) tuple, unpack it, store the Point into a slot, and return
+    // without consuming it — must trigger UnconsumedStruct. (The compiler now also
+    // rejects the equivalent source, so this is built from hand-crafted bytecode to
+    // verify the verifier's own check.)
+    let mut module = struct_module();
+    let func = module
+        .functions
+        .iter_mut()
+        .find(|f| f.name == "dummy")
+        .unwrap();
+    func.local_count = 2;
+    func.return_type = None;
+    func.code = vec![
+        // Point { x: 1, y: 2 }
+        Instruction::PushU64(1),
+        Instruction::PushU64(2),
+        Instruction::NewStruct {
+            type_name: "Point".to_string(),
+            field_names: vec!["x".to_string(), "y".to_string()],
+        },
+        Instruction::PushU64(7),
+        Instruction::MakeTuple(2),   // (Point, u64)
+        Instruction::UnpackTuple(2), // pushes Point then u64 (element[0] on top)
+        Instruction::Store(0),       // slot 0 = Point  ← never consumed
+        Instruction::Store(1),       // slot 1 = u64
+        Instruction::Return,
+    ];
     let errs = utils::verify_errors(&module);
     assert!(
         errs.iter().any(|e| matches!(
             e,
-            VerificationError::UnconsumedStruct { function, .. }
-            if function == "lose_from_tuple"
+            VerificationError::UnconsumedStruct { function, slot: 0, .. }
+            if function == "dummy"
         )),
-        "expected UnconsumedStruct(lose_from_tuple), got: {errs:?}"
+        "expected UnconsumedStruct(dummy, slot=0), got: {errs:?}"
     );
 }
 

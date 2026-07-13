@@ -203,9 +203,9 @@ fn getter_function_exposes_field_cross_module() {
 
             use shapes@0xFD;
 
-            fn read_x(p: shapes::Point) -> u64 {
+            fn read_x(p: shapes::Point) -> (shapes::Point, u64) {
                 let (p, val) = shapes::get_x(p);
-                val
+                (p, val)
             }
         "#,
     )

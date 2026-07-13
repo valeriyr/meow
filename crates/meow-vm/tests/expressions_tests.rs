@@ -131,6 +131,49 @@ fn modulo_by_zero() {
 }
 
 //
+// ─── u64 checked arithmetic (overflow aborts) ───
+//
+
+#[test]
+fn add_aborts_on_overflow() {
+    let src = r#"
+        mod test;
+
+        pub fn f() -> u64 { 18446744073709551615 + 1 }
+    "#;
+    assert!(matches!(
+        utils::try_run(utils::compile(src), "f", vec![]),
+        Err(meow_vm::error::VmError::ArithmeticOverflow)
+    ));
+}
+
+#[test]
+fn sub_aborts_on_underflow() {
+    let src = r#"
+        mod test;
+
+        pub fn f() -> u64 { 0 - 1 }
+    "#;
+    assert!(matches!(
+        utils::try_run(utils::compile(src), "f", vec![]),
+        Err(meow_vm::error::VmError::ArithmeticOverflow)
+    ));
+}
+
+#[test]
+fn mul_aborts_on_overflow() {
+    let src = r#"
+        mod test;
+
+        pub fn f() -> u64 { 9223372036854775808 * 2 }
+    "#;
+    assert!(matches!(
+        utils::try_run(utils::compile(src), "f", vec![]),
+        Err(meow_vm::error::VmError::ArithmeticOverflow)
+    ));
+}
+
+//
 // ─── Comparisons ───
 //
 
@@ -333,40 +376,6 @@ fn parens_override_precedence() {
         pub fn f() -> u64 { (2 + 3) * 4 }
     "#;
     assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(20)));
-}
-
-//
-// ─── u64 wrapping arithmetic ───
-//
-
-#[test]
-fn add_wraps_on_overflow() {
-    let src = r#"
-        mod test;
-
-        pub fn f() -> u64 { 18446744073709551615 + 1 }
-    "#;
-    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
-}
-
-#[test]
-fn sub_wraps_on_underflow() {
-    let src = r#"
-        mod test;
-
-        pub fn f() -> u64 { 0 - 1 }
-    "#;
-    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(u64::MAX)));
-}
-
-#[test]
-fn mul_wraps_on_overflow() {
-    let src = r#"
-        mod test;
-
-        pub fn f() -> u64 { 9223372036854775808 * 2 }
-    "#;
-    assert_eq!(utils::run(src, "f", vec![]), Some(Value::U64(0)));
 }
 
 //

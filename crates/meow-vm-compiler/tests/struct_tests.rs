@@ -219,6 +219,272 @@ fn struct_param_not_consumed_rejected() {
 }
 
 //
+// ─── Move semantics: use-after-move, drop, reassign ───
+//
+
+#[test]
+fn double_move_of_struct_rejected() {
+    // Passing the same struct to two consuming calls moves it twice.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn take(t: Token) { let Token { value } = t; }
+
+        pub fn run(t: Token) {
+            take(t);
+            take(t);
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("after it was moved")
+    ));
+}
+
+#[test]
+fn struct_passed_to_two_params_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn two(a: Token, b: Token) {
+            let Token { value: va } = a;
+            let Token { value: vb } = b;
+        }
+
+        pub fn run(t: Token) {
+            two(t, t);
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("after it was moved")
+    ));
+}
+
+#[test]
+fn bare_struct_expression_statement_rejected() {
+    // A struct-returning call used as a bare statement would silently drop the struct.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn make() -> Token { Token { value: 1 } }
+
+        pub fn run() {
+            make();
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("cannot be discarded")
+    ));
+}
+
+#[test]
+fn struct_literal_expression_statement_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        pub fn run() {
+            Token { value: 1 };
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("cannot be discarded")
+    ));
+}
+
+#[test]
+fn reassign_over_live_struct_rejected() {
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn make() -> Token { Token { value: 1 } }
+
+        pub fn run() {
+            let t = make();
+            t = make();
+            take(t);
+        }
+
+        fn take(t: Token) { let Token { value } = t; }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("still holds a struct value")
+    ));
+}
+
+#[test]
+fn reassign_after_move_then_leak_rejected() {
+    // Move t out, then reassign a fresh struct into the slot and never consume it.
+    // The fresh struct must be tracked so the leak is caught.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn make() -> Token { Token { value: 1 } }
+        fn take(t: Token) { let Token { value } = t; }
+
+        pub fn run() {
+            let t = make();
+            take(t);
+            t = make();
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("must be consumed")
+    ));
+}
+
+#[test]
+fn struct_consumed_in_both_branches_compiles() {
+    // Each path consumes the struct exactly once — legal linear code. Move tracking
+    // must be per-branch: consumption in the then-branch is not a move on the
+    // else-path.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn take(t: Token) { let Token { value } = t; }
+
+        pub fn run(c: bool, t: Token) {
+            if c {
+                take(t);
+            } else {
+                take(t);
+            }
+        }
+    "#;
+    utils::compile(src).expect("consuming a struct once per branch must compile");
+}
+
+#[test]
+fn struct_consumed_in_terminating_branch_and_after_compiles() {
+    // The then-branch consumes the struct and returns, so it never reaches the
+    // join — the fall-through consumption is the only one on that path.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn take(t: Token) { let Token { value } = t; }
+
+        pub fn run(c: bool, t: Token) {
+            if c {
+                take(t);
+                return;
+            }
+            take(t);
+        }
+    "#;
+    utils::compile(src).expect("early-return branch consumption must compile");
+}
+
+#[test]
+fn struct_moved_in_one_branch_only_then_used_rejected() {
+    // Consumed on the then-path but still live on the fall-through path: the value's
+    // liveness is path-dependent, so any later use is rejected.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn take(t: Token) { let Token { value } = t; }
+
+        pub fn run(c: bool, t: Token) {
+            if c {
+                take(t);
+            }
+            take(t);
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("after it was moved")
+    ));
+}
+
+#[test]
+fn unconsumed_destructured_tuple_struct_rejected() {
+    // Destructuring a tuple whose element is a struct, then leaking that struct.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn pair() -> (Token, u64) { (Token { value: 1 }, 7) }
+
+        pub fn run() -> u64 {
+            let (t, v) = pair();
+            v
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("must be consumed")
+    ));
+}
+
+#[test]
+fn multiple_unconsumed_structs_report_first_declared() {
+    // When several bindings leak at once, the error must deterministically name
+    // the first-declared one (smallest slot).
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn make() -> Token { Token { value: 1 } }
+
+        pub fn run() {
+            let first = make();
+            let second = make();
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("'first'")
+    ));
+}
+
+#[test]
+fn multiple_branch_structs_report_first_declared() {
+    // Same determinism rule for the branch-scoped leak check.
+    let src = r#"
+        mod test;
+
+        struct Token { value: u64 }
+
+        fn make() -> Token { Token { value: 1 } }
+
+        pub fn run(c: bool) {
+            if c {
+                let first = make();
+                let second = make();
+            }
+        }
+    "#;
+    assert!(matches!(
+        utils::compile(src).unwrap_err(),
+        CompilerError::Message(msg) if msg.contains("'first'")
+    ));
+}
+
+//
 // ─── Destructuring ───
 //
 

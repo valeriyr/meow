@@ -32,8 +32,8 @@ pub fn object_to_vm_object_value(obj: &Object) -> Result<Value> {
         _ => Err(ObjectConversionError::InvalidObjectType),
     }?;
     let type_name = module_ref::qualify(&(*decl.module()).into(), decl.name().as_ref());
-    let mut fields: Vec<(String, Value)> =
-        bcs::from_bytes(obj.content()).expect("object content must be valid BCS");
+    let mut fields: Vec<(String, Value)> = bcs::from_bytes(obj.content())
+        .map_err(|e| ObjectConversionError::InvalidContent(e.to_string()))?;
     let id = MeowObjectId::from(*obj.address()).into();
     fields.insert(0, (MEOW_OBJECT_ID_FIELD_NAME.to_string(), id));
     Ok(Value::Struct { type_name, fields })
@@ -62,7 +62,8 @@ pub fn vm_object_value_to_object(
         module_ref::parse_module_ref(&type_name).ok_or(ObjectConversionError::InvalidTypeName)?;
     let object_type = ObjectType::Object(ObjectDeclRef::new(
         Address::from(vm_module_addr),
-        Identifier::new(struct_name).expect("VM type name must be a valid identifier"),
+        Identifier::new(struct_name)
+            .map_err(|e| ObjectConversionError::InvalidIdentifier(e.to_string()))?,
     ));
 
     let address: Address =

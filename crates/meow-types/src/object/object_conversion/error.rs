@@ -11,4 +11,8 @@ pub enum ObjectConversionError {
     InvalidTypeName,
     #[error("object struct is missing the required id field")]
     MissingIdField,
+    #[error("object content is not valid BCS: {0}")]
+    InvalidContent(String),
+    #[error("VM type name is not a valid identifier: {0}")]
+    InvalidIdentifier(String),
 }

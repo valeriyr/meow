@@ -226,6 +226,15 @@ pub enum VerificationError {
         slot: u8,
     },
 
+    #[error(
+        "function '{function}': local slot {slot} holds linear values of incompatible types at join point pc {join_pc} between branch paths"
+    )]
+    SlotTypeMergeConflict {
+        function: String,
+        join_pc: usize,
+        slot: u8,
+    },
+
     #[error("function '{function}': return type mismatch — declared {declared}, found {found}")]
     ReturnTypeMismatch {
         function: String,
@@ -298,6 +307,11 @@ pub enum VerificationError {
 
     #[error("function '{function}': struct in slot {slot} was not consumed before Return")]
     UnconsumedStruct { function: String, slot: u8 },
+
+    #[error(
+        "function '{function}': a linear value is left on the operand stack beneath the return value — it would be silently dropped at Return"
+    )]
+    UnconsumedStructOnStack { function: String },
 
     //
     // ─── Call resolution ───

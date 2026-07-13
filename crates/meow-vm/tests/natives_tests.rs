@@ -5,9 +5,11 @@ use std::collections::HashMap;
 use meow_vm::error::VmError;
 use meow_vm::gas_meter::GasMeter;
 use meow_vm_types::address::Address;
+use meow_vm_types::bytecode::Instruction;
+use meow_vm_types::module::{Function, Module};
 use meow_vm_types::module_ref;
 use meow_vm_types::natives::{NativeFnEntry, NativeParam, NativeResult};
-use meow_vm_types::types::{Type, Value};
+use meow_vm_types::types::{FieldDef, StructDef, Type, Value};
 
 //
 // ─── Native function calls ───
@@ -120,14 +122,41 @@ fn abort_can_be_overridden_by_custom_native() {
 
 #[test]
 fn use_after_move_is_an_error() {
-    let src = r#"
-        mod test;
-
-        struct Token { amount: u64 }
-
-        pub fn consume_twice(tok: Token) { consume_native(tok); consume_native(tok); }
-    "#;
-    let vm = utils::vm_with_natives(src, vec![utils::consume_native("consume_native")]);
+    // The compiler statically rejects passing a moved struct to a second native call,
+    // so this scenario is built from hand-crafted bytecode to verify the VM's own
+    // runtime move guard still fires when consuming a moved value via a native.
+    let module = Module {
+        name: "test".to_string(),
+        imports: vec![],
+        structs: vec![StructDef {
+            name: "Token".to_string(),
+            is_public: true,
+            fields: vec![FieldDef {
+                name: "amount".to_string(),
+                ty: Type::U64,
+            }],
+        }],
+        functions: vec![Function {
+            name: "consume_twice".to_string(),
+            is_public: true,
+            params: vec![("tok".to_string(), Type::Struct("Token".to_string()))],
+            return_type: None,
+            local_count: 1,
+            code: vec![
+                Instruction::Load(0), // move Token out of slot 0
+                Instruction::Call("consume_native".to_string()),
+                Instruction::Pop,     // discard the native's Void return
+                Instruction::Load(0), // ← use after move
+                Instruction::Call("consume_native".to_string()),
+                Instruction::Return,
+            ],
+        }],
+    };
+    let vm = utils::vm_with_deps_and_natives(
+        module,
+        HashMap::new(),
+        vec![utils::consume_native("consume_native")],
+    );
     let mut gas = GasMeter::unlimited();
     let err = vm
         .call("consume_twice", vec![test_token(100)], &mut gas)

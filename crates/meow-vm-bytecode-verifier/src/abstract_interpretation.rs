@@ -148,15 +148,26 @@ fn merge(
             return None;
         }
     }
+    let mut merged = current.clone();
     for (slot, (a, b)) in current
         .locals
         .iter()
         .zip(incoming.locals.iter())
         .enumerate()
     {
-        let a_obj = matches!(a, SlotState::Live(t) if t.is_linear());
-        let b_obj = matches!(b, SlotState::Live(t) if t.is_linear());
-        if a_obj != b_obj {
+        if a == b {
+            continue;
+        }
+        // Slots diverge between paths. Divergence involving a live linear value is
+        // rejected at the join: if only one path holds it live, the other path leaks
+        // it; if both hold live linear values of different types, the value can no
+        // longer be tracked and deferring would hide the leak. A purely non-linear
+        // divergence (different value types, or live vs dead) cannot leak anything,
+        // so the slot is merged to Dead instead — a later `Load` of the
+        // path-dependent value is then rejected as UseAfterMove.
+        let a_linear = matches!(a, SlotState::Live(t) if t.is_linear());
+        let b_linear = matches!(b, SlotState::Live(t) if t.is_linear());
+        if a_linear != b_linear {
             errors.push(VerificationError::LivenessMergeConflict {
                 function: fn_name.to_string(),
                 join_pc,
@@ -164,9 +175,18 @@ fn merge(
             });
             return None;
         }
+        if a_linear && b_linear {
+            errors.push(VerificationError::SlotTypeMergeConflict {
+                function: fn_name.to_string(),
+                join_pc,
+                slot: slot as u8,
+            });
+            return None;
+        }
+        merged.locals[slot] = SlotState::Dead;
     }
 
-    Some(current.clone())
+    Some(merged)
 }
 
 fn merge_at(
@@ -1159,6 +1179,18 @@ fn check_return(func: &Function, state: &AbstractState, errors: &mut Vec<Verific
                 }
                 _ => {}
             }
+        }
+    }
+
+    // A linear value sitting on the operand stack *beneath* the return value would be
+    // silently dropped by the VM's `Return` (which pops only the top). The return-type
+    // check above only inspects the top of stack, so scan everything below it here.
+    if state.stack.len() > 1 {
+        let below_top = &state.stack[..state.stack.len() - 1];
+        if below_top.iter().any(|t| t.is_linear()) {
+            errors.push(VerificationError::UnconsumedStructOnStack {
+                function: fn_name.clone(),
+            });
         }
     }
 

@@ -1,6 +1,6 @@
 //! Code generator: walks the AST and emits bytecode instructions.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use meow_vm_types::{
     address::Address,
@@ -40,6 +40,10 @@ pub struct Codegen<'m> {
     /// same name) can be tracked independently. Cross-module struct types are stored
     /// as `Type::Struct("alias::TypeName")`.
     local_types: HashMap<u8, Type>,
+    /// Slots whose struct value has been moved out (consumed) by a `Load`. Used to
+    /// reject use-after-move: reading the same binding a second time without rebinding
+    /// it. Cleared whenever a slot is (re)bound via `alloc_local`/reassignment.
+    moved: HashSet<u8>,
     next_slot: u8,
     /// Nesting depth of if/else body scopes. Zero means the function's top-level body.
     /// Incremented when entering an if/else body, decremented on exit.
@@ -142,6 +146,7 @@ impl<'m> Codegen<'m> {
             local_fn_return_types,
             locals: HashMap::new(),
             local_types: HashMap::new(),
+            moved: HashSet::new(),
             next_slot: 0,
             scope_depth: 0,
             code: Vec::new(),
@@ -161,6 +166,8 @@ impl<'m> Codegen<'m> {
                          consume or destructure it first",
                 )));
             }
+            // The slot is being rebound to a fresh value — clear any moved marker.
+            self.moved.remove(&existing_slot);
             return Ok(existing_slot);
         }
         // Outer-scope binding: allocate a new slot so the outer binding is preserved.
@@ -261,7 +268,10 @@ impl<'m> Codegen<'m> {
                 BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod => Type::U64,
                 _ => Type::Bool,
             }),
-            Expr::Tuple(_) => None,
+            Expr::Tuple(items) => {
+                let types: Option<Vec<Type>> = items.iter().map(|e| self.infer_type(e)).collect();
+                types.map(Type::Tuple)
+            }
             Expr::UnaryOp { .. } => Some(Type::Bool),
         }
     }
@@ -332,10 +342,20 @@ impl<'m> Codegen<'m> {
                 let slot = self.locals.get(&name).map(|&(s, _)| s).ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
+                // Reject use-after-move: a struct binding that was already moved out
+                // cannot be read again until it is rebound.
+                if self.moved.contains(&slot) {
+                    return Err(CompilerError::Message(format!(
+                        "use of '{name}' after it was moved — structs have move semantics; \
+                         rebind it before using it again"
+                    )));
+                }
                 // Struct loads move the value out of the slot — mark the binding consumed
-                // so that a subsequent `let name = ...` knows the slot is safe to reuse.
+                // so that a subsequent `let name = ...` knows the slot is safe to reuse,
+                // and so a second read is rejected as use-after-move.
                 if matches!(self.local_types.get(&slot), Some(ty) if !ty.is_primitive()) {
                     self.local_types.remove(&slot);
+                    self.moved.insert(slot);
                 }
                 self.emit(Instruction::Load(slot));
             }
@@ -491,8 +511,28 @@ impl<'m> Codegen<'m> {
                 let slot = self.locals.get(&name).map(|&(s, _)| s).ok_or_else(|| {
                     CompilerError::Message(format!("undefined variable '{name}'"))
                 })?;
+                // Reassigning over a slot that still holds a live struct would silently
+                // drop (leak) that struct — reject it (mirrors the shadowing rule).
+                if matches!(self.local_types.get(&slot), Some(ty) if !ty.is_primitive()) {
+                    return Err(CompilerError::Message(format!(
+                        "cannot reassign '{name}': it still holds a struct value — \
+                         consume or destructure it first"
+                    )));
+                }
+                let inferred_type = self.infer_type(&expr);
                 self.compile_expr(expr)?;
                 self.emit(Instruction::Store(slot));
+                // Track the slot's new type so a struct stored here is still subject to
+                // the consume-before-return check; clear the moved marker (it's rebound).
+                self.moved.remove(&slot);
+                match inferred_type {
+                    Some(ty) => {
+                        self.local_types.insert(slot, ty);
+                    }
+                    None => {
+                        self.local_types.remove(&slot);
+                    }
+                }
             }
 
             Stmt::Return(expr) => {
@@ -503,6 +543,17 @@ impl<'m> Codegen<'m> {
             }
 
             Stmt::Expr(expr) => {
+                // A bare expression statement discards its result with `Pop`. Discarding
+                // a struct/linear value this way would silently leak it, so reject it.
+                if let Some(ty) = self.infer_type(&expr)
+                    && !ty.is_primitive()
+                {
+                    return Err(CompilerError::Message(format!(
+                        "expression of type '{}' cannot be discarded as a statement — \
+                         structs have move semantics; bind or consume the value",
+                        ty.name()
+                    )));
+                }
                 self.compile_expr(expr)?;
                 // Always pop: Call always pushes something (Void for void functions).
                 self.emit(Instruction::Pop);
@@ -517,6 +568,18 @@ impl<'m> Codegen<'m> {
                 let patch_cond = self.code.len();
                 self.emit(Instruction::JumpIfNot(0));
 
+                // Each branch tracks types/moved from the shared pre-branch state and
+                // the two outcomes are merged after the join, so consuming a struct in
+                // one branch does not count as consumption on the other path.
+                let pre_types = self.local_types.clone();
+                let pre_moved = self.moved.clone();
+                // A branch ending in `return` never reaches the join, so its outcome
+                // must not contribute to the merged state.
+                let then_terminates = matches!(body.last(), Some(Stmt::Return(_)));
+                let else_terminates = else_body
+                    .as_ref()
+                    .is_some_and(|stmts| matches!(stmts.last(), Some(Stmt::Return(_))));
+
                 // Then body — scoped: shadow+restore, structs must be consumed.
                 let outer_locals = self.locals.clone();
                 self.scope_depth += 1;
@@ -526,6 +589,11 @@ impl<'m> Codegen<'m> {
                 self.scope_depth -= 1;
                 self.check_branch_structs_consumed(&outer_locals, "if")?;
                 self.locals = outer_locals;
+
+                // The else path (the fall-through path when there is no else body)
+                // starts from the pre-branch state, not the then-branch outcome.
+                let then_types = std::mem::replace(&mut self.local_types, pre_types);
+                let then_moved = std::mem::replace(&mut self.moved, pre_moved);
 
                 if let Some(else_stmts) = else_body {
                     let patch_jump = self.code.len();
@@ -549,6 +617,22 @@ impl<'m> Codegen<'m> {
                     self.code[patch_cond] =
                         Instruction::JumpIfNot((self.code.len() - patch_cond) as i32);
                 }
+
+                // Merge the branch outcomes (`self` currently holds the else /
+                // fall-through outcome): a slot keeps its type only when both paths
+                // agree, and a slot moved on either path is treated as moved. Joins
+                // that genuinely diverge on a live struct are left to the bytecode
+                // verifier, which rejects them at the merge point.
+                if then_terminates {
+                    // Only the else/fall-through outcome reaches the join — keep it.
+                } else if else_terminates {
+                    self.local_types = then_types;
+                    self.moved = then_moved;
+                } else {
+                    self.local_types
+                        .retain(|slot, ty| then_types.get(slot) == Some(&*ty));
+                    self.moved.extend(then_moved);
+                }
             }
 
             Stmt::LetTuple { names, expr } => {
@@ -559,11 +643,21 @@ impl<'m> Codegen<'m> {
                         "tuple destructuring has {n} elements, exceeding the limit of {max}"
                     )));
                 }
+                // Infer the per-element types so struct-typed bindings are tracked for
+                // linearity (otherwise an unconsumed destructured struct would slip past
+                // the consume-before-return check).
+                let elem_types = match self.infer_type(&expr) {
+                    Some(Type::Tuple(types)) if types.len() == n => Some(types),
+                    _ => None,
+                };
                 self.compile_expr(expr)?;
                 self.emit(Instruction::UnpackTuple(n as u8));
                 // UnpackTuple pushes elements with element[0] on top.
-                for name in names {
+                for (i, name) in names.into_iter().enumerate() {
                     let slot = self.alloc_local(name.clone())?;
+                    if let Some(ref types) = elem_types {
+                        self.local_types.insert(slot, types[i].clone());
+                    }
                     self.emit(Instruction::Store(slot));
                 }
             }
@@ -679,15 +773,22 @@ impl<'m> Codegen<'m> {
     /// top-level function body is compiled. This includes parameters — the compiler
     /// enforces linearity for all struct values, so no exemption is needed.
     fn check_all_structs_consumed(&self, fn_name: &str) -> Result<()> {
-        for (name, &(slot, _)) in &self.locals {
-            if let Some(ty) = self.local_types.get(&slot)
-                && !ty.is_primitive()
-            {
-                return Err(CompilerError::Message(format!(
-                    "in function '{fn_name}': '{name}' of type '{}' must be consumed before the function returns",
-                    ty.name()
-                )));
-            }
+        // Report the offender with the smallest slot (= first declared) so the
+        // error is deterministic when several bindings leak at once.
+        let offender = self
+            .locals
+            .iter()
+            .map(|(name, &(slot, _))| (name, slot))
+            .filter(
+                |(_, slot)| matches!(self.local_types.get(slot), Some(ty) if !ty.is_primitive()),
+            )
+            .min_by_key(|&(_, slot)| slot);
+        if let Some((name, slot)) = offender {
+            let ty = &self.local_types[&slot];
+            return Err(CompilerError::Message(format!(
+                "in function '{fn_name}': '{name}' of type '{}' must be consumed before the function returns",
+                ty.name()
+            )));
         }
         Ok(())
     }
@@ -754,15 +855,21 @@ impl<'m> Codegen<'m> {
         outer_locals: &HashMap<String, (u8, u32)>,
         branch: &str,
     ) -> Result<()> {
-        for (name, &(slot, _)) in &self.locals {
-            if outer_locals.get(name.as_str()).map(|&(s, _)| s) != Some(slot)
-                && let Some(ty) = self.local_types.get(&slot)
-                && !ty.is_primitive()
-            {
-                return Err(CompilerError::Message(format!(
-                    "struct '{name}' introduced in {branch} body must be consumed before the branch ends",
-                )));
-            }
+        // Report the offender with the smallest slot (= first declared) so the
+        // error is deterministic when several bindings leak at once.
+        let offender = self
+            .locals
+            .iter()
+            .map(|(name, &(slot, _))| (name, slot))
+            .filter(|&(name, slot)| {
+                outer_locals.get(name.as_str()).map(|&(s, _)| s) != Some(slot)
+                    && matches!(self.local_types.get(&slot), Some(ty) if !ty.is_primitive())
+            })
+            .min_by_key(|&(_, slot)| slot);
+        if let Some((name, _)) = offender {
+            return Err(CompilerError::Message(format!(
+                "struct '{name}' introduced in {branch} body must be consumed before the branch ends",
+            )));
         }
         Ok(())
     }

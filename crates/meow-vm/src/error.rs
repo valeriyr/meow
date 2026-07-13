@@ -6,6 +6,18 @@ pub enum VmError {
     #[error("aborted with code {code}: {message}")]
     Aborted { code: u64, message: String },
 
+    #[error("arithmetic overflow")]
+    ArithmeticOverflow,
+
+    #[error(
+        "function '{function}' received {got} arguments but declares only {local_count} local slots"
+    )]
+    ArityMismatch {
+        function: String,
+        got: usize,
+        local_count: usize,
+    },
+
     #[error("call stack overflow (max depth {0})")]
     CallStackOverflow(usize),
 
@@ -16,6 +28,12 @@ pub enum VmError {
         "'{0}': struct types and tuples containing structs cannot be compared with == or != — destructure and compare fields individually"
     )]
     EqOnLinearType(String),
+
+    #[error("invalid jump target: offset {offset} from pc {pc} is out of range")]
+    InvalidJumpTarget { pc: usize, offset: i32 },
+
+    #[error("store-field would overwrite live struct field '{0}'; consume it before storing")]
+    LinearFieldOverwrite(String),
 
     #[error("native function error: {0}")]
     NativeError(String),

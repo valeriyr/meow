@@ -189,7 +189,7 @@ Structs can appear in return tuples, following the same move semantics — the c
 | Field assignment | `obj.field = expr;` |
 | Return | `return expr;` or `return;` |
 | Conditional | `if cond { ... }` or `if cond { ... } else { ... }` |
-| Bare expression | `expr;` (value discarded) |
+| Bare expression | `expr;` (value discarded — struct values cannot be discarded) |
 
 ### `let` bindings
 
@@ -319,11 +319,13 @@ Integer literals are `u64`; a literal that exceeds `u64::MAX` is a compile error
 
 ### Variables
 
-Reading a struct variable moves it out of the binding (the binding becomes dead). Reading a primitive copies it.
+Reading a struct variable moves it out of the binding (the binding becomes dead). Reading the binding again before it is rebound is a compile error. Reading a primitive copies it.
 
 ### Arithmetic
 
 `+` `-` `*` `/` `%` — operands must be `u64`; result is `u64`.
+
+Arithmetic is checked: overflow and underflow abort execution with an error, as do division and remainder by zero. There is no wrapping arithmetic.
 
 ### Comparison
 

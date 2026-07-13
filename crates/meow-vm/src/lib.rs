@@ -249,6 +249,18 @@ impl Vm {
             .get_function(fn_name)
             .ok_or_else(|| VmError::UndefinedFunction(fn_name.to_string()))?;
 
+        // Defend against unverified/hand-crafted bytecode: a function must have at
+        // least as many local slots as the arguments it is being called with,
+        // otherwise `Frame::new` would index out of bounds. The verifier guarantees
+        // `local_count >= params.len()`, but the VM must not panic when that is violated.
+        if args.len() > func.local_count as usize {
+            return Err(VmError::ArityMismatch {
+                function: fn_name.to_string(),
+                got: args.len(),
+                local_count: func.local_count as usize,
+            });
+        }
+
         let mut frame = Frame::new(func.code.clone(), args, func.local_count);
 
         while let Some(instr) = frame.code.get(frame.pc).cloned() {
@@ -334,17 +346,17 @@ impl Vm {
                 Instruction::Add => {
                     let r = frame.pop()?;
                     let l = frame.pop()?;
-                    frame.push(arith_op(l, r, |a, b| a.wrapping_add(b))?);
+                    frame.push(arith_op(l, r, u64::checked_add)?);
                 }
                 Instruction::Sub => {
                     let r = frame.pop()?;
                     let l = frame.pop()?;
-                    frame.push(arith_op(l, r, |a, b| a.wrapping_sub(b))?);
+                    frame.push(arith_op(l, r, u64::checked_sub)?);
                 }
                 Instruction::Mul => {
                     let r = frame.pop()?;
                     let l = frame.pop()?;
-                    frame.push(arith_op(l, r, |a, b| a.wrapping_mul(b))?);
+                    frame.push(arith_op(l, r, u64::checked_mul)?);
                 }
                 Instruction::Div => {
                     let r = frame.pop()?;
@@ -352,7 +364,7 @@ impl Vm {
                     if r.as_u64() == Some(0) {
                         return Err(VmError::DivisionByZero);
                     }
-                    frame.push(arith_op(l, r, |a, b| a / b)?);
+                    frame.push(arith_op(l, r, u64::checked_div)?);
                 }
                 Instruction::Mod => {
                     let r = frame.pop()?;
@@ -360,7 +372,7 @@ impl Vm {
                     if r.as_u64() == Some(0) {
                         return Err(VmError::DivisionByZero);
                     }
-                    frame.push(arith_op(l, r, |a, b| a % b)?);
+                    frame.push(arith_op(l, r, u64::checked_rem)?);
                 }
 
                 // ── Comparison ────────────────────────────────────────────────
@@ -531,18 +543,24 @@ impl Vm {
 
                 // ── Control flow ──────────────────────────────────────────────
                 Instruction::Jump(offset) => {
-                    frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                    frame.pc = jump_target(frame.pc, offset)?;
                 }
                 Instruction::JumpIf(offset) => {
                     let v = frame.pop()?;
-                    if v.as_bool() == Some(true) {
-                        frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                    let cond = v.as_bool().ok_or_else(|| {
+                        VmError::TypeError(format!("expected bool, got {}", v.type_name()))
+                    })?;
+                    if cond {
+                        frame.pc = jump_target(frame.pc, offset)?;
                     }
                 }
                 Instruction::JumpIfNot(offset) => {
                     let v = frame.pop()?;
-                    if v.as_bool() == Some(false) {
-                        frame.pc = (frame.pc as i64 - 1 + offset as i64).max(0) as usize;
+                    let cond = v.as_bool().ok_or_else(|| {
+                        VmError::TypeError(format!("expected bool, got {}", v.type_name()))
+                    })?;
+                    if !cond {
+                        frame.pc = jump_target(frame.pc, offset)?;
                     }
                 }
 
@@ -554,11 +572,17 @@ impl Vm {
                             .deps
                             .get(&dep_addr)
                             .ok_or_else(|| VmError::UndefinedFunction(name.clone()))?;
-                        let arg_count = dep
+                        let dep_func = dep
                             .get_function(fn_name_in_dep)
-                            .ok_or_else(|| VmError::UndefinedFunction(name.clone()))?
-                            .params
-                            .len();
+                            .ok_or_else(|| VmError::UndefinedFunction(name.clone()))?;
+                        // Cross-module calls may only target public functions; a
+                        // module's private functions are not part of its callable
+                        // surface. The verifier enforces this, but the VM must not
+                        // rely on that for the module-privacy boundary.
+                        if !dep_func.is_public {
+                            return Err(VmError::PrivateFunction(name.clone()));
+                        }
+                        let arg_count = dep_func.params.len();
                         let mut args: Vec<Value> = (0..arg_count)
                             .map(|_| frame.pop())
                             .collect::<Result<Vec<_>>>()?;
@@ -661,14 +685,29 @@ impl Vm {
 // ─── Helpers ───
 //
 
-fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> u64) -> Result<Value> {
+/// Resolve a jump offset to an absolute program counter.
+///
+/// Offsets are relative to the jump instruction's own position (`pc` has already
+/// been advanced past it, hence the `- 1`). A target that lands before the start
+/// of the function is rejected rather than silently clamped — only the verifier's
+/// forward-jump guarantee keeps well-formed code in range, and the VM must surface
+/// hand-crafted out-of-range jumps as an error.
+fn jump_target(pc: usize, offset: i32) -> Result<usize> {
+    let target = pc as i64 - 1 + offset as i64;
+    if target < 0 {
+        return Err(VmError::InvalidJumpTarget { pc, offset });
+    }
+    Ok(target as usize)
+}
+
+fn arith_op(l: Value, r: Value, op: impl Fn(u64, u64) -> Option<u64>) -> Result<Value> {
     let a = l
         .as_u64()
         .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", l.type_name())))?;
     let b = r
         .as_u64()
         .ok_or_else(|| VmError::TypeError(format!("expected integer, got {}", r.type_name())))?;
-    Ok(Value::U64(op(a, b)))
+    op(a, b).map(Value::U64).ok_or(VmError::ArithmeticOverflow)
 }
 
 /// Traverse `path` through nested struct fields and return a clone of the terminal value.
@@ -739,6 +778,12 @@ fn write_field_path(mut current: &mut Value, path: &[String], val: Value) -> Res
                 type_name,
                 field: last.clone(),
             })?;
+    // Mirror the `Store` slot-overwrite guard: refuse to silently drop a live
+    // linear value held in the target field (a struct/resource), which would
+    // destroy it without consumption.
+    if entry.1.is_linear() {
+        return Err(VmError::LinearFieldOverwrite(last.clone()));
+    }
     entry.1 = val;
     Ok(())
 }

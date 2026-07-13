@@ -17,6 +17,58 @@ use meow_vm_types::{
 };
 
 //
+// ─── ArithmeticOverflow ───
+//
+
+#[test]
+fn add_overflow_errors() {
+    let m = module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(u64::MAX),
+            Instruction::PushU64(1),
+            Instruction::Add,
+            Instruction::Return,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::ArithmeticOverflow),
+        "expected ArithmeticOverflow, got: {err:?}"
+    );
+}
+
+//
+// ─── ArityMismatch (Frame::new must not panic) ───
+//
+
+#[test]
+fn more_args_than_local_count_errors_not_panics() {
+    // Function declares two params but zero local slots — a malformed module the
+    // verifier would reject. Calling it with two args must error, not panic.
+    let m = module_with_function(make_function(
+        "run",
+        vec![("a".to_string(), Type::U64), ("b".to_string(), Type::U64)],
+        0,
+        vec![Instruction::Return],
+    ));
+    let err = utils::try_run(m, "run", vec![Value::U64(1), Value::U64(2)]).unwrap_err();
+    assert!(
+        matches!(
+            err,
+            VmError::ArityMismatch {
+                got: 2,
+                local_count: 0,
+                ..
+            }
+        ),
+        "expected ArityMismatch, got: {err:?}"
+    );
+}
+
+//
 // ─── EqOnLinearType ───
 //
 
@@ -169,6 +221,125 @@ fn eq_on_tuple_containing_struct_returns_eq_on_linear_type() {
 }
 
 //
+// ─── InvalidJumpTarget ───
+//
+
+#[test]
+fn negative_jump_target_errors() {
+    // A backward jump landing before the function start is rejected, not clamped.
+    let m = module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![Instruction::Jump(-10), Instruction::Return],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::InvalidJumpTarget { .. }),
+        "expected InvalidJumpTarget, got: {err:?}"
+    );
+}
+
+//
+// ─── LinearFieldOverwrite ───
+//
+
+#[test]
+fn store_field_over_live_struct_errors() {
+    // A struct whose field holds another struct; StoreField over that field would
+    // silently drop the live linear value. The VM must reject it.
+    let mut module = Module::new("defense_test");
+    module.structs.push(StructDef {
+        name: "Inner".to_string(),
+        is_public: true,
+        fields: vec![FieldDef {
+            name: "v".to_string(),
+            ty: Type::U64,
+        }],
+    });
+    module.structs.push(StructDef {
+        name: "Outer".to_string(),
+        is_public: true,
+        fields: vec![FieldDef {
+            name: "inner".to_string(),
+            ty: Type::Struct("Inner".to_string()),
+        }],
+    });
+    module.functions.push(make_function(
+        "run",
+        vec![],
+        1,
+        vec![
+            // build Inner { v: 1 }
+            Instruction::PushU64(1),
+            Instruction::NewStruct {
+                type_name: "Inner".to_string(),
+                field_names: vec!["v".to_string()],
+            },
+            // build Outer { inner: Inner }
+            Instruction::NewStruct {
+                type_name: "Outer".to_string(),
+                field_names: vec!["inner".to_string()],
+            },
+            Instruction::Store(0),
+            // build a replacement Inner and store it over Outer.inner (drops the old one)
+            Instruction::PushU64(2),
+            Instruction::NewStruct {
+                type_name: "Inner".to_string(),
+                field_names: vec!["v".to_string()],
+            },
+            Instruction::StoreField(0, vec!["inner".to_string()]),
+            Instruction::Return,
+        ],
+    ));
+    let err = utils::try_run(module, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::LinearFieldOverwrite(ref f) if f == "inner"),
+        "expected LinearFieldOverwrite(inner), got: {err:?}"
+    );
+}
+
+//
+// ─── PrivateFunction (cross-module call) ───
+//
+
+#[test]
+fn cross_module_call_to_private_fn_errors() {
+    // Cross-module calls may only target `pub fn`. The verifier enforces this at
+    // publish time; the VM must uphold the module-privacy boundary for hand-crafted
+    // bytecode as well.
+    let dep_addr = Address::suffixed(0xFD);
+    let mut dep = Module::new("dep");
+    dep.functions.push(Function {
+        name: "secret".to_string(),
+        is_public: false,
+        params: vec![],
+        return_type: Some(Type::U64),
+        local_count: 0,
+        code: vec![Instruction::PushU64(42), Instruction::Return],
+    });
+
+    let qualified = module_ref::qualify(&dep_addr, "secret");
+    let m = module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::Call(qualified.clone()),
+            Instruction::Pop,
+            Instruction::Return,
+        ],
+    ));
+    let vm = utils::vm_with_deps(m, std::collections::HashMap::from([(dep_addr, dep)]));
+    let mut gas = meow_vm::gas_meter::GasMeter::unlimited();
+    let err = vm.call("run", vec![], &mut gas).unwrap_err();
+    assert!(
+        matches!(err, VmError::PrivateFunction(ref name) if name == &qualified),
+        "expected PrivateFunction({qualified}), got: {err:?}"
+    );
+}
+
+//
 // ─── SlotOverwrite ───
 //
 
@@ -252,6 +423,26 @@ fn store_field_empty_path_returns_type_error() {
     assert!(
         matches!(err, VmError::TypeError(ref msg) if msg.contains("path must not be empty")),
         "expected TypeError(path must not be empty), got: {err:?}"
+    );
+}
+
+#[test]
+fn conditional_jump_on_non_bool_errors() {
+    // JumpIfNot must pop a bool; a u64 condition is a type error, not a silent no-op.
+    let m = module_with_function(make_function(
+        "run",
+        vec![],
+        0,
+        vec![
+            Instruction::PushU64(7),
+            Instruction::JumpIfNot(2),
+            Instruction::Return,
+        ],
+    ));
+    let err = utils::try_run(m, "run", vec![]).unwrap_err();
+    assert!(
+        matches!(err, VmError::TypeError(_)),
+        "expected TypeError, got: {err:?}"
     );
 }
 

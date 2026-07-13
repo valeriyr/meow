@@ -71,6 +71,18 @@ fn object_to_vm_fails_for_module_type() {
     assert!(object_conversion::object_to_vm_object_value(&module).is_err());
 }
 
+#[test]
+fn object_to_vm_fails_for_invalid_bcs_content() {
+    // Content bytes that do not deserialize as BCS field pairs must surface as an
+    // error, not a panic.
+    let ident = Identifier::new("Foo").unwrap();
+    let decl_ref = ObjectDeclRef::new(MODULE_ADDR, ident);
+    let obj = Object::fresh_object(OBJECT_ID, OWNER, Digest::ZERO, decl_ref, vec![0xFF]);
+
+    let err = object_conversion::object_to_vm_object_value(&obj).unwrap_err();
+    assert!(matches!(err, ObjectConversionError::InvalidContent(_)));
+}
+
 //
 // ─── vm_object_value_to_object ───
 //
@@ -164,6 +176,27 @@ fn vm_to_object_fails_when_id_field_missing() {
     )
     .unwrap_err();
     assert!(matches!(err, ObjectConversionError::MissingIdField));
+}
+
+#[test]
+fn vm_to_object_fails_for_invalid_identifier_struct_name() {
+    // A VM struct whose type name is address-qualified but not a valid identifier
+    // ("1Foo" starts with a digit) must surface as an error, not a panic.
+    let val = Value::Struct {
+        type_name: module_ref::qualify(&MODULE_ADDR.into(), "1Foo"),
+        fields: vec![(
+            MEOW_OBJECT_ID_FIELD_NAME.to_string(),
+            MeowObjectId::new(OBJECT_ID).into(),
+        )],
+    };
+    let err = object_conversion::vm_object_value_to_object(
+        &val,
+        ObjectOwner::Address(OWNER),
+        Digest::ZERO,
+        ObjectVersion::ZERO,
+    )
+    .unwrap_err();
+    assert!(matches!(err, ObjectConversionError::InvalidIdentifier(_)));
 }
 
 //
